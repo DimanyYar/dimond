@@ -386,12 +386,25 @@ textarea.input {
 
 .chip:hover {
   border-color: var(--ink);
+  background: var(--canvas);
 }
 
 .chip[aria-pressed="true"] {
   background: var(--ink);
   border-color: var(--ink);
   color: #ffffff;
+}
+
+.chip[aria-pressed="true"]:hover {
+  background: var(--panel-raised);
+  border-color: var(--panel-raised);
+}
+
+.chip:disabled {
+  border-color: var(--hairline-soft);
+  background: var(--surface);
+  color: var(--muted-on-panel);
+  pointer-events: none;
 }
 
 /* Client statuses: one pill per status, colours from the UI kit. */
