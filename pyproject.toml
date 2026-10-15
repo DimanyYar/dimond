@@ -5,7 +5,7 @@ description = "Client request portal synced with Jira."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "django>=5.2,<5.3",
+    "django>=6.1.2,<6.2",
     "psycopg[binary]>=3.2",
     "gunicorn>=23",
 ]
