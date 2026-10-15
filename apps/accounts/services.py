@@ -33,18 +33,28 @@ def send_sign_in_link(email: str) -> None:
     Returns the same way whether or not the address has an account, so the sign-in page
     cannot be used to find out who is a client.
     """
-    user = User.objects.filter(email=email.strip().lower(), is_active=True).first()
-    if user is None:
-        return
+    # Locking the person makes parallel requests wait their turn, so all of them see the
+    # real count and the limit holds even when someone fires many requests at once.
+    with transaction.atomic():
+        user = (
+            User.objects.select_for_update()
+            .filter(email=email.strip().lower(), is_active=True)
+            .first()
+        )
+        if user is None:
+            return
 
-    now = timezone.now()
-    recent = user.sign_in_links.filter(created_at__gte=now - LINK_LIFETIME).count()
-    if recent >= MAX_LINKS_PER_LIFETIME:
-        logger.warning("Sign-in link limit reached for user %s", user.pk)
-        return
+        now = timezone.now()
+        recent = user.sign_in_links.filter(created_at__gte=now - LINK_LIFETIME).count()
+        if recent >= MAX_LINKS_PER_LIFETIME:
+            logger.warning("Sign-in link limit reached for user %s", user.pk)
+            return
 
-    token = secrets.token_urlsafe(32)
-    SignInLink.objects.create(user=user, token_hash=_hash(token), expires_at=now + LINK_LIFETIME)
+        token = secrets.token_urlsafe(32)
+        SignInLink.objects.create(
+            user=user, token_hash=_hash(token), expires_at=now + LINK_LIFETIME
+        )
+
     url = settings.SITE_URL + reverse("sign_in_link", args=[token])
     send_mail(
         subject="Your dimon.d sign-in link",
