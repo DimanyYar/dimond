@@ -1,0 +1,22 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+The client's shell: navigation, company and sign-out. Only clients see these pages, and they
+may always send a request. Pages fill `content`.
+{% endcomment %}
+{% block nav %}
+  <a href="{% url 'my_requests' %}"{% if request.resolver_match.url_name == "my_requests" %} aria-current="page"{% endif %}>My requests</a>
+{% endblock %}
+{% block sidebar_footer %}
+  <span>{{ user.name|default:user.email }} · {{ user.company }}</span>
+  {% include "accounts/sign_out_button.html" %}
+{% endblock %}
+{% block topbar_meta %}{{ user.company }} {% include "accounts/sign_out_button.html" %}{% endblock %}
+{% block tabs %}
+  <a href="{% url 'my_requests' %}"{% if request.resolver_match.url_name == "my_requests" %} aria-current="page"{% endif %}>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+    Requests
+  </a>
+  <a href="{% url 'new_request' %}" class="tab-new" aria-label="Summon Dimon: new request"{% if request.resolver_match.url_name == "new_request" %} aria-current="page"{% endif %}>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+  </a>
+{% endblock %}

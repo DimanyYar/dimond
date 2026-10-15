@@ -107,5 +107,5 @@ def test_revoked_client_is_sent_to_sign_in(client, ruslan):
 def test_page_script_gets_the_address_instead_of_a_redirect(client, ruslan):
     response = client.post(URL, filled("idea"), headers={"X-Requested-With": "fetch"})
 
-    assert (response.status_code, response["Location"]) == (201, "/")
-    assert "DMN-" in client.get("/").content.decode()
+    assert (response.status_code, response["Location"]) == (201, "/requests/")
+    assert "DMN-" in client.get("/requests/").content.decode()
