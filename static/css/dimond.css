@@ -105,6 +105,14 @@ h2 {
 
 /* App shell: dark sidebar on wide screens, bottom tab bar on phones. */
 
+/* The macOS bounce at the top and bottom of the page drags the sticky sidebar with it.
+   Phones keep it: there is no sidebar there, and pulling down reloads the page. */
+@media (min-width: 900px) {
+  html {
+    overscroll-behavior-y: none;
+  }
+}
+
 .app {
   display: flex;
   min-height: 100vh;
