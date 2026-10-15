@@ -1,0 +1,13 @@
+{% extends "layouts/sign_in.html" %}
+{% block title %}Sign in · dimon.d{% endblock %}
+
+{% block content %}
+  <header class="stack auth-header">
+    <h1>You’re almost in</h1>
+    <p class="muted">Press the button to finish signing in on this device.</p>
+  </header>
+  <form method="post">
+    {% csrf_token %}
+    <button class="btn btn-primary btn-block" type="submit">Sign in to dimon.d</button>
+  </form>
+{% endblock %}

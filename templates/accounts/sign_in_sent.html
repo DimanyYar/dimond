@@ -1,0 +1,24 @@
+{% extends "layouts/sign_in.html" %}
+{% block title %}Check your inbox · dimon.d{% endblock %}
+
+{% block content %}
+  <header class="stack auth-header">
+    <h1>Check your inbox</h1>
+    <p class="muted">If <strong class="ink">{{ email }}</strong> has access, a sign-in link is on its way. It works once, for 15 minutes.</p>
+  </header>
+
+  <div class="row">
+    <a class="btn" href="https://mail.google.com/" target="_blank" rel="noopener">Open Gmail</a>
+    <a class="btn" href="https://outlook.office.com/mail/" target="_blank" rel="noopener">Open Outlook</a>
+  </div>
+
+  <p class="hint">Didn’t get it in a couple of minutes? Check spam and make sure this is the email your PM invited. Still nothing? Ask your PM to add you.</p>
+
+  <form method="post" action="{% url 'sign_in' %}">
+    {% csrf_token %}
+    <input type="hidden" name="email" value="{{ email }}">
+    <button class="link-button" type="submit">Send the link again</button>
+  </form>
+
+  <a href="{% url 'sign_in' %}">Use a different email</a>
+{% endblock %}

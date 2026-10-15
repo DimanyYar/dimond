@@ -179,17 +179,47 @@ h2 {
   gap: var(--space-5);
 }
 
-.tabbar {
+.tabbar,
+.topbar {
   display: none;
 }
 
 @media (max-width: 899px) {
+  .app {
+    flex-direction: column;
+  }
+
   .sidebar {
     display: none;
   }
 
+  /* The sidebar is hidden on phones, so the brand moves to a slim bar on top. */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-4) 0;
+  }
+
+  .topbar .brand {
+    color: var(--ink);
+    font-size: 17px;
+  }
+
+  .topbar .brand-mark {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+
+  .topbar-meta {
+    font-size: 14px;
+    color: var(--muted);
+  }
+
   .main {
-    padding: var(--space-6) var(--space-4) 112px;
+    padding: var(--space-5) var(--space-4) 112px;
   }
 
   h1 {
@@ -238,6 +268,103 @@ h2 {
     color: var(--ink);
     font-size: 28px;
     box-shadow: 0 6px 18px rgb(255 86 0 / 35%);
+  }
+}
+
+/* Signed-out pages: brand panel and form. The panel moves on top on phones. */
+
+.auth {
+  min-height: 100vh;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.auth-hero {
+  flex: 0 0 440px;
+  background: var(--panel);
+  color: #ffffff;
+  padding: 48px 44px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.auth-pitch {
+  margin-top: auto;
+}
+
+.auth-tagline {
+  margin: 0 0 14px;
+  font-size: 44px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+
+.auth-lede {
+  margin: 0;
+  max-width: 360px;
+  color: var(--muted-on-panel);
+}
+
+.auth-footnote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.auth-main {
+  flex: 1 1 480px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px var(--space-5);
+}
+
+.auth-panel {
+  width: 100%;
+  max-width: 420px;
+  gap: 22px;
+}
+
+.auth-header {
+  gap: var(--space-2);
+}
+
+.auth-header p {
+  margin: 0;
+}
+
+@media (max-width: 899px) {
+  .auth {
+    flex-direction: column;
+  }
+
+  .auth-hero {
+    flex: 0 0 auto;
+    padding: var(--space-5) var(--space-4);
+    gap: var(--space-5);
+  }
+
+  .auth-pitch {
+    margin-top: 0;
+  }
+
+  .auth-tagline {
+    margin: 0;
+    font-size: 32px;
+  }
+
+  .auth-lede,
+  .auth-footnote {
+    display: none;
+  }
+
+  .auth-main {
+    flex: 1 1 auto;
+    align-items: flex-start;
+    padding: var(--space-6) var(--space-4);
   }
 }
 
@@ -353,6 +480,29 @@ textarea.input {
 
 .hint {
   font-size: 13px;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.ink {
+  color: var(--ink);
+}
+
+/* A button that reads as a link: actions such as sign out must be POST, never a plain link. */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link-button:hover {
   color: var(--muted);
 }
 
