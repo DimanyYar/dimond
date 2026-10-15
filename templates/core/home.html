@@ -5,6 +5,7 @@
 {% block sidebar_footer %}
   {{ user.name|default:user.email }}{% if user.company %} · {{ user.company }}{% endif %}
 {% endblock %}
+{% block topbar_meta %}{{ user.company|default:"" }}{% endblock %}
 {% block tabs %}<a href="{% url 'home' %}" aria-current="page">Requests</a>{% endblock %}
 
 {% block content %}

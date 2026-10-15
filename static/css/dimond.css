@@ -179,17 +179,47 @@ h2 {
   gap: var(--space-5);
 }
 
-.tabbar {
+.tabbar,
+.topbar {
   display: none;
 }
 
 @media (max-width: 899px) {
+  .app {
+    flex-direction: column;
+  }
+
   .sidebar {
     display: none;
   }
 
+  /* The sidebar is hidden on phones, so the brand moves to a slim bar on top. */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-4) 0;
+  }
+
+  .topbar .brand {
+    color: var(--ink);
+    font-size: 17px;
+  }
+
+  .topbar .brand-mark {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+
+  .topbar-meta {
+    font-size: 14px;
+    color: var(--muted);
+  }
+
   .main {
-    padding: var(--space-6) var(--space-4) 112px;
+    padding: var(--space-5) var(--space-4) 112px;
   }
 
   h1 {
