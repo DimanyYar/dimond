@@ -20,6 +20,8 @@ const DONE_MS = 1000;
 const LAST_SCENARIO_KEY = "dimond.lastSpinnerScenario";
 
 const spinner = document.getElementById("spinner");
+const SUBMIT_LABEL = document.querySelector('#new-request-form [type="submit"]').textContent;
+let requestSaved = false;
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -119,12 +121,21 @@ function bind(form) {
     }
 
     if (response.status === 201) {
+      requestSaved = true;
       await playSpinner();
       window.location.assign(response.headers.get("Location"));
       return;
     }
 
-    const page = new DOMParser().parseFromString(await response.text(), "text/html");
+    let body;
+    try {
+      body = await response.text();
+    } catch {
+      sendError.textContent = "Couldn’t reach dimon.d. Check your connection and try again.";
+      restoreButton();
+      return;
+    }
+    const page = new DOMParser().parseFromString(body, "text/html");
     const withErrors = page.getElementById(form.id);
     if (response.status !== 422 || withErrors === null) {
       sendError.textContent = "Something went wrong on our side. Please try again in a minute.";
@@ -139,8 +150,18 @@ function bind(form) {
 
 bind(document.getElementById("new-request-form"));
 
-// Coming back with the Back button restores this page from cache, spinner and all; the
-// request is already sent, so a clean form is what the client needs.
+// Coming back with the Back button after sending restores this page from cache, spinner and
+// all. The request is already saved, so the client gets an empty form instead of one that
+// would send it twice. An unsent draft is left as it was.
 window.addEventListener("pageshow", (event) => {
-  if (event.persisted) window.location.reload();
+  if (!event.persisted || !requestSaved) return;
+  requestSaved = false;
+  spinner.hidden = true;
+  const form = document.getElementById("new-request-form");
+  form.reset();
+  applyType(form, form.elements.type.value);
+  applyWhenNeeded(form);
+  const button = form.querySelector('[type="submit"]');
+  button.disabled = false;
+  button.textContent = SUBMIT_LABEL;
 });
