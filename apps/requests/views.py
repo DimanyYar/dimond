@@ -44,6 +44,5 @@ def new_request(request: HttpRequest) -> HttpResponse:
         "form": form,
         "type_copy": TYPE_COPY,
         "when_needed_copy": WHEN_NEEDED_COPY,
-        "default_when_needed": {t: t.default_when_needed for t in RequestType},
     }
     return render(request, "requests/new_request.html", context, status=status)

@@ -1,9 +1,8 @@
-// New request form: per-type copy, the default urgency per type, and the joke spinner while
+// New request form: per-type copy, the urgency note, and the joke spinner while
 // the request is sent. Without this script the form still works as a plain POST.
 
 const typeCopy = JSON.parse(document.getElementById("type-copy").textContent);
 const whenNeededCopy = JSON.parse(document.getElementById("when-needed-copy").textContent);
-const defaultWhenNeeded = JSON.parse(document.getElementById("default-when-needed").textContent);
 
 // One scenario per send; the last line is always the confirmation (mockups: Spinner scenarios).
 const SCENARIOS = [
@@ -98,21 +97,9 @@ function applyWhenNeeded(form) {
 }
 
 function bind(form) {
-  // Once the client picks an urgency themselves, switching the type must not overwrite it.
-  let whenTouched = false;
-
   form.addEventListener("change", (event) => {
-    if (event.target.name === "type") {
-      applyType(form, event.target.value);
-      if (!whenTouched) {
-        form.elements.when_needed.value = defaultWhenNeeded[event.target.value];
-        applyWhenNeeded(form);
-      }
-    }
-    if (event.target.name === "when_needed") {
-      whenTouched = true;
-      applyWhenNeeded(form);
-    }
+    if (event.target.name === "type") applyType(form, event.target.value);
+    if (event.target.name === "when_needed") applyWhenNeeded(form);
   });
 
   form.addEventListener("submit", async (event) => {
