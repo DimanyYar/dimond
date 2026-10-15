@@ -15,8 +15,8 @@ const SCENARIOS = [
   ["Looking for a spot in the backlog…", "Found one. Right at the top.", "Don’t tell the other tickets."],
   ["Pinging a developer…", "Developer: “works on my machine”.", "Your machine counts too. Request’s in."],
 ];
-const LINE_MS = 1000;
-const DONE_MS = 1200;
+const LINE_MS = 850;
+const DONE_MS = 1000;
 const LAST_SCENARIO_KEY = "dimond.lastSpinnerScenario";
 
 const spinner = document.getElementById("spinner");
@@ -42,42 +42,32 @@ function pickScenario() {
   return SCENARIOS[index];
 }
 
-function startSpinner() {
+// Plays only after the server has saved the request: a form it bounces must not flash
+// a success animation first.
+async function playSpinner() {
   const lines = pickScenario();
   const card = spinner.querySelector(".spinner-card");
-  const line = spinner.querySelector("[data-spinner-line]");
   const dots = spinner.querySelector("[data-spinner-dots]");
   dots.replaceChildren(...lines.map(() => document.createElement("span")));
 
   function show(index) {
     // A fresh node restarts the fade-in animation for every line.
+    const line = spinner.querySelector("[data-spinner-line]");
     const fresh = line.cloneNode();
     fresh.textContent = lines[index];
-    spinner.querySelector("[data-spinner-line]").replaceWith(fresh);
+    line.replaceWith(fresh);
     [...dots.children].forEach((dot, k) => dot.classList.toggle("is-passed", k <= index));
   }
 
   card.classList.remove("is-done");
   spinner.hidden = false;
-  show(0);
-  const startedAt = Date.now();
-  // A slow request holds on the middle line instead of announcing success too early.
-  const middle = setTimeout(() => show(1), LINE_MS);
-
-  return {
-    stop() {
-      clearTimeout(middle);
-      spinner.hidden = true;
-    },
-    async finish() {
-      // Even a fast server leaves the first line on screen long enough to read.
-      await wait(Math.max(0, LINE_MS - (Date.now() - startedAt)));
-      clearTimeout(middle);
-      card.classList.add("is-done");
-      show(lines.length - 1);
-      await wait(DONE_MS);
-    },
-  };
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    show(index);
+    await wait(LINE_MS);
+  }
+  card.classList.add("is-done");
+  show(lines.length - 1);
+  await wait(DONE_MS);
 }
 
 function applyType(form, type) {
@@ -106,10 +96,14 @@ function bind(form) {
     event.preventDefault();
     const button = form.querySelector('[type="submit"]');
     const sendError = form.querySelector("[data-send-error]");
+    const label = button.textContent;
     button.disabled = true;
+    button.textContent = "Sending…";
     sendError.textContent = "";
-    // A form the server will bounce gets no jokes: the errors show up straight away.
-    const running = form.checkValidity() ? startSpinner() : null;
+    const restoreButton = () => {
+      button.disabled = false;
+      button.textContent = label;
+    };
 
     let response;
     try {
@@ -119,24 +113,22 @@ function bind(form) {
         headers: { "X-Requested-With": "fetch" },
       });
     } catch {
-      running?.stop();
       sendError.textContent = "Couldn’t reach dimon.d. Check your connection and try again.";
-      button.disabled = false;
+      restoreButton();
       return;
     }
 
     if (response.status === 201) {
-      await running?.finish();
+      await playSpinner();
       window.location.assign(response.headers.get("Location"));
       return;
     }
 
-    running?.stop();
     const page = new DOMParser().parseFromString(await response.text(), "text/html");
     const withErrors = page.getElementById(form.id);
     if (response.status !== 422 || withErrors === null) {
       sendError.textContent = "Something went wrong on our side. Please try again in a minute.";
-      button.disabled = false;
+      restoreButton();
       return;
     }
     form.replaceWith(withErrors);
@@ -147,9 +139,8 @@ function bind(form) {
 
 bind(document.getElementById("new-request-form"));
 
-// Coming back with the Back button restores this page from cache, spinner and all.
+// Coming back with the Back button restores this page from cache, spinner and all; the
+// request is already sent, so a clean form is what the client needs.
 window.addEventListener("pageshow", (event) => {
-  if (!event.persisted) return;
-  spinner.hidden = true;
-  document.querySelector('#new-request-form [type="submit"]').disabled = false;
+  if (event.persisted) window.location.reload();
 });
