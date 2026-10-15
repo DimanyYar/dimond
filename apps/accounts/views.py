@@ -15,7 +15,7 @@ def sign_in(request: HttpRequest) -> HttpResponse:
         return redirect("home")
     form = EmailForm(request.POST or None)
     if form.is_valid():
-        services.send_sign_in_link(form.cleaned_data["email"])
+        services.request_sign_in_link(form.cleaned_data["email"])
         request.session[SENT_TO] = form.cleaned_data["email"]
         return redirect("sign_in_sent")
     return render(request, "accounts/sign_in.html", {"form": form})

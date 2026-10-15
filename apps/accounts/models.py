@@ -108,12 +108,17 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 class SignInLink(models.Model):
-    """A one-time sign-in link sent by email (ADR 0003). Only the hash of its token is stored."""
+    """A one-time sign-in link (ADR 0003), queued by the sign-in page and emailed by the worker.
+
+    The token is made at sending time and only its hash is kept, so the database never holds
+    a working link. Until the worker sends it, the hash and expiry are empty.
+    """
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sign_in_links")
-    token_hash = models.CharField(max_length=64, unique=True)
+    token_hash = models.CharField(max_length=64, unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
+    sent_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
     used_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self) -> str:

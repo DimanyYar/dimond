@@ -1,12 +1,15 @@
 import re
 from datetime import timedelta
+from io import StringIO
 
 import pytest
 from django.conf import settings
 from django.core import mail
+from django.core.management import call_command
 from django.utils import timezone
 
 from apps.accounts.models import Company, SignInLink, User
+from apps.accounts.services import send_queued_sign_in_links
 
 pytestmark = pytest.mark.django_db
 
@@ -18,7 +21,10 @@ def anna() -> User:
 
 
 def ask_for_link(client, email: str):
-    return client.post("/sign-in/", {"email": email}, follow=True)
+    """Ask on the sign-in page, then let the worker do its round."""
+    response = client.post("/sign-in/", {"email": email}, follow=True)
+    send_queued_sign_in_links()
+    return response
 
 
 def link_path_from_email() -> str:
@@ -117,13 +123,6 @@ def test_revoked_person_gets_no_new_links(client, anna):
     assert mail.outbox == []
 
 
-def test_link_is_stored_only_as_a_hash(client, anna):
-    ask_for_link(client, anna.email)
-    token = link_path_from_email().rstrip("/").rsplit("/", 1)[-1]
-
-    assert not SignInLink.objects.filter(token_hash=token).exists()
-
-
 def test_no_more_than_three_links_in_15_minutes(client, anna):
     for _ in range(4):
         ask_for_link(client, anna.email)
@@ -145,3 +144,69 @@ def test_sign_out_ends_the_session(client, anna):
     client.post("/sign-out/")
 
     assert client.get("/").status_code == 302
+
+
+def test_sign_in_page_only_queues_the_email(client, anna):
+    # Sending during the request would make known addresses answer slower than unknown ones.
+    client.post("/sign-in/", {"email": anna.email})
+
+    assert mail.outbox == []
+    assert send_queued_sign_in_links() == 1
+    assert len(mail.outbox) == 1
+
+
+def test_database_never_holds_a_working_link(client, anna):
+    client.post("/sign-in/", {"email": anna.email})
+    queued = SignInLink.objects.get()
+    assert queued.token_hash is None
+
+    send_queued_sign_in_links()
+    token = link_path_from_email().rstrip("/").rsplit("/", 1)[-1]
+
+    assert not SignInLink.objects.filter(token_hash=token).exists()
+
+
+def test_each_queued_link_is_emailed_once(client, anna):
+    client.post("/sign-in/", {"email": anna.email})
+
+    send_queued_sign_in_links()
+    send_queued_sign_in_links()
+
+    assert len(mail.outbox) == 1
+
+
+def test_failed_email_is_retried_on_the_next_round(client, anna, monkeypatch):
+    client.post("/sign-in/", {"email": anna.email})
+
+    def mail_server_down(*args, **kwargs):
+        raise ConnectionRefusedError
+
+    monkeypatch.setattr("apps.accounts.services.send_mail", mail_server_down)
+    assert send_queued_sign_in_links() == 0
+    monkeypatch.undo()
+
+    assert send_queued_sign_in_links() == 1
+    assert len(mail.outbox) == 1
+
+
+def test_request_older_than_15_minutes_is_not_sent(client, anna):
+    client.post("/sign-in/", {"email": anna.email})
+    SignInLink.objects.update(created_at=timezone.now() - timedelta(minutes=16))
+
+    assert send_queued_sign_in_links() == 0
+
+
+def test_person_revoked_before_the_email_went_out_gets_nothing(client, anna):
+    client.post("/sign-in/", {"email": anna.email})
+    anna.is_active = False
+    anna.save()
+
+    assert send_queued_sign_in_links() == 0
+
+
+def test_worker_command_sends_queued_emails(client, anna):
+    client.post("/sign-in/", {"email": anna.email})
+
+    call_command("send_emails", stdout=StringIO())
+
+    assert len(mail.outbox) == 1
