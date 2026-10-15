@@ -23,6 +23,7 @@ def test_pm_adds_a_client_person_in_the_admin(pm_client):
             "name": "Mark T.",
             "role": Role.CLIENT,
             "company": atlas.pk,
+            "notify": "own",
             "is_active": "on",
         },
     )

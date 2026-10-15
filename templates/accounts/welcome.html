@@ -1,0 +1,38 @@
+{% extends "layouts/sign_in.html" %}
+{% block title %}Welcome · dimon.d{% endblock %}
+
+{% block content %}
+  {% with company=invite.user.company %}
+  <header class="stack auth-header">
+    {% if invite.invited_by %}<p class="hint">Invited by {{ invite.invited_by.name|default:invite.invited_by.email }}{% if company %} · {{ company }}{% endif %}</p>{% endif %}
+    <h1>Welcome to dimon.d</h1>
+    <p class="muted">{% if company %}This is where {{ company }} sends requests to the team and follows them. {% endif %}Two quick things and you’re in.</p>
+  </header>
+
+  <form method="post" class="stack" novalidate>
+    {% csrf_token %}
+    <div class="field">
+      <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+      <input class="input" type="text" name="name" id="{{ form.name.id_for_label }}"
+             autocomplete="name" required maxlength="120" value="{{ form.name.value|default_if_none:'' }}"
+             aria-describedby="name-hint{% if form.name.errors %} name-error{% endif %}"
+             {% if form.name.errors %}aria-invalid="true"{% endif %}>
+      {% if form.name.errors %}<span class="error-text" id="name-error">Tell us your name so people know who wrote the request.</span>{% endif %}
+      <span class="hint" id="name-hint">{% if company %}Your colleagues at {{ company }} and the team{% else %}Everyone you work with here{% endif %} will see it next to your requests.</span>
+    </div>
+
+    <fieldset class="field choices">
+      <legend>Email me about</legend>
+      {% for value, label in form.notify.field.choices %}
+        <label class="choice">
+          <input type="radio" name="notify" value="{{ value }}" {% if form.notify.value == value %}checked{% endif %}>
+          <span>{% if value == "company" and company %}Everything at {{ company }}{% else %}{{ label }}{% endif %}</span>
+        </label>
+      {% endfor %}
+      <span class="hint">You can change this later in your account.</span>
+    </fieldset>
+
+    <button class="btn btn-primary btn-block" type="submit">Continue to my requests</button>
+  </form>
+  {% endwith %}
+{% endblock %}
