@@ -41,7 +41,7 @@ def make(
 
 
 def titles(response) -> list[str]:
-    return [r.title for r in response.context["requests"]]
+    return [r.title for r in response.context["page"].requests]
 
 
 def test_client_lands_on_my_requests_after_sign_in(client, anna):

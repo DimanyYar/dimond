@@ -26,13 +26,16 @@ def my_requests(request: HttpRequest) -> HttpResponse:
     type = RequestType(filters.chosen("type")) if filters.chosen("type") else None
     period = Period(filters.chosen("period", Period.THREE_MONTHS))
     view = View(filters.chosen("view", View.BOARD))
-    since = selectors.period_start(period, timezone.now())
-    shown = list(selectors.my_requests(request.user, show=show, type=type, since=since))
+    page = selectors.my_requests_page(
+        request.user,
+        show=show,
+        type=type,
+        period=period,
+        with_board=view == View.BOARD,
+        now=timezone.now(),
+    )
     context = {
-        "requests": shown,
-        "board": selectors.board(shown) if view == View.BOARD else [],
-        "summary": selectors.period_summary(request.user, since),
-        "has_any_request": selectors.requests_for(request.user).exists(),
+        "page": page,
         "show": show,
         "type": type,
         "period": period,

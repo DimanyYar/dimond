@@ -27,11 +27,11 @@
       </nav>
     </div>
     <dl class="summary-stats">
-      <div><dt>Received</dt><dd>{{ summary.received }}</dd></div>
-      <div><dt>In work</dt><dd>{{ summary.in_work }}</dd></div>
-      <div><dt>Later</dt><dd>{{ summary.later }}</dd></div>
-      <div><dt>Done</dt><dd>{{ summary.done }}</dd></div>
-      <div><dt>Declined</dt><dd>{{ summary.declined }}</dd></div>
+      <div><dt>Received</dt><dd>{{ page.summary.received }}</dd></div>
+      <div><dt>In work</dt><dd>{{ page.summary.in_work }}</dd></div>
+      <div><dt>Later</dt><dd>{{ page.summary.later }}</dd></div>
+      <div><dt>Done</dt><dd>{{ page.summary.done }}</dd></div>
+      <div><dt>Declined</dt><dd>{{ page.summary.declined }}</dd></div>
     </dl>
   </section>
 
@@ -39,7 +39,7 @@
     <nav class="segmented" aria-label="Show">
       {% for value, label in shows %}
         <a href="{% querystring show=value %}"{% if value == show %} aria-current="true"{% endif %}>
-          {{ label }} {% if value == "open" %}{{ summary.open }}{% elif value == "closed" %}{{ summary.closed }}{% else %}{{ summary.received }}{% endif %}
+          {{ label }} {% if value == "open" %}{{ page.summary.open }}{% elif value == "closed" %}{{ page.summary.closed }}{% else %}{{ page.summary.received }}{% endif %}
         </a>
       {% endfor %}
     </nav>
@@ -55,10 +55,10 @@
     </nav>
   </div>
 
-  {% if not requests %}
+  {% if not page.requests %}
     <div class="empty-state">
       <span class="brand-mark" aria-hidden="true">d.</span>
-      {% if has_any_request %}
+      {% if page.has_any_request %}
         <strong>Nothing here.</strong>
         <p class="muted">No requests match these filters. Dimon is idle — got something for him?</p>
       {% else %}
@@ -69,7 +69,7 @@
     </div>
   {% elif view == "board" %}
     <section class="board" aria-label="Requests by status">
-      {% for column, items in board %}
+      {% for column, items in page.board %}
         <div class="board-column" data-column="{{ column.slug }}">
           <h2><span class="dot" aria-hidden="true"></span>{{ column.name }} <span class="muted">{{ items|length }}</span></h2>
           {% for item in items %}
@@ -80,7 +80,7 @@
     </section>
   {% else %}
     <section class="request-list" aria-label="Requests list">
-      {% regroup requests by created_at|date:"F Y" as months %}
+      {% regroup page.requests by created_at|date:"F Y" as months %}
       {% for month in months %}
         <h2 class="list-month">{{ month.grouper }} <span class="muted">{{ month.list|length }}</span></h2>
         {% for item in month.list %}

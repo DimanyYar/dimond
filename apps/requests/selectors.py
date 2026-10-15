@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from django.db import models
@@ -121,3 +122,35 @@ def board(requests: Iterable[Request]) -> list[tuple[BoardColumn, list[Request]]
         (column, [r for r in requests if r.status in column.statuses]) for column in BOARD_COLUMNS
     ]
     return [(column, items) for column, items in columns if items]
+
+
+@dataclass(frozen=True)
+class MyRequestsPage:
+    requests: list[Request]
+    board: list[tuple[BoardColumn, list[Request]]]
+    summary: dict[str, int]
+    has_any_request: bool
+
+
+def my_requests_page(
+    user: User,
+    *,
+    show: Show,
+    type: RequestType | None,
+    period: Period,
+    with_board: bool,
+    now: datetime,
+) -> MyRequestsPage:
+    """Everything "My requests" shows, read in one place.
+
+    Not paginated: a client sends a handful of requests a week, so even "All time" stays
+    small. Revisit when a company passes a few hundred requests.
+    """
+    since = period_start(period, now)
+    shown = list(my_requests(user, show=show, type=type, since=since))
+    return MyRequestsPage(
+        requests=shown,
+        board=board(shown) if with_board else [],
+        summary=period_summary(user, since),
+        has_any_request=requests_for(user).exists(),
+    )
