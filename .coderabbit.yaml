@@ -1,0 +1,34 @@
+# CodeRabbit review settings. Docs: https://docs.coderabbit.ai/reference/configuration
+language: en-US
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_instructions:
+    - path: "**/*.py"
+      instructions: |
+        Review against the rules in CLAUDE.md. Flag in particular:
+        - abstractions with a single implementation (base classes, factories, strategies);
+        - comments that restate what the code does instead of why;
+        - broad `except Exception`, swallowed errors, defensive checks for impossible values;
+        - duplicated logic, statuses or permission checks that should live in one place;
+        - dead code, commented-out code, TODOs, unused parameters;
+        - new dependencies without a matching ADR in docs/adr/.
+    - path: "apps/**/views.py"
+      instructions: |
+        Views must stay thin: parse input, call one service or selector, render.
+        Any direct `Model.objects` query here is a bug: reads go through selectors that scope
+        data to the acting user's company (IDOR protection).
+    - path: "apps/**/selectors.py"
+      instructions: |
+        Every selector must take the acting user and restrict results to what that user may
+        see. A query without that scoping is a security issue.
+    - path: "tests/**"
+      instructions: |
+        Tests must check behaviour named after the product rules, not that code exists.
+        No network calls: Jira is always the mock adapter or recorded JSON.

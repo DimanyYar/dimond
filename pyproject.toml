@@ -1,0 +1,69 @@
+[project]
+name = "dimond"
+version = "0.1.0"
+description = "Client request portal synced with Jira."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "django>=5.2,<5.3",
+    "psycopg[binary]>=3.2",
+    "gunicorn>=23",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-django>=4.9",
+    "ruff>=0.13",
+    "mypy>=1.18",
+    "django-stubs>=5.2",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["**/migrations/*"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F",   # pycodestyle, pyflakes: errors, unused imports and variables
+    "I",             # import order
+    "B",             # bugbear: likely bugs
+    "UP",            # modern syntax
+    "SIM",           # needless complexity
+    "C90",           # functions too complex to read
+    "BLE",           # blind `except Exception`
+    "S110",          # `try/except/pass`
+    "ERA",           # commented-out code
+    "T20",           # stray print()
+    "DJ",            # Django pitfalls
+    "PT",            # pytest style
+    "RET",           # needless returns
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.mypy]
+python_version = "3.13"
+plugins = ["mypy_django_plugin.main"]
+files = ["apps"]
+exclude = ["/migrations/"]
+check_untyped_defs = true
+warn_unused_ignores = true
+
+# Strict where a mistake costs the most: business actions and the Jira adapter (ADR 0007).
+[[tool.mypy.overrides]]
+module = ["apps.*.services", "apps.tracker.*"]
+strict = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+testpaths = ["tests"]
+addopts = "--strict-markers"
