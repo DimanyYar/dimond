@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: dimond
+          POSTGRES_USER: dimond
+          POSTGRES_PASSWORD: dimond
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dimond"
+          --health-interval 2s
+          --health-retries 15
+
+    env:
+      DJANGO_SECRET_KEY: ci-only
+      POSTGRES_PASSWORD: dimond
+      POSTGRES_HOST: localhost
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Formatting
+        run: uv run ruff format --check .
+
+      - name: Types
+        run: uv run mypy
+
+      - name: Migrations are committed
+        run: uv run python manage.py makemigrations --check --dry-run
+
+      - name: Tests
+        run: uv run pytest
