@@ -86,9 +86,7 @@ class NewRequestForm(forms.Form):
     why = forms.CharField(
         error_messages={"required": "Tell us why it matters — it helps us plan it right."}
     )
-    when_needed = forms.ChoiceField(
-        choices=WhenNeeded.choices, initial=RequestType.BUG.default_when_needed
-    )
+    when_needed = forms.ChoiceField(choices=WhenNeeded.choices, initial=WhenNeeded.NOT_SURE)
     link = forms.URLField(
         max_length=500,
         required=False,
@@ -120,5 +118,5 @@ class NewRequestForm(forms.Form):
 
     def when_note(self) -> str:
         return WHEN_NEEDED_COPY.get(
-            self["when_needed"].value(), WHEN_NEEDED_COPY[WhenNeeded.THIS_RELEASE]
+            self["when_needed"].value(), WHEN_NEEDED_COPY[WhenNeeded.NOT_SURE]
         )["note"]

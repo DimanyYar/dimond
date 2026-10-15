@@ -11,19 +11,13 @@ class RequestType(models.TextChoices):
     FEATURE = "feature", "New feature"
     IDEA = "idea", "Idea"
 
-    @property
-    def default_when_needed(self) -> "WhenNeeded":
-        """What the form pre-selects for "When do you need it?" (PRD: request types)."""
-        return {
-            RequestType.BUG: WhenNeeded.THIS_RELEASE,
-            RequestType.IMPROVEMENT: WhenNeeded.NEXT_RELEASE,
-            RequestType.FEATURE: WhenNeeded.NEXT_RELEASE,
-            RequestType.IDEA: WhenNeeded.NICE_TO_HAVE,
-        }[self]
-
 
 class WhenNeeded(models.TextChoices):
-    """How urgent the client says it is. The PM decides the actual release ("Planned for")."""
+    """How urgent the client says it is. The PM decides the actual release ("Planned for").
+
+    The form starts at Not sure for every type: the client raises the urgency on purpose,
+    instead of keeping a guess we made for them.
+    """
 
     HOTFIX = "hotfix", "Hotfix"
     THIS_RELEASE = "this_release", "This release"

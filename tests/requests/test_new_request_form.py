@@ -79,20 +79,11 @@ def test_steps_are_kept_only_for_bugs(client, ruslan):
     }
 
 
-def test_new_form_starts_as_a_bug_needed_this_release(client, ruslan):
+def test_new_form_starts_as_a_bug_with_urgency_not_sure(client, ruslan):
     page = client.get(URL).content.decode()
 
     assert '<input type="radio" name="type" value="bug" checked>' in page
-    assert '<input type="radio" name="when_needed" value="this_release" checked>' in page
-
-
-def test_each_type_suggests_its_own_urgency():
-    assert {t: t.default_when_needed for t in RequestType} == {
-        RequestType.BUG: WhenNeeded.THIS_RELEASE,
-        RequestType.IMPROVEMENT: WhenNeeded.NEXT_RELEASE,
-        RequestType.FEATURE: WhenNeeded.NEXT_RELEASE,
-        RequestType.IDEA: WhenNeeded.NICE_TO_HAVE,
-    }
+    assert '<input type="radio" name="when_needed" value="not_sure" checked>' in page
 
 
 @pytest.mark.parametrize("role", [Role.PM, Role.TEAM])
