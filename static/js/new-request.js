@@ -24,6 +24,9 @@ const spinner = document.getElementById("spinner");
 // typed values and error messages, and reset() would bring those back.
 const emptyForm = document.getElementById("new-request-form").cloneNode(true);
 let requestSaved = false;
+// Survives a Back that reloads the page instead of restoring it from cache.
+const SAVED_KEY = "dimond.requestSaved";
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -124,7 +127,9 @@ function bind(form) {
 
     if (response.status === 201) {
       requestSaved = true;
-      await playSpinner();
+      history.replaceState({ ...(history.state ?? {}), [SAVED_KEY]: true }, "");
+      // Without the motion the jokes are only a pause, so people who turned it off go straight on.
+      if (!reducedMotion.matches) await playSpinner();
       window.location.assign(response.headers.get("Location"));
       return;
     }
@@ -152,14 +157,28 @@ function bind(form) {
 
 bind(document.getElementById("new-request-form"));
 
-// Coming back with the Back button after sending restores this page from cache, spinner and
-// all. The request is already saved, so the client gets an empty form instead of one that
-// would send it twice. An unsent draft is left as it was.
+// Coming back with the Back button after sending: the request is saved, so the client gets an
+// empty form instead of one that would send it twice. The browser either restores the page
+// from cache (spinner and all, maybe holding a form swapped in after an error) or reloads it
+// and may fill the fields back in itself. An unsent draft is left as it was.
 window.addEventListener("pageshow", (event) => {
-  if (!event.persisted || !requestSaved) return;
-  requestSaved = false;
-  spinner.hidden = true;
-  const fresh = emptyForm.cloneNode(true);
-  document.getElementById("new-request-form").replaceWith(fresh);
-  bind(fresh);
+  const form = document.getElementById("new-request-form");
+  const savedInHistory = history.state?.[SAVED_KEY] === true;
+  if (requestSaved || savedInHistory) {
+    requestSaved = false;
+    const state = { ...(history.state ?? {}) };
+    delete state[SAVED_KEY];
+    history.replaceState(state, "");
+    spinner.hidden = true;
+    if (event.persisted) {
+      const fresh = emptyForm.cloneNode(true);
+      form.replaceWith(fresh);
+      bind(fresh);
+      return;
+    }
+    form.reset();
+  }
+  // A restored draft keeps its type without a change event, so the labels catch up here.
+  applyType(form, form.elements.type.value);
+  applyWhenNeeded(form);
 });
