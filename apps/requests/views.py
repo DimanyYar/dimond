@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -10,8 +10,15 @@ from django.views.decorators.http import require_GET, require_http_methods
 from apps.accounts.models import User
 
 from . import selectors, services
-from .forms import TYPE_COPY, WHEN_NEEDED_COPY, MyRequestsFilter, NewRequestForm, View
-from .models import RequestType, WhenNeeded
+from .forms import (
+    TYPE_COPY,
+    WHEN_NEEDED_COPY,
+    MessageForm,
+    MyRequestsFilter,
+    NewRequestForm,
+    View,
+)
+from .models import Request, RequestType, WhenNeeded
 from .selectors import Period, Show
 
 
@@ -102,3 +109,34 @@ def new_request(request: HttpRequest) -> HttpResponse:
         "when_needed_copy": WHEN_NEEDED_COPY,
     }
     return render(request, "requests/new_request.html", context, status=status)
+
+
+@require_http_methods(["GET", "POST"])
+@login_required
+def request_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    """The request card with its thread; posting the form adds a message."""
+    assert isinstance(request.user, User)  # login_required lets only signed-in people in
+    try:
+        page = selectors.request_page(request.user, pk)
+    except Request.DoesNotExist:
+        raise Http404 from None
+    form = MessageForm(request.POST or None)
+    if form.is_valid():
+        try:
+            message = services.post_message(
+                request.user,
+                page.request,
+                form.cleaned_data["text"],
+                ask_for_input=form.cleaned_data["ask_for_input"],
+            )
+        except services.NotAllowedError:
+            raise PermissionDenied from None
+        return redirect(f"{page.request.get_absolute_url()}#message-{message.pk}")
+    context = {
+        "page": page,
+        "form": form,
+        # Picks the client's navigation; the PM's own pages come with the inbox (#12).
+        "is_client": selectors.has_my_requests_page(request.user),
+    }
+    status = 422 if form.errors else 200
+    return render(request, "requests/request_detail.html", context, status=status)

@@ -138,7 +138,7 @@
             {% for item in group.requests %}
               <tr{% if item.status == "needs_input" %} class="needs-you"{% endif %}>
                 <td class="muted">{{ item.key }}</td>
-                <td class="request-title">{{ item.title }}</td>
+                <td class="request-title"><a href="{{ item.get_absolute_url }}">{{ item.title }}</a></td>
                 <td>{{ item.get_type_display }}</td>
                 <td{% if item.when_needed == "hotfix" %} class="hotfix"{% endif %}>{{ item.get_when_needed_display }}</td>
                 <td><span class="status status-{{ item.status }}">{{ item.get_status_display }}</span></td>

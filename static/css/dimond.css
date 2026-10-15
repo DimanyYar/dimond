@@ -1318,7 +1318,9 @@ textarea.input {
 .board-column[data-column="ready-to-check"] { --column-color: var(--info); }
 .board-column[data-column="later"] { --column-color: var(--hairline-strong); }
 
+/* Relative so the title link can cover the whole card: it opens on a tap anywhere. */
 .request-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1330,6 +1332,22 @@ textarea.input {
 
 .request-card.needs-you {
   border: 1.5px solid var(--accent);
+}
+
+.request-card:hover {
+  border-color: var(--ink);
+}
+
+.card-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.card-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
 }
 
 .request-card h3 {
@@ -1399,6 +1417,14 @@ textarea.input {
   font-weight: 500;
 }
 
+.request-table .request-title a {
+  text-decoration: none;
+}
+
+.request-table .request-title a:hover {
+  text-decoration: underline;
+}
+
 .request-table tr.needs-you {
   background: #fff8f3;
 }
@@ -1454,4 +1480,416 @@ textarea.input {
     white-space: nowrap;
   }
 
+}
+
+/* Request card (#9): header, thread on the left, progress and facts on the right. */
+
+.request-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.crumbs {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.crumbs a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.crumbs a:hover {
+  color: var(--ink);
+}
+
+.type-pill {
+  padding: 3px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.request-header .meta {
+  font-size: 13px;
+}
+
+.needs-you-banner {
+  flex-wrap: wrap;
+  gap: var(--space-3) 20px;
+}
+
+.banner-mark {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.needs-you-text {
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.needs-you-text p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.request-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  scroll-margin-top: var(--space-5);
+}
+
+.message-pm {
+  border-color: var(--surface-2);
+  background: var(--surface-2);
+}
+
+.message:target {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.message-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 15px;
+}
+
+.message-head .muted {
+  font-size: 13px;
+}
+
+.message-head time {
+  margin-left: auto;
+}
+
+.avatar {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.message-pm .avatar {
+  background: var(--ink);
+  color: #ffffff;
+}
+
+.message-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.message-why {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.thread-event {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.thread-event .dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted-on-panel);
+}
+
+.thread-event time {
+  margin-left: auto;
+}
+
+.event-needs_input .dot { background: var(--accent); }
+.event-in_progress .dot { background: var(--ink); }
+.event-ready_to_check .dot { background: var(--info); }
+.event-done .dot { background: var(--success-text); }
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  scroll-margin-top: var(--space-5);
+}
+
+.composer > label:first-of-type {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.composer .check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  font-size: 14px;
+}
+
+.composer .check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ink);
+}
+
+.composer-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.thread-closed {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px dashed var(--hairline-strong);
+  border-radius: var(--radius-l);
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.request-aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.progress-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.progress-card h2 {
+  font-size: 15px;
+}
+
+.progress-card p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Phones get the one-line summary and the bar; wide screens the list of steps. */
+.progress-summary,
+.progress-bar {
+  display: none;
+}
+
+.progress-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.progress-steps li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 0 14px 28px;
+  font-size: 14px;
+  color: var(--muted-on-panel);
+}
+
+/* The circle and the line down to the next step. */
+.progress-steps li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--hairline);
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.progress-steps li::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 20px;
+  bottom: 2px;
+  width: 2px;
+  background: var(--hairline-soft);
+}
+
+.progress-steps li:last-child::after {
+  display: none;
+}
+
+.progress-steps .is-done,
+.progress-steps .is-current,
+.progress-steps .is-waiting {
+  color: var(--ink);
+}
+
+.progress-steps .is-done::before,
+.progress-steps .is-current::before {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+.progress-steps .is-done::after {
+  background: var(--ink);
+}
+
+.progress-steps .is-current,
+.progress-steps .is-waiting {
+  font-weight: 600;
+}
+
+.progress-steps .is-waiting::before {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.progress-steps .muted {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.facts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 20px;
+  border-radius: var(--radius-l);
+  background: var(--surface-2);
+  font-size: 14px;
+}
+
+.facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+  min-width: 0;
+  font-weight: 500;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 899px) {
+  .request-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* On a phone the status comes first, then the conversation. */
+  .request-aside {
+    order: -1;
+  }
+
+  .progress-card {
+    gap: var(--space-2);
+    padding: var(--space-3) 14px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--surface-2);
+  }
+
+  .progress-card h2,
+  .progress-steps {
+    display: none;
+  }
+
+  .progress-summary {
+    display: block;
+    font-weight: 600;
+  }
+
+  .progress-bar {
+    display: flex;
+    gap: var(--space-1);
+  }
+
+  .progress-bar span {
+    flex: 1;
+    height: 4px;
+    border-radius: var(--radius-pill);
+    background: var(--hairline);
+  }
+
+  .progress-bar .is-done,
+  .progress-bar .is-current {
+    background: var(--ink);
+  }
+
+  .progress-bar .is-waiting {
+    background: var(--accent);
+  }
+
+  .facts {
+    padding: var(--space-3) 14px;
+    background: transparent;
+  }
+
+  .message {
+    padding: 14px;
+  }
+
+  .composer-actions .btn {
+    width: 100%;
+    min-height: 48px;
+  }
 }

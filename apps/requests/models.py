@@ -1,6 +1,7 @@
 from typing import NamedTuple
 
 from django.db import models
+from django.urls import reverse
 
 from apps.accounts.models import Company, User
 
@@ -92,6 +93,11 @@ class Request(models.Model):
     def __str__(self) -> str:
         return self.title
 
+    def get_absolute_url(self) -> str:
+        # Also gives the admin its "View on site" button: the PM's way to the card until the
+        # inbox (#12) exists.
+        return reverse("request_detail", args=[self.pk])
+
     @property
     def key(self) -> str:
         """The number clients and the PM use for a request, like a Jira key."""
@@ -121,3 +127,19 @@ class StatusEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.from_status or 'new'} → {self.to_status}"
+
+
+class Message(models.Model):
+    """A reply in a request's thread. Everyone who can open the request reads every message,
+    so PM notes and Jira comments never go here."""
+
+    request = models.ForeignKey(Request, on_delete=models.PROTECT, related_name="messages")
+    author = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+    def __str__(self) -> str:
+        return f"{self.author} on {self.request.key}"
