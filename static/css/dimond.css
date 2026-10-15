@@ -1138,6 +1138,114 @@ textarea.input {
   color: var(--surface);
 }
 
+.filter-button,
+.request-list-mobile {
+  display: none;
+}
+
+/* The phone filter sheet: a native popover pinned to the bottom of the screen. */
+.sheet {
+  inset: auto 0 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 10px var(--space-5) calc(var(--space-6) + env(safe-area-inset-bottom));
+  border: 0;
+  border-radius: 20px 20px 0 0;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.sheet::before {
+  content: "";
+  display: block;
+  width: 40px;
+  height: 5px;
+  margin: 0 auto var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--hairline);
+}
+
+.sheet::backdrop {
+  background: rgb(17 17 17 / 45%);
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sheet-head h2 {
+  font-size: 20px;
+}
+
+.sheet .segmented {
+  display: flex;
+  flex-wrap: nowrap;
+}
+
+.sheet .segmented label {
+  padding: 8px 4px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.sheet-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.sheet-group legend {
+  margin-bottom: 10px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* A checkbox that looks like a chip: several can be on at once. */
+.chip-check {
+  min-height: var(--tap);
+  font-size: 15px;
+}
+
+.chip-check input,
+.segmented label input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chip-check:has(input:checked) {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+
+.chip-check:has(input:focus-visible),
+.segmented label:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.segmented label {
+  position: relative;
+  flex: 1 1 0;
+  padding: 7px 8px;
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.segmented label:has(input:checked) {
+  background: var(--surface);
+  color: var(--ink);
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -1291,21 +1399,37 @@ textarea.input {
 }
 
 @media (max-width: 899px) {
-  /* On a phone the type chips scroll sideways instead of taking several rows. */
-  .type-filter {
-    order: 3;
-    width: 100%;
-    overflow-x: auto;
-    padding-bottom: var(--space-1);
-  }
-
   .requests-header .btn {
     display: none;
   }
 
-  .summary .segmented {
-    width: 100%;
+  /* Phones follow the mobile mockup: one list of cards; type and period live in the sheet. */
+  .summary,
+  .type-filter,
+  .view-switch,
+  .board,
+  .request-table-wrap {
+    display: none;
+  }
+
+  .filter-bar {
     flex-wrap: nowrap;
+  }
+
+  .filter-bar .segmented {
+    flex: 1 1 auto;
+  }
+
+  .filter-button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    border-radius: var(--radius-pill);
+  }
+
+  .request-list-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .segmented a {
@@ -1316,20 +1440,4 @@ textarea.input {
     white-space: nowrap;
   }
 
-  .summary-stats {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 6px;
-  }
-
-  .summary-stats div {
-    padding: var(--space-2);
-  }
-
-  .summary-stats dt {
-    font-size: 11px;
-  }
-
-  .summary-stats dd {
-    font-size: 20px;
-  }
 }

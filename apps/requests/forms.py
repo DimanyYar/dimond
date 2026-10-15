@@ -138,7 +138,7 @@ class MyRequestsFilter(forms.Form):
     """
 
     show = forms.ChoiceField(choices=Show.choices, required=False)
-    type = forms.ChoiceField(choices=RequestType.choices, required=False)
+    type = forms.MultipleChoiceField(choices=RequestType.choices, required=False)
     period = forms.ChoiceField(choices=Period.choices, required=False)
     view = forms.ChoiceField(choices=View.choices, required=False)
 
@@ -146,3 +146,8 @@ class MyRequestsFilter(forms.Form):
         self.is_valid()
         value: str = self.cleaned_data.get(name) or default
         return value
+
+    def chosen_types(self) -> list[RequestType]:
+        """Several types at once (PRD mockups: the type chips are a multi-select)."""
+        self.is_valid()
+        return [RequestType(value) for value in self.cleaned_data.get("type") or []]

@@ -23,13 +23,13 @@ def my_requests(request: HttpRequest) -> HttpResponse:
         raise PermissionDenied
     filters = MyRequestsFilter(request.GET)
     show = Show(filters.chosen("show", Show.OPEN))
-    type = RequestType(filters.chosen("type")) if filters.chosen("type") else None
+    types = filters.chosen_types()
     period = Period(filters.chosen("period", Period.THREE_MONTHS))
     view = View(filters.chosen("view", View.BOARD))
     page = selectors.my_requests_page(
         request.user,
         show=show,
-        type=type,
+        types=types,
         period=period,
         with_board=view == View.BOARD,
         now=timezone.now(),
@@ -37,11 +37,20 @@ def my_requests(request: HttpRequest) -> HttpResponse:
     context = {
         "page": page,
         "show": show,
-        "type": type,
+        "types_chosen": types,
         "period": period,
         "view": view,
         "shows": Show.choices,
-        "types": RequestType.choices,
+        "type_chips": [
+            {
+                "value": value,
+                "label": label,
+                "on": value in types,
+                # The link a chip leads to: the same filters with this type switched on or off.
+                "toggled": [t for t in types if t != value] if value in types else [*types, value],
+            }
+            for value, label in RequestType.choices
+        ],
         "periods": Period.choices,
     }
     return render(request, "requests/my_requests.html", context)

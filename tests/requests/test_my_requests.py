@@ -85,6 +85,37 @@ def test_type_filter_shows_one_type(client, anna):
     assert titles(client.get(URL, {"type": "idea"})) == ["An idea"]
 
 
+def test_type_filter_takes_several_types_at_once(client, anna):
+    make(anna, "A bug")
+    make(anna, "An improvement", type=RequestType.IMPROVEMENT)
+    make(anna, "An idea", type=RequestType.IDEA)
+    client.force_login(anna)
+
+    response = client.get(URL, {"type": ["bug", "improvement"]})
+
+    assert sorted(titles(response)) == ["A bug", "An improvement"]
+
+
+def test_type_chip_switches_only_its_own_type(client, anna):
+    client.force_login(anna)
+
+    chips = {c["value"]: c for c in client.get(URL, {"type": "bug"}).context["type_chips"]}
+
+    assert chips["bug"]["on"]
+    assert chips["bug"]["toggled"] == []
+    assert chips["idea"]["toggled"] == ["bug", "idea"]
+
+
+def test_phone_filter_sheet_keeps_the_open_closed_switch(client, anna):
+    client.force_login(anna)
+
+    page = client.get(URL, {"show": "closed", "type": "bug"}).content.decode()
+
+    assert 'popovertarget="filters"' in page
+    assert '<input type="hidden" name="show" value="closed">' in page
+    assert 'name="type" value="bug" checked' in page
+
+
 def test_period_counts_requests_created_in_it(client, anna):
     make(anna, "Old one", created=datetime(2020, 1, 6, tzinfo=UTC))
     make(anna, "Fresh one")
@@ -169,8 +200,9 @@ def test_list_view_groups_requests_by_month(client, anna):
     client.force_login(anna)
 
     page = client.get(URL, {"view": "list", "period": "all"}).content.decode()
+    table = page[page.index('<table class="request-table"') :]  # phones get a card list above it
 
-    assert page.index("September 2026") < page.index("September one") < page.index("August 2026")
+    assert table.index("September 2026") < table.index("September one") < table.index("August 2026")
 
 
 def test_first_visit_invites_to_send_a_request(client, anna):

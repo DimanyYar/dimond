@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import NamedTuple
@@ -89,7 +89,7 @@ def _created_since(user: User, since: datetime | None) -> QuerySet[Request]:
 
 
 def my_requests(
-    user: User, *, show: Show, type: RequestType | None, since: datetime | None
+    user: User, *, show: Show, types: Collection[RequestType], since: datetime | None
 ) -> QuerySet[Request]:
     """The requests on "My requests", newest first. Later counts as open: it may come back."""
     requests = _created_since(user, since)
@@ -97,8 +97,8 @@ def my_requests(
         requests = requests.exclude(status__in=CLOSED_STATUSES)
     elif show == Show.CLOSED:
         requests = requests.filter(status__in=CLOSED_STATUSES)
-    if type is not None:
-        requests = requests.filter(type=type)
+    if types:
+        requests = requests.filter(type__in=types)
     return requests
 
 
@@ -156,7 +156,7 @@ def my_requests_page(
     user: User,
     *,
     show: Show,
-    type: RequestType | None,
+    types: Collection[RequestType],
     period: Period,
     with_board: bool,
     now: datetime,
@@ -167,7 +167,7 @@ def my_requests_page(
     small. Revisit when a company passes a few hundred requests.
     """
     since = period_start(period, now)
-    shown = list(my_requests(user, show=show, type=type, since=since))
+    shown = list(my_requests(user, show=show, types=types, since=since))
     return MyRequestsPage(
         requests=shown,
         board=board(shown) if with_board else [],

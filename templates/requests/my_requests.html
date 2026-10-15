@@ -44,15 +44,49 @@
       {% endfor %}
     </nav>
     <nav class="type-filter" aria-label="Type">
-      <a class="chip" href="{% querystring type=None %}"{% if not type %} aria-current="true"{% endif %}>All types</a>
-      {% for value, label in types %}
-        <a class="chip" href="{% querystring type=value %}"{% if value == type %} aria-current="true"{% endif %}>{{ label }}</a>
+      <a class="chip" href="{% querystring type=None %}"{% if not types_chosen %} aria-current="true"{% endif %}>All types</a>
+      {% for chip in type_chips %}
+        <a class="chip" href="{% querystring type=chip.toggled %}"{% if chip.on %} aria-current="true"{% endif %}>{{ chip.label }}</a>
       {% endfor %}
     </nav>
     <nav class="view-switch" aria-label="View">
       <a href="{% querystring view='board' %}"{% if view == "board" %} aria-current="true"{% endif %}>Board</a>
       <a href="{% querystring view='list' %}"{% if view == "list" %} aria-current="true"{% endif %}>List</a>
     </nav>
+    {# Phones: type and period move into a sheet, as in the mobile mockup. Popover needs no script. #}
+    <button class="btn filter-button" type="button" popovertarget="filters">
+      Filter{% if types_chosen %} · {{ types_chosen|length }}{% endif %}
+    </button>
+  </div>
+
+  <div id="filters" class="sheet" popover role="dialog" aria-labelledby="filters-title">
+    <form method="get" class="stack">
+      <input type="hidden" name="show" value="{{ show }}">
+      <input type="hidden" name="view" value="{{ view }}">
+      <div class="sheet-head">
+        <h2 id="filters-title">Filters</h2>
+        <a href="{% querystring type=None period=None %}">Reset</a>
+      </div>
+      <fieldset class="sheet-group">
+        <legend>Type</legend>
+        <div class="row">
+          {% for chip in type_chips %}
+            <label class="chip chip-check">
+              <input type="checkbox" name="type" value="{{ chip.value }}"{% if chip.on %} checked{% endif %}>{{ chip.label }}
+            </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <fieldset class="sheet-group">
+        <legend>Period</legend>
+        <div class="segmented">
+          {% for value, label in periods %}
+            <label><input type="radio" name="period" value="{{ value }}"{% if value == period %} checked{% endif %}>{{ label }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <button class="btn btn-dark btn-block" type="submit">Show requests</button>
+    </form>
   </div>
 
   {% if not page.requests %}
@@ -67,7 +101,13 @@
         <a class="btn btn-primary" href="{% url 'new_request' %}">Summon Dimon</a>
       {% endif %}
     </div>
-  {% elif view == "board" %}
+  {% else %}
+    <section class="request-list-mobile" aria-label="Requests">
+      {% for item in page.requests %}
+        {% include "requests/request_card.html" %}
+      {% endfor %}
+    </section>
+  {% if view == "board" %}
     <section class="board" aria-label="Requests by status">
       {% for column, items in page.board %}
         <div class="board-column" data-column="{{ column.slug }}">
@@ -103,5 +143,6 @@
         {% endfor %}
       </table>
     </div>
+  {% endif %}
   {% endif %}
 {% endblock %}
