@@ -3,7 +3,7 @@ from django.db.models import ProtectedError
 
 from apps.accounts.models import Company, Role, User
 from apps.requests import selectors, services
-from apps.requests.models import ClientStatus, Request, RequestType
+from apps.requests.models import ClientStatus, Request, RequestType, WhenNeeded
 
 pytestmark = pytest.mark.django_db
 
@@ -42,7 +42,11 @@ def developer() -> User:
 @pytest.fixture
 def bug(ruslan) -> Request:
     return services.create_request(
-        ruslan, RequestType.BUG, "Lead page is blank", why="Sales can't call leads"
+        ruslan,
+        RequestType.BUG,
+        "Lead page is blank",
+        why="Sales can't call leads",
+        when_needed=WhenNeeded.THIS_RELEASE,
     )
 
 
@@ -55,7 +59,9 @@ def test_new_request_is_received_and_belongs_to_the_author_company(bug, ruslan, 
 
 def test_only_clients_can_create_requests(pm):
     with pytest.raises(services.NotAllowedError):
-        services.create_request(pm, RequestType.IDEA, "Dark mode", why="Night shifts")
+        services.create_request(
+            pm, RequestType.IDEA, "Dark mode", why="Night shifts", when_needed=WhenNeeded.NOT_SURE
+        )
 
 
 def test_client_cannot_open_other_company_request(bug, northwind_client):
@@ -70,7 +76,11 @@ def test_colleague_sees_every_request_of_their_company(bug, anna):
 
 def test_pm_sees_requests_of_all_companies(bug, northwind_client, pm):
     other = services.create_request(
-        northwind_client, RequestType.FEATURE, "Export to CSV", why="Monthly report"
+        northwind_client,
+        RequestType.FEATURE,
+        "Export to CSV",
+        why="Monthly report",
+        when_needed=WhenNeeded.NEXT_RELEASE,
     )
     assert set(selectors.requests_for(pm)) == {bug, other}
 

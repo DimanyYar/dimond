@@ -7,6 +7,7 @@ from apps.core.views import health, home, styleguide
 urlpatterns = [
     path("", home, name="home"),
     path("", include("apps.accounts.urls")),
+    path("", include("apps.requests.urls")),
     path("healthz", health, name="health"),
     path("styleguide/", styleguide, name="styleguide"),
     path(settings.ADMIN_URL, admin.site.urls),

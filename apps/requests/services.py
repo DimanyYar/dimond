@@ -2,7 +2,8 @@ from django.db import transaction
 
 from apps.accounts.models import Role, User
 
-from .models import ClientStatus, Request, RequestType, StatusEvent
+from .models import ClientStatus, Request, RequestType, StatusEvent, WhenNeeded
+from .selectors import can_create_requests
 
 
 class NotAllowedError(Exception):
@@ -11,18 +12,30 @@ class NotAllowedError(Exception):
 
 @transaction.atomic
 def create_request(
-    author: User, type: RequestType, title: str, why: str, description: str = ""
+    author: User,
+    type: RequestType,
+    title: str,
+    why: str,
+    when_needed: WhenNeeded,
+    description: str = "",
+    steps: str = "",
+    link: str = "",
 ) -> Request:
     """Save a client's request as Received. The company comes from the author's account."""
-    if author.role != Role.CLIENT or not author.is_active or author.company is None:
+    if not can_create_requests(author):
         raise NotAllowedError
+    # Always true for a client (a database constraint); spelled out for the type checker.
+    assert author.company is not None
     request = Request.objects.create(
         company=author.company,
         author=author,
         type=type,
         title=title,
         why=why,
+        when_needed=when_needed,
         description=description,
+        steps=steps,
+        link=link,
     )
     StatusEvent.objects.create(request=request, to_status=ClientStatus.RECEIVED, actor=author)
     return request
