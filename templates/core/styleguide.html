@@ -1,0 +1,74 @@
+{% extends "layouts/app.html" %}
+{% block title %}Style guide · dimon.d{% endblock %}
+
+{% block nav %}
+  <a href="#" aria-current="page">Requests</a>
+  <a href="#">Account</a>
+{% endblock %}
+{% block sidebar_footer %}Style guide · local only{% endblock %}
+{% block tabs %}
+  <a href="#" aria-current="page">Requests</a>
+  <a href="#" class="tab-new" aria-label="New request">+</a>
+  <a href="#">Account</a>
+{% endblock %}
+
+{% block content %}
+  <header>
+    <p class="hint">Visible only with DJANGO_DEBUG=true</p>
+    <h1>Style guide</h1>
+    <p class="hint">Components arrive together with the screens that use them: forms with #7, filters and dropdowns with #8, the thread with #9, attachments with #10, media players with #11, PM tables and dialogs with #12–14.</p>
+  </header>
+
+  <section class="card stack" aria-labelledby="sg-buttons">
+    <h2 id="sg-buttons">Buttons</h2>
+    <div class="row">
+      <button class="btn btn-primary" type="button">Summon Dimon</button>
+      <button class="btn btn-dark" type="button">Send reply</button>
+      <button class="btn" type="button">Cancel</button>
+      <button class="btn btn-primary" type="button" disabled>Disabled</button>
+    </div>
+  </section>
+
+  <section class="card stack" aria-labelledby="sg-fields">
+    <h2 id="sg-fields">Fields</h2>
+    <div class="field">
+      <label for="sg-email">Work email</label>
+      <input class="input" id="sg-email" type="email" placeholder="name@company.com" aria-describedby="sg-email-hint">
+      <span class="hint" id="sg-email-hint">Only invited people can sign in.</span>
+    </div>
+    <div class="field">
+      <label for="sg-bad">With an error</label>
+      <input class="input" id="sg-bad" value="anna@" aria-invalid="true" aria-describedby="sg-bad-error">
+      <span class="error-text" id="sg-bad-error">Enter a full email address.</span>
+    </div>
+  </section>
+
+  <section class="card stack" aria-labelledby="sg-statuses">
+    <h2 id="sg-statuses">Client statuses</h2>
+    <div class="row">
+      <span class="status status-received">Received</span>
+      <span class="status status-needs-input">Needs your input</span>
+      <span class="status status-planned">Planned</span>
+      <span class="status status-in-progress">In progress</span>
+      <span class="status status-ready-to-check">Ready to check</span>
+      <span class="status status-later">Later</span>
+      <span class="status status-done">Done</span>
+      <span class="status status-declined">Declined</span>
+    </div>
+  </section>
+
+  <section class="card stack" aria-labelledby="sg-chips">
+    <h2 id="sg-chips">Chips</h2>
+    <div class="row">
+      <button class="chip" type="button" aria-pressed="true">Open</button>
+      <button class="chip" type="button" aria-pressed="false">Closed</button>
+      <button class="chip" type="button" aria-pressed="false">All</button>
+      <button class="chip" type="button" disabled>Critical</button>
+    </div>
+  </section>
+
+  <div class="banner" role="note">
+    <strong>The team has a question</strong>
+    <span>DMN-1041 · Filter the leads list by source</span>
+  </div>
+{% endblock %}
