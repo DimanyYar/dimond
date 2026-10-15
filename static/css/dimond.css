@@ -641,3 +641,177 @@ textarea.input {
   align-items: center;
   gap: var(--space-2);
 }
+
+/* New request form (#7) */
+
+.page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.page-header p {
+  margin: 0;
+}
+
+.new-request {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-5);
+}
+
+.request-form {
+  flex: 999 1 520px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.aside-note {
+  flex: 1 1 240px;
+  max-width: 300px;
+  padding: 22px;
+  border-radius: var(--radius-l);
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.aside-note h2 {
+  font-size: 16px;
+}
+
+.aside-note p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.optional {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* A chip that is a radio button: the type picker. */
+.chip-choice {
+  position: relative;
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+}
+
+.chip-choice input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chip-choice:has(input:checked) {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #ffffff;
+}
+
+.chip-choice:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Fields that belong to one type are shown by the checked type, so it works without JS. */
+.request-form:not(:has(input[name="type"][value="bug"]:checked)) .for-bug,
+.request-form:has(input[name="type"][value="bug"]:checked) .not-for-bug {
+  display: none;
+}
+
+.request-form summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.request-form details textarea {
+  width: 100%;
+}
+
+.when-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.when-option {
+  flex: 1 1 124px;
+  align-items: flex-start;
+}
+
+.when-option input {
+  margin-top: 2px;
+}
+
+.when-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.when-text .hint {
+  font-size: 12px;
+}
+
+.when-hotfix:has(input:checked) {
+  border: 2px solid var(--accent);
+}
+
+.when-note {
+  margin-top: var(--space-2);
+}
+
+.request-form:has(input[value="hotfix"]:checked) .when-note {
+  color: var(--accent-text);
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+@media (max-width: 899px) {
+  .request-form {
+    padding: var(--space-4);
+  }
+
+  .when-options {
+    flex-direction: column;
+  }
+
+  .when-option {
+    flex: 0 0 auto;
+  }
+
+  .form-actions .btn-primary {
+    width: 100%;
+    min-height: 52px;
+    font-size: 17px;
+  }
+
+  .aside-note {
+    max-width: none;
+  }
+}

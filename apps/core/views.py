@@ -5,6 +5,9 @@ from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
+from apps.accounts.models import User
+from apps.requests.selectors import can_create_requests
+
 
 @require_GET
 def health(request: HttpRequest) -> JsonResponse:
@@ -26,4 +29,7 @@ def styleguide(request: HttpRequest) -> HttpResponse:
 @login_required
 def home(request: HttpRequest) -> HttpResponse:
     """Where a signed-in person lands. Becomes "My requests" when requests arrive."""
-    return render(request, "core/home.html")
+    assert isinstance(request.user, User)  # login_required lets only signed-in people in
+    return render(
+        request, "core/home.html", {"can_create_requests": can_create_requests(request.user)}
+    )

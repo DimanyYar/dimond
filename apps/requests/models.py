@@ -11,6 +11,26 @@ class RequestType(models.TextChoices):
     FEATURE = "feature", "New feature"
     IDEA = "idea", "Idea"
 
+    @property
+    def default_when_needed(self) -> "WhenNeeded":
+        """What the form pre-selects for "When do you need it?" (PRD: request types)."""
+        return {
+            RequestType.BUG: WhenNeeded.THIS_RELEASE,
+            RequestType.IMPROVEMENT: WhenNeeded.NEXT_RELEASE,
+            RequestType.FEATURE: WhenNeeded.NEXT_RELEASE,
+            RequestType.IDEA: WhenNeeded.NICE_TO_HAVE,
+        }[self]
+
+
+class WhenNeeded(models.TextChoices):
+    """How urgent the client says it is. The PM decides the actual release ("Planned for")."""
+
+    HOTFIX = "hotfix", "Hotfix"
+    THIS_RELEASE = "this_release", "This release"
+    NEXT_RELEASE = "next_release", "Next release"
+    NICE_TO_HAVE = "nice_to_have", "Nice to have"
+    NOT_SURE = "not_sure", "Not sure"
+
 
 class ClientStatus(models.TextChoices):
     """What the client sees instead of the Jira workflow (PRD: statuses and Jira mapping)."""
@@ -34,6 +54,9 @@ class Request(models.Model):
     title = models.CharField(max_length=200)
     why = models.TextField(help_text="Why it matters: the context behind the request.")
     description = models.TextField(blank=True)
+    steps = models.TextField(blank=True, help_text="Steps to reproduce; bugs only.")
+    link = models.URLField(max_length=500, blank=True, help_text="Required for bugs.")
+    when_needed = models.CharField(max_length=20, choices=WhenNeeded.choices)
     status = models.CharField(
         max_length=20, choices=ClientStatus.choices, default=ClientStatus.RECEIVED
     )
@@ -45,6 +68,11 @@ class Request(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+    @property
+    def key(self) -> str:
+        """The number clients and the PM use for a request, like a Jira key."""
+        return f"DMN-{self.pk}"
 
 
 class StatusEvent(models.Model):

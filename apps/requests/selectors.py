@@ -24,3 +24,8 @@ def request_for(user: User, pk: int) -> Request:
     """One request this person may see. Raises Request.DoesNotExist for anyone else's,
     exactly as for a missing one, so guessing ids reveals nothing."""
     return requests_for(user).get(pk=pk)
+
+
+def can_create_requests(user: User) -> bool:
+    """Only clients send requests, and only while they still have access."""
+    return user.role == Role.CLIENT and user.is_active
