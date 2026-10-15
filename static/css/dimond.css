@@ -815,3 +815,158 @@ textarea.input {
     max-width: none;
   }
 }
+
+/* Sending spinner: PM jokes while the request is on its way. */
+
+.spinner-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgb(245 241 236 / 92%);
+}
+
+.spinner-overlay[hidden] {
+  display: none;
+}
+
+.spinner-card {
+  width: 100%;
+  max-width: 460px;
+  padding: 36px var(--space-6);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  text-align: center;
+}
+
+.spinner-mark {
+  position: relative;
+  width: 88px;
+  height: 88px;
+}
+
+.spinner-orbit {
+  position: absolute;
+  inset: 0;
+  border: 1.5px dashed var(--hairline);
+  border-radius: 50%;
+  animation: dmn-orbit 1.2s linear infinite;
+}
+
+.spinner-orbit span {
+  position: absolute;
+  top: -6px;
+  left: 38px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.spinner-logo {
+  position: absolute;
+  inset: 20px;
+  border-radius: 14px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  animation: dmn-breathe 1.6s ease-in-out infinite;
+}
+
+.spinner-done {
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--ink);
+  display: none;
+  place-items: center;
+  animation: dmn-pop 0.35s ease-out both;
+}
+
+.spinner-card.is-done .spinner-orbit,
+.spinner-card.is-done .spinner-logo {
+  display: none;
+}
+
+.spinner-card.is-done .spinner-done {
+  display: grid;
+}
+
+.spinner-line {
+  min-height: 54px;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  animation: dmn-in 0.25s ease-out both;
+}
+
+.spinner-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.spinner-dots span {
+  width: 24px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+
+.spinner-dots .is-passed {
+  background: var(--ink);
+}
+
+.spinner-card.is-done .spinner-dots span {
+  background: var(--accent);
+}
+
+@keyframes dmn-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes dmn-breathe {
+  50% {
+    transform: scale(0.92);
+  }
+}
+
+@keyframes dmn-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes dmn-pop {
+  0% {
+    transform: scale(0.6);
+  }
+
+  70% {
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner-orbit,
+  .spinner-logo,
+  .spinner-done,
+  .spinner-line {
+    animation: none;
+  }
+}

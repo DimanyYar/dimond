@@ -5,6 +5,7 @@ from django import forms
 from .models import RequestType, WhenNeeded
 
 # Labels, hints and examples change with the request type (PRD: request types and fields).
+# The page also hands this to the browser, so switching the type needs no reload.
 TYPE_COPY: dict[str, dict[str, str]] = {
     RequestType.BUG: {
         "title": "e.g. Lead card doesn’t save the second phone number",

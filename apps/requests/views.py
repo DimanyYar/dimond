@@ -3,12 +3,13 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from apps.accounts.models import User
 
 from . import selectors, services
-from .forms import NewRequestForm
+from .forms import TYPE_COPY, WHEN_NEEDED_COPY, NewRequestForm
 from .models import RequestType, WhenNeeded
 
 
@@ -32,6 +33,17 @@ def new_request(request: HttpRequest) -> HttpResponse:
             link=data["link"],
         )
         messages.success(request, f"{created.key} · {created.title}")
+        if request.headers.get("X-Requested-With") == "fetch":
+            # Following a redirect inside the script would use up the confirmation unseen,
+            # so the script gets the address and opens it itself.
+            return HttpResponse(status=201, headers={"Location": reverse("home")})
         return redirect("home")
+    # The page's script swaps the invalid form in without a reload, so it needs an error code.
     status = 422 if form.errors else 200
-    return render(request, "requests/new_request.html", {"form": form}, status=status)
+    context = {
+        "form": form,
+        "type_copy": TYPE_COPY,
+        "when_needed_copy": WHEN_NEEDED_COPY,
+        "default_when_needed": {t: t.default_when_needed for t in RequestType},
+    }
+    return render(request, "requests/new_request.html", context, status=status)
