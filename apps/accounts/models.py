@@ -105,3 +105,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     def clean(self) -> None:
         # Runs before the uniqueness check: Anna@Atlas.com and anna@atlas.com are one person.
         self.email = self.email.strip().lower()
+
+
+class SignInLink(models.Model):
+    """A one-time sign-in link sent by email (ADR 0003). Only the hash of its token is stored."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sign_in_links")
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return f"Sign-in link for {self.user}"

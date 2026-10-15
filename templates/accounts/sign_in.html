@@ -1,0 +1,31 @@
+{% extends "layouts/sign_in.html" %}
+{% block title %}{% if expired %}Link expired{% else %}Sign in{% endif %} · dimon.d{% endblock %}
+
+{% block content %}
+  <header class="stack auth-header">
+    {% if expired %}
+      <h1>This link has expired</h1>
+      <p class="muted">Sign-in links work once and only for 15 minutes — that keeps your account safe. Get a fresh one:</p>
+    {% else %}
+      <h1>Sign in</h1>
+      <p class="muted">We’ll email you a sign-in link. No password to remember.</p>
+    {% endif %}
+  </header>
+
+  <form method="post" action="{% url 'sign_in' %}" class="stack" novalidate>
+    {% csrf_token %}
+    <div class="field">
+      <label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+      <input class="input" type="email" name="email" id="{{ form.email.id_for_label }}"
+             autocomplete="email" required autofocus placeholder="name@company.com"
+             value="{{ form.email.value|default_if_none:'' }}"
+             {% if form.email.errors %}aria-invalid="true" aria-describedby="email-error"{% endif %}>
+      {% if form.email.errors %}<span class="error-text" id="email-error">Enter a full email address, like anna@atlas-crm.com.</span>{% endif %}
+    </div>
+    <button class="btn btn-primary btn-block" type="submit">{% if expired %}Send a new link{% else %}Email me a link{% endif %}</button>
+  </form>
+
+  {% if not expired %}
+    <p class="hint">Only people invited by your project manager can sign in. No invite yet? Ask your PM to add you.</p>
+  {% endif %}
+{% endblock %}

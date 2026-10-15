@@ -1,0 +1,16 @@
+{% extends "layouts/app.html" %}
+{% block title %}dimon.d{% endblock %}
+
+{% block nav %}<a href="{% url 'home' %}" aria-current="page">My requests</a>{% endblock %}
+{% block sidebar_footer %}
+  {{ user.name|default:user.email }}{% if user.company %} · {{ user.company }}{% endif %}
+{% endblock %}
+{% block tabs %}<a href="{% url 'home' %}" aria-current="page">Requests</a>{% endblock %}
+
+{% block content %}
+  <header class="stack">
+    <h1>Hi, {{ user.name|default:user.email }}</h1>
+    <p class="muted">You’re signed in. Your requests will live here soon.</p>
+  </header>
+  {% include "accounts/sign_out_button.html" %}
+{% endblock %}

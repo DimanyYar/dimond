@@ -1,0 +1,9 @@
+Hi{% if user.name %} {{ user.name }}{% endif %},
+
+Here is your link to sign in to dimon.d:
+
+{{ url }}
+
+It works once, for 15 minutes. If you didn't ask for it, ignore this email: nobody can sign in without opening the link.
+
+— Dimon

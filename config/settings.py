@@ -25,6 +25,8 @@ SECRET_KEY = env("DJANGO_SECRET_KEY")
 ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 # The Django admin lives at an unguessable path, never /admin/ (see PRD, "PM workspace vs admin").
 ADMIN_URL = env("DJANGO_ADMIN_URL", "admin-local/")
+# Sign-in links in emails point here; never taken from the request's Host header.
+SITE_URL = env("SITE_URL", "http://localhost:8000").rstrip("/")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -92,6 +94,8 @@ EMAIL_HOST = env("EMAIL_HOST", "localhost")
 EMAIL_PORT = int(env("EMAIL_PORT", "1025"))
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "Dimon <dimon@localhost>")
 
+LOGIN_URL = "sign_in"
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 30
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
 SECURE_CONTENT_TYPE_NOSNIFF = True

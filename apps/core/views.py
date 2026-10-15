@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
@@ -19,3 +20,10 @@ def styleguide(request: HttpRequest) -> HttpResponse:
     if not settings.DEBUG:
         raise Http404
     return render(request, "core/styleguide.html")
+
+
+@require_GET
+@login_required
+def home(request: HttpRequest) -> HttpResponse:
+    """Where a signed-in person lands. Becomes "My requests" when requests arrive."""
+    return render(request, "core/home.html")

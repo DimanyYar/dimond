@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% comment %}
+Signed-out pages: the dark brand panel on the left (on top on phones), the form on the right.
+{% endcomment %}
+{% block body %}
+<div class="auth">
+  <aside class="auth-hero">
+    <span class="brand"><span class="brand-mark">d.</span>dimon.d</span>
+    <div class="auth-pitch">
+      <p class="auth-tagline">Your requests,<br>always running.</p>
+      <p class="auth-lede">One place to ask, follow and get answers from your project team — without chasing anyone in chat.</p>
+    </div>
+    <p class="auth-footnote">Dimon never sleeps. Well, almost never.</p>
+  </aside>
+  <main class="auth-main">
+    <div class="auth-panel stack">{% block content %}{% endblock %}</div>
+  </main>
+</div>
+{% endblock %}
