@@ -1,20 +1,10 @@
-{% extends "layouts/app.html" %}
+{% extends "layouts/client.html" %}
 {% load static %}
 {% block title %}New request · dimon.d{% endblock %}
 
-{% block nav %}<a href="{% url 'home' %}">My requests</a>{% endblock %}
-{% block sidebar_footer %}
-  {{ user.name|default:user.email }}{% if user.company %} · {{ user.company }}{% endif %}
-{% endblock %}
-{% block topbar_meta %}{{ user.company|default:"" }}{% endblock %}
-{% block tabs %}
-  <a href="{% url 'home' %}">Requests</a>
-  <a href="{% url 'new_request' %}" class="tab-new" aria-label="New request" aria-current="page">+</a>
-{% endblock %}
-
 {% block content %}
   <header class="page-header">
-    <nav aria-label="Breadcrumb" class="hint"><a href="{% url 'home' %}" class="muted">Requests</a> / New request</nav>
+    <nav aria-label="Breadcrumb" class="hint"><a href="{% url 'my_requests' %}" class="muted">Requests</a> / New request</nav>
     <h1>Summon Dimon</h1>
     <p class="muted">A few lines are enough.</p>
   </header>
@@ -88,7 +78,7 @@
 
       <div class="form-actions">
         <button class="btn btn-primary" type="submit">Summon Dimon</button>
-        <a class="btn btn-ghost" href="{% url 'home' %}">Cancel</a>
+        <a class="btn btn-ghost" href="{% url 'my_requests' %}">Cancel</a>
         <span class="error-text" role="alert" data-send-error></span>
       </div>
     </form>

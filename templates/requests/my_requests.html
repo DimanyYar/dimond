@@ -1,0 +1,92 @@
+{% extends "layouts/client.html" %}
+{% block title %}Your requests · dimon.d{% endblock %}
+
+{% block content %}
+  {% for message in messages %}
+    <div class="banner" role="status">
+      <strong>Received</strong>
+      <span>{{ message }}. Dimon will pick it up within a working day.</span>
+    </div>
+  {% endfor %}
+
+  <header class="requests-header">
+    <div class="page-header">
+      <p class="muted">Hi, {{ user.name|default:user.email }}</p>
+      <h1>Your requests</h1>
+    </div>
+    <a class="btn btn-primary" href="{% url 'new_request' %}">Summon Dimon</a>
+  </header>
+
+  <section class="card summary" aria-labelledby="summary-title">
+    <div class="summary-head">
+      <h2 id="summary-title">{{ period.label }}</h2>
+      <nav class="segmented" aria-label="Period">
+        {% for value, label in periods %}
+          <a href="{% querystring period=value %}"{% if value == period %} aria-current="true"{% endif %}>{{ label }}</a>
+        {% endfor %}
+      </nav>
+    </div>
+    <dl class="summary-stats">
+      <div><dt>Received</dt><dd>{{ summary.received }}</dd></div>
+      <div><dt>In work</dt><dd>{{ summary.in_work }}</dd></div>
+      <div><dt>Later</dt><dd>{{ summary.later }}</dd></div>
+      <div><dt>Done</dt><dd>{{ summary.done }}</dd></div>
+      <div><dt>Declined</dt><dd>{{ summary.declined }}</dd></div>
+    </dl>
+  </section>
+
+  <div class="filter-bar">
+    <nav class="segmented" aria-label="Show">
+      {% for value, label in shows %}
+        <a href="{% querystring show=value %}"{% if value == show %} aria-current="true"{% endif %}>
+          {{ label }} {% if value == "open" %}{{ summary.open }}{% elif value == "closed" %}{{ summary.closed }}{% else %}{{ summary.received }}{% endif %}
+        </a>
+      {% endfor %}
+    </nav>
+    <nav class="type-filter" aria-label="Type">
+      <a class="chip" href="{% querystring type=None %}"{% if not type %} aria-current="true"{% endif %}>All types</a>
+      {% for value, label in types %}
+        <a class="chip" href="{% querystring type=value %}"{% if value == type %} aria-current="true"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <nav class="view-switch" aria-label="View">
+      <a href="{% querystring view='board' %}"{% if view == "board" %} aria-current="true"{% endif %}>Board</a>
+      <a href="{% querystring view='list' %}"{% if view == "list" %} aria-current="true"{% endif %}>List</a>
+    </nav>
+  </div>
+
+  {% if not requests %}
+    <div class="empty-state">
+      <span class="brand-mark" aria-hidden="true">d.</span>
+      {% if has_any_request %}
+        <strong>Nothing here.</strong>
+        <p class="muted">No requests match these filters. Dimon is idle — got something for him?</p>
+      {% else %}
+        <strong>No requests yet.</strong>
+        <p class="muted">Send the first one and follow it here, from Received to Done.</p>
+        <a class="btn btn-primary" href="{% url 'new_request' %}">Summon Dimon</a>
+      {% endif %}
+    </div>
+  {% elif view == "board" %}
+    <section class="board" aria-label="Requests by status">
+      {% for column, items in board %}
+        <div class="board-column" data-column="{{ column.slug }}">
+          <h2><span class="dot" aria-hidden="true"></span>{{ column.name }} <span class="muted">{{ items|length }}</span></h2>
+          {% for item in items %}
+            {% include "requests/request_card.html" %}
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </section>
+  {% else %}
+    <section class="request-list" aria-label="Requests list">
+      {% regroup requests by created_at|date:"F Y" as months %}
+      {% for month in months %}
+        <h2 class="list-month">{{ month.grouper }} <span class="muted">{{ month.list|length }}</span></h2>
+        {% for item in month.list %}
+          {% include "requests/request_card.html" %}
+        {% endfor %}
+      {% endfor %}
+    </section>
+  {% endif %}
+{% endblock %}

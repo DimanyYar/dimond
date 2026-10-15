@@ -2,11 +2,11 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET
 
 from apps.accounts.models import User
-from apps.requests.selectors import can_create_requests
+from apps.requests.selectors import has_my_requests_page
 
 
 @require_GET
@@ -28,8 +28,9 @@ def styleguide(request: HttpRequest) -> HttpResponse:
 @require_GET
 @login_required
 def home(request: HttpRequest) -> HttpResponse:
-    """Where a signed-in person lands. Becomes "My requests" when requests arrive."""
+    """Where a signed-in person lands: clients go to their requests, the PM gets the inbox
+    once it exists."""
     assert isinstance(request.user, User)  # login_required lets only signed-in people in
-    return render(
-        request, "core/home.html", {"can_create_requests": can_create_requests(request.user)}
-    )
+    if has_my_requests_page(request.user):
+        return redirect("my_requests")
+    return render(request, "core/home.html")

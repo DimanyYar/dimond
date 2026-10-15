@@ -1,0 +1,17 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+The client's shell: navigation, company and sign-out. Only clients see these pages, and they
+may always send a request. Pages fill `content`.
+{% endcomment %}
+{% block nav %}
+  <a href="{% url 'my_requests' %}"{% if request.resolver_match.url_name == "my_requests" %} aria-current="page"{% endif %}>My requests</a>
+{% endblock %}
+{% block sidebar_footer %}
+  <span>{{ user.name|default:user.email }} · {{ user.company }}</span>
+  {% include "accounts/sign_out_button.html" %}
+{% endblock %}
+{% block topbar_meta %}{{ user.company }} {% include "accounts/sign_out_button.html" %}{% endblock %}
+{% block tabs %}
+  <a href="{% url 'my_requests' %}"{% if request.resolver_match.url_name == "my_requests" %} aria-current="page"{% endif %}>Requests</a>
+  <a href="{% url 'new_request' %}" class="tab-new" aria-label="New request"{% if request.resolver_match.url_name == "new_request" %} aria-current="page"{% endif %}>+</a>
+{% endblock %}

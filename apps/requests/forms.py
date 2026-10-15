@@ -1,8 +1,10 @@
 from typing import Any
 
 from django import forms
+from django.db import models
 
 from .models import RequestType, WhenNeeded
+from .selectors import Period, Show
 
 # Labels, hints and examples change with the request type (PRD: request types and fields).
 # The page also hands this to the browser, so switching the type needs no reload.
@@ -121,3 +123,26 @@ class NewRequestForm(forms.Form):
         return WHEN_NEEDED_COPY.get(
             self["when_needed"].value(), WHEN_NEEDED_COPY[WhenNeeded.NOT_SURE]
         )["note"]
+
+
+class View(models.TextChoices):
+    BOARD = "board", "Board"
+    LIST = "list", "List"
+
+
+class MyRequestsFilter(forms.Form):
+    """The "My requests" filters, kept in the address so a view can be bookmarked or shared.
+
+    A value the page doesn't know (an old bookmark, a typo) falls back to the default
+    instead of an error page.
+    """
+
+    show = forms.ChoiceField(choices=Show.choices, required=False)
+    type = forms.ChoiceField(choices=RequestType.choices, required=False)
+    period = forms.ChoiceField(choices=Period.choices, required=False)
+    view = forms.ChoiceField(choices=View.choices, required=False)
+
+    def chosen(self, name: str, default: str = "") -> str:
+        self.is_valid()
+        value: str = self.cleaned_data.get(name) or default
+        return value

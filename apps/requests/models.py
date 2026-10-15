@@ -1,3 +1,5 @@
+from typing import NamedTuple
+
 from django.db import models
 
 from apps.accounts.models import Company, User
@@ -37,6 +39,33 @@ class ClientStatus(models.TextChoices):
     DONE = "done", "Done"
     DECLINED = "declined", "Declined"
     LATER = "later", "Later"
+
+
+CLOSED_STATUSES = (ClientStatus.DONE, ClientStatus.DECLINED)
+IN_WORK_STATUSES = (
+    ClientStatus.NEEDS_INPUT,
+    ClientStatus.PLANNED,
+    ClientStatus.IN_PROGRESS,
+    ClientStatus.READY_TO_CHECK,
+)
+
+
+class BoardColumn(NamedTuple):
+    slug: str
+    name: str
+    statuses: tuple[ClientStatus, ...]
+
+
+# Fewer columns than statuses: the client cares whether a request waits for them, waits in
+# line, is being built, needs checking, was parked or is over.
+BOARD_COLUMNS = (
+    BoardColumn("needs-you", "Needs you", (ClientStatus.NEEDS_INPUT,)),
+    BoardColumn("queued", "Queued", (ClientStatus.RECEIVED, ClientStatus.PLANNED)),
+    BoardColumn("in-progress", "In progress", (ClientStatus.IN_PROGRESS,)),
+    BoardColumn("ready-to-check", "Ready to check", (ClientStatus.READY_TO_CHECK,)),
+    BoardColumn("later", "Later", (ClientStatus.LATER,)),
+    BoardColumn("done", "Done", CLOSED_STATUSES),
+)
 
 
 class Request(models.Model):

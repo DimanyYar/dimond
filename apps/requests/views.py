@@ -4,13 +4,44 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
-from django.views.decorators.http import require_http_methods
+from django.utils import timezone
+from django.views.decorators.http import require_GET, require_http_methods
 
 from apps.accounts.models import User
 
 from . import selectors, services
-from .forms import TYPE_COPY, WHEN_NEEDED_COPY, NewRequestForm
+from .forms import TYPE_COPY, WHEN_NEEDED_COPY, MyRequestsFilter, NewRequestForm, View
 from .models import RequestType, WhenNeeded
+from .selectors import Period, Show
+
+
+@require_GET
+@login_required
+def my_requests(request: HttpRequest) -> HttpResponse:
+    assert isinstance(request.user, User)  # login_required lets only signed-in people in
+    if not selectors.has_my_requests_page(request.user):
+        raise PermissionDenied
+    filters = MyRequestsFilter(request.GET)
+    show = Show(filters.chosen("show", Show.OPEN))
+    type = RequestType(filters.chosen("type")) if filters.chosen("type") else None
+    period = Period(filters.chosen("period", Period.THREE_MONTHS))
+    view = View(filters.chosen("view", View.BOARD))
+    since = selectors.period_start(period, timezone.now())
+    shown = list(selectors.my_requests(request.user, show=show, type=type, since=since))
+    context = {
+        "requests": shown,
+        "board": selectors.board(shown) if view == View.BOARD else [],
+        "summary": selectors.period_summary(request.user, since),
+        "has_any_request": selectors.requests_for(request.user).exists(),
+        "show": show,
+        "type": type,
+        "period": period,
+        "view": view,
+        "shows": Show.choices,
+        "types": RequestType.choices,
+        "periods": Period.choices,
+    }
+    return render(request, "requests/my_requests.html", context)
 
 
 @require_http_methods(["GET", "POST"])
@@ -36,8 +67,8 @@ def new_request(request: HttpRequest) -> HttpResponse:
         if request.headers.get("X-Requested-With") == "fetch":
             # Following a redirect inside the script would use up the confirmation unseen,
             # so the script gets the address and opens it itself.
-            return HttpResponse(status=201, headers={"Location": reverse("home")})
-        return redirect("home")
+            return HttpResponse(status=201, headers={"Location": reverse("my_requests")})
+        return redirect("my_requests")
     # The page's script swaps the invalid form in without a reload, so it needs an error code.
     status = 422 if form.errors else 200
     context = {

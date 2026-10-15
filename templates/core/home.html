@@ -1,29 +1,12 @@
 {% extends "layouts/app.html" %}
 {% block title %}dimon.d{% endblock %}
 
-{% block nav %}<a href="{% url 'home' %}" aria-current="page">My requests</a>{% endblock %}
-{% block sidebar_footer %}
-  {{ user.name|default:user.email }}{% if user.company %} · {{ user.company }}{% endif %}
-{% endblock %}
-{% block topbar_meta %}{{ user.company|default:"" }}{% endblock %}
-{% block tabs %}
-  <a href="{% url 'home' %}" aria-current="page">Requests</a>
-  {% if can_create_requests %}<a href="{% url 'new_request' %}" class="tab-new" aria-label="New request">+</a>{% endif %}
-{% endblock %}
+{% block sidebar_footer %}{{ user.name|default:user.email }}{% endblock %}
 
 {% block content %}
-  {% for message in messages %}
-    <div class="banner" role="status">
-      <strong>Received</strong>
-      <span>{{ message }}. Dimon will pick it up within a working day.</span>
-    </div>
-  {% endfor %}
   <header class="stack">
     <h1>Hi, {{ user.name|default:user.email }}</h1>
-    <p class="muted">You’re signed in. Your requests will live here soon.</p>
+    <p class="muted">You’re signed in. Your workspace will live here soon.</p>
   </header>
-  {% if can_create_requests %}
-    <div class="row"><a class="btn btn-primary" href="{% url 'new_request' %}">Summon Dimon</a></div>
-  {% endif %}
   {% include "accounts/sign_out_button.html" %}
 {% endblock %}

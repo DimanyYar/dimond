@@ -609,10 +609,10 @@ textarea.input {
 }
 
 .status-received { background: var(--surface); border: 1px solid var(--hairline); }
-.status-needs-input { background: #ffd9c4; }
+.status-needs_input { background: #ffd9c4; }
 .status-planned { background: var(--surface-2); }
-.status-in-progress { background: #d9f4f8; }
-.status-ready-to-check { background: var(--accent-soft); border: 1px solid var(--accent); }
+.status-in_progress { background: #d9f4f8; }
+.status-ready_to_check { background: var(--accent-soft); border: 1px solid var(--accent); }
 .status-later { background: var(--canvas); border: 1px dashed #b9b4ac; }
 .status-done { background: var(--success-soft); color: var(--success-text); }
 .status-declined { background: var(--canvas); color: var(--muted); }
@@ -968,5 +968,318 @@ textarea.input {
   .spinner-done,
   .spinner-line {
     animation: none;
+  }
+}
+
+/* My requests (#8) */
+
+.sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sidebar-footer .link-button {
+  color: inherit;
+}
+
+.topbar-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.requests-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+/* Links that act like a segmented control: the current one is filled. */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+
+.segmented a {
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  color: var(--ink-soft);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.segmented a:hover {
+  color: var(--ink);
+}
+
+.segmented a[aria-current="true"] {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.summary-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.summary-head h2 {
+  font-size: 16px;
+}
+
+.summary-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.summary-stats div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  padding: var(--space-3) 14px;
+  border-radius: var(--radius-m);
+  background: var(--canvas);
+}
+
+.summary-stats dt {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.summary-stats dd {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.type-filter {
+  display: flex;
+  gap: 6px;
+}
+
+.type-filter .chip {
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.type-filter .chip[aria-current="true"] {
+  border-color: var(--ink);
+}
+
+.view-switch {
+  display: inline-flex;
+  margin-left: auto;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+}
+
+.view-switch a {
+  padding: 7px 12px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.view-switch a[aria-current="true"] {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: var(--space-7);
+  border: 1px dashed var(--hairline-strong);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  text-align: center;
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.board-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-l);
+  background: var(--surface-2);
+}
+
+.board-column h2,
+.list-month {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.board-column h2 {
+  padding: var(--space-1) 6px;
+}
+
+.board-column .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--column-color, var(--muted));
+}
+
+.board-column[data-column="needs-you"] { --column-color: var(--accent); }
+.board-column[data-column="in-progress"] { --column-color: var(--ink); }
+.board-column[data-column="ready-to-check"] { --column-color: var(--info); }
+.board-column[data-column="later"] { --column-color: var(--hairline-strong); }
+
+.request-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+}
+
+.request-card.needs-you {
+  border: 1.5px solid var(--accent);
+}
+
+.request-card h3 {
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.request-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.request-card-meta .hotfix {
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.request-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.list-month {
+  margin-top: var(--space-2);
+}
+
+@media (min-width: 900px) {
+  .request-list .request-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--space-5);
+  }
+
+  .request-list .request-card-meta:first-child {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .request-list .request-card h3 {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .request-list .request-card-meta:last-child {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 899px) {
+  /* On a phone the type chips scroll sideways instead of taking several rows. */
+  .type-filter {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: var(--space-1);
+  }
+
+  .requests-header .btn {
+    display: none;
+  }
+
+  .summary .segmented {
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+
+  .segmented a {
+    flex: 1 1 auto;
+    padding: 7px 8px;
+    font-size: 13px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .summary-stats {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .summary-stats div {
+    padding: var(--space-2);
+  }
+
+  .summary-stats dt {
+    font-size: 11px;
+  }
+
+  .summary-stats dd {
+    font-size: 20px;
   }
 }
