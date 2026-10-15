@@ -43,5 +43,22 @@ services:
       mailpit:
         condition: service_started
 
+  # Sends queued emails (ADR 0004). Restarts if it starts before `web` has run migrations.
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+      EMAIL_HOST: mailpit
+    command: python manage.py send_emails --every 5
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
 volumes:
   pgdata:

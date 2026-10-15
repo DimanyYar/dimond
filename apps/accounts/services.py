@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import secrets
+import smtplib
 from datetime import timedelta
 
 from django.conf import settings
@@ -27,11 +28,12 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def send_sign_in_link(email: str) -> None:
-    """Email a one-time link if this address belongs to an active person.
+def request_sign_in_link(email: str) -> None:
+    """Queue a sign-in link if this address belongs to an active person.
 
-    Returns the same way whether or not the address has an account, so the sign-in page
-    cannot be used to find out who is a client.
+    Nothing is sent here: the worker emails it (send_queued_sign_in_links). The page then
+    answers equally fast and the same way for every address, so neither its words nor its
+    speed reveal who is a client.
     """
     # Locking the person makes parallel requests wait their turn, so all of them see the
     # real count and the limit holds even when someone fires many requests at once.
@@ -44,24 +46,67 @@ def send_sign_in_link(email: str) -> None:
         if user is None:
             return
 
-        now = timezone.now()
-        recent = user.sign_in_links.filter(created_at__gte=now - LINK_LIFETIME).count()
-        if recent >= MAX_LINKS_PER_LIFETIME:
+        since = timezone.now() - LINK_LIFETIME
+        if user.sign_in_links.filter(created_at__gte=since).count() >= MAX_LINKS_PER_LIFETIME:
             logger.warning("Sign-in link limit reached for user %s", user.pk)
             return
 
-        token = secrets.token_urlsafe(32)
-        SignInLink.objects.create(
-            user=user, token_hash=_hash(token), expires_at=now + LINK_LIFETIME
-        )
+        SignInLink.objects.create(user=user)
 
-    url = settings.SITE_URL + reverse("sign_in_link", args=[token])
-    send_mail(
-        subject="Your dimon.d sign-in link",
-        message=render_to_string("accounts/email/sign_in_link.txt", {"user": user, "url": url}),
-        from_email=None,
-        recipient_list=[user.email],
+
+def send_queued_sign_in_links() -> int:
+    """Email every queued link that is still worth sending. Returns how many went out.
+
+    A request older than the link lifetime is skipped: the person has moved on and asks
+    again if they still need it.
+    """
+    sent = 0
+    since = timezone.now() - LINK_LIFETIME
+    queued = SignInLink.objects.filter(
+        sent_at__isnull=True, created_at__gte=since, user__is_active=True
     )
+    for link_id in queued.values_list("pk", flat=True):
+        if _send_one(link_id):
+            sent += 1
+    return sent
+
+
+def _send_one(link_id: int) -> bool:
+    with transaction.atomic():
+        # skip_locked lets a second worker, if one ever runs, take other links instead of
+        # sending the same one twice.
+        link = (
+            SignInLink.objects.select_for_update(skip_locked=True)
+            .select_related("user")
+            .filter(pk=link_id, sent_at__isnull=True)
+            .first()
+        )
+        if link is None:
+            return False
+
+        token = secrets.token_urlsafe(32)
+        now = timezone.now()
+        link.token_hash = _hash(token)
+        link.sent_at = now
+        link.expires_at = now + LINK_LIFETIME
+        link.save(update_fields=["token_hash", "sent_at", "expires_at"])
+
+        url = settings.SITE_URL + reverse("sign_in_link", args=[token])
+        try:
+            send_mail(
+                subject="Your dimon.d sign-in link",
+                message=render_to_string(
+                    "accounts/email/sign_in_link.txt", {"user": link.user, "url": url}
+                ),
+                from_email=None,
+                recipient_list=[link.user.email],
+            )
+        except (smtplib.SMTPException, OSError):
+            # Undo the "sent" mark so the next run tries this link again.
+            logger.exception("Sign-in email to user %s failed; will retry", link.user.pk)
+            transaction.set_rollback(True)
+            return False
+    return True
 
 
 @transaction.atomic
@@ -74,7 +119,12 @@ def use_sign_in_link(token: str) -> User:
         .first()
     )
     now = timezone.now()
-    if link is None or link.used_at is not None or link.expires_at <= now:
+    if (
+        link is None
+        or link.used_at is not None
+        or link.expires_at is None
+        or link.expires_at <= now
+    ):
         logger.warning("Sign-in link rejected: unknown, used or expired")
         raise SignInLinkRejectedError
     if not link.user.is_active:

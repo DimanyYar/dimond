@@ -26,7 +26,8 @@ docker compose up --build
 - App: http://localhost:8000/healthz should answer `{"status": "ok"}`
 - Mail catcher (Mailpit): http://localhost:8025, where every email the app sends lands locally
 - Sign in: open http://localhost:8000/, enter the email of a person added in the admin, then open
-  the link from Mailpit
+  the link from Mailpit. The `worker` container sends emails every 5 seconds; its log is
+  `docker compose logs -f worker`
 
 Stop with `Ctrl+C`; `docker compose down` removes the containers (data stays in a volume).
 
