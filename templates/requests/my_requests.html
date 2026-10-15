@@ -59,6 +59,7 @@
     </nav>
     {# Phones: type and period move into a sheet, as in the mobile mockup. Popover needs no script. #}
     <button class="btn filter-button" type="button" popovertarget="filters">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
       Filter{% if types_chosen %} · {{ types_chosen|length }}{% endif %}
     </button>
   </div>
