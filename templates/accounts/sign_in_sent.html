@@ -12,11 +12,12 @@
     <a class="btn" href="https://outlook.office.com/mail/" target="_blank" rel="noopener">Open Outlook</a>
   </div>
 
-  <form method="post" action="{% url 'sign_in' %}" class="row">
+  <p class="hint">Didn’t get it in a couple of minutes? Check spam and make sure this is the email your PM invited. Still nothing? Ask your PM to add you.</p>
+
+  <form method="post" action="{% url 'sign_in' %}">
     {% csrf_token %}
     <input type="hidden" name="email" value="{{ email }}">
-    <span class="hint">Didn’t get it? Check spam, or</span>
-    <button class="link-button" type="submit">send it again</button>
+    <button class="link-button" type="submit">Send the link again</button>
   </form>
 
   <a href="{% url 'sign_in' %}">Use a different email</a>
