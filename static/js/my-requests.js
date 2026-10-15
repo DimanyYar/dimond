@@ -10,8 +10,9 @@ if (form && label) {
     const asked = ++latest;
     const query = new URLSearchParams(new FormData(form));
     const response = await fetch(`${form.dataset.countUrl}?${query}`);
-    if (asked === latest && response.ok) {
-      label.textContent = (await response.text()).trim();
-    }
+    if (!response.ok) return;
+    const text = await response.text();
+    // Checked after the body arrives: a newer tap may have come in while it was loading.
+    if (asked === latest) label.textContent = text.trim();
   });
 }
