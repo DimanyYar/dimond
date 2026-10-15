@@ -28,6 +28,18 @@ let requestSaved = false;
 const SAVED_KEY = "dimond.requestSaved";
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
+function rememberSaved(saved) {
+  try {
+    const state = { ...(history.state ?? {}) };
+    if (saved) state[SAVED_KEY] = true;
+    else delete state[SAVED_KEY];
+    history.replaceState(state, "");
+  } catch {
+    // Some browsers refuse; the in-memory flag still covers a cached Back, only a reloaded
+    // Back loses it. A saved request must never get stuck on "Sending…" over this.
+  }
+}
+
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -127,7 +139,7 @@ function bind(form) {
 
     if (response.status === 201) {
       requestSaved = true;
-      history.replaceState({ ...(history.state ?? {}), [SAVED_KEY]: true }, "");
+      rememberSaved(true);
       // Without the motion the jokes are only a pause, so people who turned it off go straight on.
       if (!reducedMotion.matches) await playSpinner();
       window.location.assign(response.headers.get("Location"));
@@ -166,9 +178,7 @@ window.addEventListener("pageshow", (event) => {
   const savedInHistory = history.state?.[SAVED_KEY] === true;
   if (requestSaved || savedInHistory) {
     requestSaved = false;
-    const state = { ...(history.state ?? {}) };
-    delete state[SAVED_KEY];
-    history.replaceState(state, "");
+    rememberSaved(false);
     spinner.hidden = true;
     if (event.persisted) {
       const fresh = emptyForm.cloneNode(true);
