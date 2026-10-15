@@ -60,6 +60,11 @@ warn_unused_ignores = true
 module = ["apps.*.services", "apps.tracker.*"]
 strict = true
 
+# Django admin classes are generic only for the type checker; subscripting them at runtime fails.
+[[tool.mypy.overrides]]
+module = ["apps.*.admin"]
+disable_error_code = ["type-arg"]
+
 [tool.django-stubs]
 django_settings_module = "config.settings"
 
