@@ -44,6 +44,18 @@ def test_email_is_one_login_regardless_of_letter_case(atlas):
         User.objects.create_user("ANNA.K@atlas-crm.com", company=atlas)
 
 
+def test_database_rejects_mixed_case_email_even_bypassing_validation(atlas):
+    with pytest.raises(IntegrityError):
+        User.objects.bulk_create([User(email="Anna.K@atlas-crm.com", company=atlas)])
+
+
+def test_person_saved_without_the_manager_still_has_no_password(atlas):
+    mark = User(email="mark.t@atlas-crm.com", company=atlas)
+    mark.save()
+
+    assert not mark.has_usable_password()
+
+
 def test_people_have_no_password_to_sign_in_with(atlas):
     anna = User.objects.create_user("anna.k@atlas-crm.com", company=atlas)
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from django.contrib import admin
 from django.db.models import QuerySet
-from django.forms import ModelForm
 from django.http import HttpRequest
 
 from .models import Company, User
@@ -11,8 +10,13 @@ from .models import Company, User
 class PeopleInline(admin.TabularInline):
     model = User
     fields = ["email", "name", "is_active"]
+    readonly_fields = ["email", "name", "is_active"]
     extra = 0
     show_change_link = True
+
+    def has_add_permission(self, request: HttpRequest, obj: Company | None = None) -> bool:
+        # People are added on the Users page, where the same validation applies to everyone.
+        return False
 
 
 @admin.register(Company)
@@ -38,14 +42,6 @@ class UserAdmin(admin.ModelAdmin):
         "last_login",
     ]
     readonly_fields = ["date_joined", "last_login"]
-
-    def save_model(
-        self, request: HttpRequest, obj: User, form: ModelForm[User], change: bool
-    ) -> None:
-        # People added here sign in by email link only (ADR 0003).
-        if not change:
-            obj.set_unusable_password()
-        super().save_model(request, obj, form, change)
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[User]:
         return super().get_queryset(request).select_related("company")

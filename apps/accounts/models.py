@@ -2,6 +2,7 @@ from typing import Any, ClassVar
 
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils import timezone
 
 
@@ -34,7 +35,6 @@ class Role(models.TextChoices):
 class UserManager(BaseUserManager["User"]):
     def create_user(self, email: str, name: str = "", **extra: Any) -> "User":
         user = self.model(email=email, name=name, **extra)
-        # Nobody signs in with a password except the admin superuser (ADR 0003).
         user.set_unusable_password()
         user.full_clean()
         user.save(using=self._db)
@@ -81,6 +81,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     class Meta:
         constraints = [
             models.CheckConstraint(
+                condition=models.Q(email=Lower("email")), name="email_is_lowercase"
+            ),
+            models.CheckConstraint(
                 condition=(
                     models.Q(role=Role.CLIENT, company__isnull=False)
                     | (~models.Q(role=Role.CLIENT) & models.Q(company__isnull=True))
@@ -91,6 +94,13 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self) -> str:
         return self.name or self.email
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # Nobody signs in with a password except the admin superuser (ADR 0003). An empty
+        # password string counts as usable in Django, so every other path gets an unusable one.
+        if not self.password:
+            self.set_unusable_password()
+        super().save(*args, **kwargs)
 
     def clean(self) -> None:
         # Runs before the uniqueness check: Anna@Atlas.com and anna@atlas.com are one person.
