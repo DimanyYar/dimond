@@ -821,10 +821,16 @@ textarea.input {
     flex: 0 0 auto;
   }
 
-  .form-actions .btn-primary {
+  .form-actions .btn {
     width: 100%;
     min-height: 52px;
     font-size: 17px;
+  }
+
+  /* A full-width text link would float; an outline keeps it reading as a button. */
+  .form-actions .btn-ghost {
+    border-color: var(--hairline);
+    background: var(--surface);
   }
 
   .aside-note {
