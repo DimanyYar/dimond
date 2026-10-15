@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% comment %}
+The signed-in shell. Pages fill `nav` (sidebar links), `tabs` (phone tab bar) and `content`.
+{% endcomment %}
+{% block body %}
+<div class="app">
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="brand-mark">d.</span>dimon.d</a>
+    <nav class="nav" aria-label="Main">{% block nav %}{% endblock %}</nav>
+    <div class="sidebar-footer">{% block sidebar_footer %}{% endblock %}</div>
+  </aside>
+  <main class="main">{% block content %}{% endblock %}</main>
+  <nav class="tabbar" aria-label="Main">{% block tabs %}{% endblock %}</nav>
+</div>
+{% endblock %}

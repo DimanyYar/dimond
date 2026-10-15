@@ -1,0 +1,386 @@
+/* dimond design system: the UI kit (C2 on Intercom tokens) as CSS. ADR 0006. */
+
+:root {
+  /* Surfaces */
+  --canvas: #f5f1ec;
+  --surface: #ffffff;
+  --surface-2: #ebe7e1;
+  --panel: #111111;
+  --panel-raised: #313130;
+
+  /* Text and lines */
+  --ink: #111111;
+  --ink-soft: #313130;
+  --muted: #626260;
+  --muted-on-panel: #9c9fa5;
+  --hairline: #d3cec6;
+  --hairline-soft: #ebe7e1;
+
+  /* Signals. Text on the accent is always ink. */
+  --accent: #ff5600;
+  --accent-soft: #fff1e8;
+  --accent-text: #b33a00;
+  --info: #03b2cb;
+  --info-soft: #eefafc;
+  --success-soft: #e3f7ea;
+  --success-text: #0a6b2c;
+  --error: #c41c1c;
+  --error-soft: #fdecec;
+
+  /* Shape and rhythm: 8 px grid */
+  --radius-s: 8px;
+  --radius-m: 12px;
+  --radius-l: 16px;
+  --radius-pill: 9999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+
+  --font: "Figtree", system-ui, -apple-system, sans-serif;
+  --tap: 44px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: 34px;
+}
+
+h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* App shell: dark sidebar on wide screens, bottom tab bar on phones. */
+
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  flex: 0 0 256px;
+  background: var(--panel);
+  color: #ffffff;
+  padding: var(--space-6) 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 19px;
+  font-weight: 500;
+}
+
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-s);
+  background: var(--accent);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.nav a {
+  color: var(--muted-on-panel);
+  text-decoration: none;
+  padding: var(--space-3) 14px;
+  border-radius: var(--radius-s);
+}
+
+.nav a[aria-current="page"] {
+  color: #ffffff;
+  background: var(--panel-raised);
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  font-size: 12px;
+  color: var(--muted-on-panel);
+}
+
+.main {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.tabbar {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .sidebar {
+    display: none;
+  }
+
+  .main {
+    padding: var(--space-6) var(--space-4) 112px;
+  }
+
+  h1 {
+    font-size: 30px;
+  }
+
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--surface);
+    border-top: 1px solid var(--hairline);
+    padding: var(--space-2) var(--space-5) calc(var(--space-3) + env(safe-area-inset-bottom));
+  }
+
+  .tabbar a {
+    min-width: 72px;
+    min-height: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .tabbar a[aria-current="page"] {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .tabbar .tab-new {
+    min-width: 64px;
+    width: 64px;
+    height: 64px;
+    margin-top: -24px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--ink);
+    font-size: 28px;
+    box-shadow: 0 6px 18px rgb(255 86 0 / 35%);
+  }
+}
+
+/* Components */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 18px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.btn-dark {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.btn-block {
+  width: 100%;
+  min-height: 52px;
+  font-size: 17px;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.input {
+  font: inherit;
+  font-size: 16px;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+textarea.input {
+  padding: var(--space-3) 14px;
+  resize: vertical;
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--error);
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.error-text {
+  font-size: 13px;
+  color: var(--error);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-l);
+  padding: var(--space-5);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #ffffff;
+}
+
+/* Client statuses: one pill per status, colours from the UI kit. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-received { background: var(--surface); border: 1px solid var(--hairline); }
+.status-needs-input { background: #ffd9c4; }
+.status-planned { background: var(--surface-2); }
+.status-in-progress { background: #d9f4f8; }
+.status-ready-to-check { background: var(--accent-soft); border: 1px solid var(--accent); }
+.status-later { background: var(--canvas); border: 1px dashed #b9b4ac; }
+.status-done { background: var(--success-soft); color: var(--success-text); }
+.status-declined { background: var(--canvas); color: var(--muted); }
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) 18px;
+  border-radius: var(--radius-l);
+  background: var(--accent-soft);
+  border: 1.5px solid var(--accent);
+}
+
+/* Layout helpers */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
