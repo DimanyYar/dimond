@@ -112,6 +112,14 @@ h2 {
 
 .sidebar {
   flex: 0 0 256px;
+  /* Stays on screen while a long page scrolls, so navigation and sign-out are always in reach. */
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  box-sizing: border-box;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
   background: var(--panel);
   color: #ffffff;
   padding: var(--space-6) 18px;
