@@ -1089,7 +1089,14 @@ textarea.input {
 }
 
 .type-filter .chip[aria-current="true"] {
+  background: var(--ink);
   border-color: var(--ink);
+  color: var(--surface);
+}
+
+.type-filter .chip[aria-current="true"]:hover {
+  background: var(--panel-raised);
+  border-color: var(--panel-raised);
 }
 
 .view-switch {
