@@ -28,6 +28,15 @@ docker compose up --build
 
 Stop with `Ctrl+C`; `docker compose down` removes the containers (data stays in a volume).
 
+### Create your admin account (once)
+
+```bash
+docker compose exec web python manage.py createsuperuser
+```
+
+Then open http://localhost:8000/admin-local/ (the address comes from `DJANGO_ADMIN_URL` in
+`.env`) and sign in with that email and password. This is the only account with a password.
+
 ## Run the checks
 
 The database must be running (`docker compose up db` in another terminal is enough).
