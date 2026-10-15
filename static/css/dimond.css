@@ -1126,11 +1126,17 @@ textarea.input {
 }
 
 .view-switch a {
-  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 34px;
   border-radius: 6px;
   color: var(--muted);
-  font-size: 14px;
-  text-decoration: none;
+}
+
+.view-switch a:hover {
+  color: var(--ink);
 }
 
 .view-switch a[aria-current="true"] {

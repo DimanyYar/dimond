@@ -50,8 +50,12 @@
       {% endfor %}
     </nav>
     <nav class="view-switch" aria-label="View">
-      <a href="{% querystring view='board' %}"{% if view == "board" %} aria-current="true"{% endif %}>Board</a>
-      <a href="{% querystring view='list' %}"{% if view == "list" %} aria-current="true"{% endif %}>List</a>
+      <a href="{% querystring view='board' %}" aria-label="Board view" title="Board"{% if view == "board" %} aria-current="true"{% endif %}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/></svg>
+      </a>
+      <a href="{% querystring view='list' %}" aria-label="List view" title="List"{% if view == "list" %} aria-current="true"{% endif %}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
+      </a>
     </nav>
     {# Phones: type and period move into a sheet, as in the mobile mockup. Popover needs no script. #}
     <button class="btn filter-button" type="button" popovertarget="filters">
