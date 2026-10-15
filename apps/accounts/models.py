@@ -32,6 +32,14 @@ class Role(models.TextChoices):
     PM = "pm", "PM"
 
 
+class Notify(models.TextChoices):
+    """Which requests a person gets emails about (PRD: notifications)."""
+
+    OWN = "own", "My requests and the ones I follow"
+    COMPANY = "company", "Everything at my company"
+    NONE = "none", "Nothing"
+
+
 class UserManager(BaseUserManager["User"]):
     def create_user(self, email: str, name: str = "", **extra: Any) -> "User":
         user = self.model(email=email, name=name, **extra)
@@ -66,6 +74,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     company = models.ForeignKey(
         Company, null=True, blank=True, on_delete=models.PROTECT, related_name="people"
     )
+    notify = models.CharField(max_length=10, choices=Notify.choices, default=Notify.OWN)
     is_active = models.BooleanField(
         default=True, help_text="Off means access is revoked; requests and replies stay."
     )
@@ -107,14 +116,24 @@ class User(AbstractBaseUser, PermissionsMixin):
         self.email = self.email.strip().lower()
 
 
-class SignInLink(models.Model):
-    """A one-time sign-in link (ADR 0003), queued by the sign-in page and emailed by the worker.
+class LinkKind(models.TextChoices):
+    SIGN_IN = "sign_in", "Sign-in link"
+    INVITE = "invite", "Invite"
 
+
+class SignInLink(models.Model):
+    """A one-time link (ADR 0003), queued by the sign-in page or the PM, emailed by the worker.
+
+    An invite is the same link with a longer life that opens the welcome screen first.
     The token is made at sending time and only its hash is kept, so the database never holds
     a working link. Until the worker sends it, the hash and expiry are empty.
     """
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sign_in_links")
+    kind = models.CharField(max_length=10, choices=LinkKind.choices, default=LinkKind.SIGN_IN)
+    invited_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
     token_hash = models.CharField(max_length=64, unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     sent_at = models.DateTimeField(null=True, blank=True)
@@ -122,4 +141,4 @@ class SignInLink(models.Model):
     used_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self) -> str:
-        return f"Sign-in link for {self.user}"
+        return f"{self.get_kind_display()} for {self.user}"

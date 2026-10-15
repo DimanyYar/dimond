@@ -1,0 +1,11 @@
+Hi{% if user.name %} {{ user.name }}{% endif %},
+
+{{ invited_by.name|default:"Your project manager" }} invited you to dimon.d{% if user.company %}, where {{ user.company }} sends requests to the Shakuro team and follows their status{% endif %}.
+
+Open this link to join:
+
+{{ url }}
+
+It works once, for 7 days. After that, sign in with your email at any time; no password needed.
+
+— Dimon

@@ -478,6 +478,46 @@ textarea.input {
   border-color: var(--error);
 }
 
+.choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choices legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 52px;
+  padding: var(--space-3) 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.choice:hover {
+  border-color: var(--hairline-strong);
+}
+
+.choice:has(input:checked) {
+  border: 1.5px solid var(--ink);
+}
+
+.choice input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
 .hint {
   font-size: 13px;
   color: var(--muted);

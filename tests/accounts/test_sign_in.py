@@ -9,7 +9,7 @@ from django.core.management import call_command
 from django.utils import timezone
 
 from apps.accounts.models import Company, SignInLink, User
-from apps.accounts.services import send_queued_sign_in_links
+from apps.accounts.services import send_queued_links
 
 pytestmark = pytest.mark.django_db
 
@@ -23,7 +23,7 @@ def anna() -> User:
 def ask_for_link(client, email: str):
     """Ask on the sign-in page, then let the worker do its round."""
     response = client.post("/sign-in/", {"email": email}, follow=True)
-    send_queued_sign_in_links()
+    send_queued_links()
     return response
 
 
@@ -151,7 +151,7 @@ def test_sign_in_page_only_queues_the_email(client, anna):
     client.post("/sign-in/", {"email": anna.email})
 
     assert mail.outbox == []
-    assert send_queued_sign_in_links() == 1
+    assert send_queued_links() == 1
     assert len(mail.outbox) == 1
 
 
@@ -160,7 +160,7 @@ def test_database_never_holds_a_working_link(client, anna):
     queued = SignInLink.objects.get()
     assert queued.token_hash is None
 
-    send_queued_sign_in_links()
+    send_queued_links()
     token = link_path_from_email().rstrip("/").rsplit("/", 1)[-1]
 
     assert not SignInLink.objects.filter(token_hash=token).exists()
@@ -169,8 +169,8 @@ def test_database_never_holds_a_working_link(client, anna):
 def test_each_queued_link_is_emailed_once(client, anna):
     client.post("/sign-in/", {"email": anna.email})
 
-    send_queued_sign_in_links()
-    send_queued_sign_in_links()
+    send_queued_links()
+    send_queued_links()
 
     assert len(mail.outbox) == 1
 
@@ -182,10 +182,10 @@ def test_failed_email_is_retried_on_the_next_round(client, anna, monkeypatch):
         raise ConnectionRefusedError
 
     monkeypatch.setattr("apps.accounts.services.send_mail", mail_server_down)
-    assert send_queued_sign_in_links() == 0
+    assert send_queued_links() == 0
     monkeypatch.undo()
 
-    assert send_queued_sign_in_links() == 1
+    assert send_queued_links() == 1
     assert len(mail.outbox) == 1
 
 
@@ -193,7 +193,7 @@ def test_request_older_than_15_minutes_is_not_sent(client, anna):
     client.post("/sign-in/", {"email": anna.email})
     SignInLink.objects.update(created_at=timezone.now() - timedelta(minutes=16))
 
-    assert send_queued_sign_in_links() == 0
+    assert send_queued_links() == 0
 
 
 def test_person_revoked_before_the_email_went_out_gets_nothing(client, anna):
@@ -201,7 +201,7 @@ def test_person_revoked_before_the_email_went_out_gets_nothing(client, anna):
     anna.is_active = False
     anna.save()
 
-    assert send_queued_sign_in_links() == 0
+    assert send_queued_links() == 0
 
 
 def test_worker_command_sends_queued_emails(client, anna):

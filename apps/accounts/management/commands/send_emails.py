@@ -3,7 +3,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandParser
 
-from apps.accounts.services import send_queued_sign_in_links
+from apps.accounts.services import send_queued_links
 
 
 class Command(BaseCommand):
@@ -14,9 +14,9 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, every: int | None, **options: Any) -> None:
         while True:
-            sent = send_queued_sign_in_links()
+            sent = send_queued_links()
             if sent:
-                self.stdout.write(f"Sent {sent} sign-in email(s)")
+                self.stdout.write(f"Sent {sent} email(s)")
             if every is None:
                 return
             time.sleep(every)
