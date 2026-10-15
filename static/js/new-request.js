@@ -15,7 +15,7 @@ const SCENARIOS = [
   ["Looking for a spot in the backlog…", "Found one. Right at the top.", "Don’t tell the other tickets."],
   ["Pinging a developer…", "Developer: “works on my machine”.", "Your machine counts too. Request’s in."],
 ];
-const LINE_MS = 850;
+const LINE_MS = 1300;
 const DONE_MS = 1000;
 const LAST_SCENARIO_KEY = "dimond.lastSpinnerScenario";
 
