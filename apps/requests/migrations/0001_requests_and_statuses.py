@@ -148,7 +148,7 @@ class Migration(migrations.Migration):
                 (
                     "request",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
+                        on_delete=django.db.models.deletion.PROTECT,
                         related_name="status_events",
                         to="requests.request",
                     ),

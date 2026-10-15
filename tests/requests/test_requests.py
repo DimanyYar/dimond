@@ -1,4 +1,5 @@
 import pytest
+from django.db.models import ProtectedError
 
 from apps.accounts.models import Company, Role, User
 from apps.requests import selectors, services
@@ -101,3 +102,9 @@ def test_client_cannot_change_status(bug, ruslan):
         services.change_status(bug, ClientStatus.DONE, actor=ruslan)
     bug.refresh_from_db()
     assert bug.status == ClientStatus.RECEIVED
+
+
+def test_request_with_status_history_cannot_be_deleted(bug):
+    with pytest.raises(ProtectedError):
+        bug.delete()
+    assert bug.status_events.exists()

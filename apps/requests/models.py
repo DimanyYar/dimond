@@ -50,7 +50,7 @@ class Request(models.Model):
 class StatusEvent(models.Model):
     """One status change. Kept forever: period summaries and PM reports are built from it."""
 
-    request = models.ForeignKey(Request, on_delete=models.CASCADE, related_name="status_events")
+    request = models.ForeignKey(Request, on_delete=models.PROTECT, related_name="status_events")
     from_status = models.CharField(
         max_length=20, choices=ClientStatus.choices, blank=True, help_text="Empty when created."
     )
