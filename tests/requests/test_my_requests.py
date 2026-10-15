@@ -177,3 +177,16 @@ def test_first_visit_invites_to_send_a_request(client, anna):
     client.force_login(anna)
 
     assert "No requests yet." in client.get(URL).content.decode()
+
+
+def test_month_groups_count_received_and_closed(anna):
+    make(anna, "Shipped", status=ClientStatus.DONE, created=datetime(2026, 9, 10, tzinfo=UTC))
+    make(anna, "Waiting", created=datetime(2026, 9, 3, tzinfo=UTC))
+    make(anna, "August one", created=datetime(2026, 8, 20, tzinfo=UTC))
+
+    months = selectors.by_month(selectors.requests_for(anna))
+
+    assert [(g.month.strftime("%B %Y"), len(g.requests), g.closed) for g in months] == [
+        ("September 2026", 2, 1),
+        ("August 2026", 1, 0),
+    ]

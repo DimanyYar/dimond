@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from typing import NamedTuple
 
 from django.db import models
 from django.db.models import Count, Q, QuerySet
@@ -124,10 +125,29 @@ def board(requests: Iterable[Request]) -> list[tuple[BoardColumn, list[Request]]
     return [(column, items) for column, items in columns if items]
 
 
+class MonthGroup(NamedTuple):
+    month: date
+    requests: list[Request]
+    closed: int
+
+
+def by_month(requests: Iterable[Request]) -> list[MonthGroup]:
+    """Requests grouped by the month they were sent, in the order given (newest first)."""
+    groups: dict[date, list[Request]] = {}
+    for request in requests:
+        month = timezone.localtime(request.created_at).date().replace(day=1)
+        groups.setdefault(month, []).append(request)
+    return [
+        MonthGroup(month, rows, sum(r.status in CLOSED_STATUSES for r in rows))
+        for month, rows in groups.items()
+    ]
+
+
 @dataclass(frozen=True)
 class MyRequestsPage:
     requests: list[Request]
     board: list[tuple[BoardColumn, list[Request]]]
+    months: list[MonthGroup]
     summary: dict[str, int]
     has_any_request: bool
 
@@ -151,6 +171,7 @@ def my_requests_page(
     return MyRequestsPage(
         requests=shown,
         board=board(shown) if with_board else [],
+        months=[] if with_board else by_month(shown),
         summary=period_summary(user, since),
         has_any_request=requests_for(user).exists(),
     )

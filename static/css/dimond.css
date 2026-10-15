@@ -1156,7 +1156,7 @@ textarea.input {
 
 .board {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 14px;
   align-items: start;
 }
@@ -1170,17 +1170,18 @@ textarea.input {
   background: var(--surface-2);
 }
 
-.board-column h2,
-.list-month {
+.board-column h2 {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  padding: var(--space-1) 6px;
   font-size: 15px;
   font-weight: 500;
 }
 
-.board-column h2 {
-  padding: var(--space-1) 6px;
+.board-column h2 .muted {
+  margin-left: auto;
+  font-size: 13px;
 }
 
 .board-column .dot {
@@ -1229,38 +1230,64 @@ textarea.input {
   color: var(--accent-text);
 }
 
-.request-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* The list view is a table: one row per request, grouped by month. */
+.request-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-l);
+  background: var(--surface);
 }
 
-.list-month {
-  margin-top: var(--space-2);
+.request-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: left;
 }
 
-@media (min-width: 900px) {
-  .request-list .request-card {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    column-gap: var(--space-5);
-  }
+.request-table th,
+.request-table td {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--hairline-soft);
+  vertical-align: middle;
+}
 
-  .request-list .request-card-meta:first-child {
-    grid-column: 2;
-    grid-row: 1;
-  }
+.request-table thead th {
+  padding-block: var(--space-3);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
 
-  .request-list .request-card h3 {
-    grid-column: 1;
-    grid-row: 1;
-  }
+.request-table .month-row th {
+  padding-block: var(--space-3) var(--space-2);
+  background: var(--canvas);
+  font-weight: 600;
+}
 
-  .request-list .request-card-meta:last-child {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
+.request-table .month-row .muted {
+  margin-left: var(--space-2);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.request-table .request-title {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.request-table tr.needs-you {
+  background: #fff8f3;
+}
+
+.request-table .hotfix {
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.request-table tbody:last-child tr:last-child > * {
+  border-bottom: 0;
 }
 
 @media (max-width: 899px) {
