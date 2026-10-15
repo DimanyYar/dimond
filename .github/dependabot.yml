@@ -6,7 +6,7 @@ updates:
       interval: weekly
     groups:
       dev-tools:
-        dependency-type: development
+        patterns: ["pytest*", "ruff", "mypy", "django-stubs*"]
 
   - package-ecosystem: github-actions
     directory: /
