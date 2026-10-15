@@ -7,6 +7,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
+from django.db.models import QuerySet
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -54,31 +55,33 @@ def request_sign_in_link(email: str) -> None:
         SignInLink.objects.create(user=user)
 
 
-def send_queued_sign_in_links() -> int:
-    """Email every queued link that is still worth sending. Returns how many went out.
+def _queued() -> QuerySet[SignInLink]:
+    """Links waiting to be emailed that are still worth sending.
 
     A request older than the link lifetime is skipped: the person has moved on and asks
-    again if they still need it.
+    again if they still need it. Someone who lost access in the meantime gets nothing.
     """
-    sent = 0
     since = timezone.now() - LINK_LIFETIME
-    queued = SignInLink.objects.filter(
+    return SignInLink.objects.filter(
         sent_at__isnull=True, created_at__gte=since, user__is_active=True
     )
-    for link_id in queued.values_list("pk", flat=True):
-        if _send_one(link_id):
-            sent += 1
-    return sent
+
+
+def send_queued_sign_in_links() -> int:
+    """Email every queued link. Returns how many went out."""
+    return sum(_send_one(link_id) for link_id in _queued().values_list("pk", flat=True))
 
 
 def _send_one(link_id: int) -> bool:
     with transaction.atomic():
-        # skip_locked lets a second worker, if one ever runs, take other links instead of
-        # sending the same one twice.
+        # The same filter again, under the lock: between listing and sending a link may have
+        # aged out or its owner lost access. skip_locked lets a second worker, if one ever
+        # runs, take other links instead of sending the same one twice.
         link = (
-            SignInLink.objects.select_for_update(skip_locked=True)
+            _queued()
+            .select_for_update(skip_locked=True, of=("self",))
             .select_related("user")
-            .filter(pk=link_id, sent_at__isnull=True)
+            .filter(pk=link_id)
             .first()
         )
         if link is None:
