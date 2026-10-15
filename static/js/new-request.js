@@ -20,7 +20,9 @@ const DONE_MS = 1000;
 const LAST_SCENARIO_KEY = "dimond.lastSpinnerScenario";
 
 const spinner = document.getElementById("spinner");
-const SUBMIT_LABEL = document.querySelector('#new-request-form [type="submit"]').textContent;
+// The empty form as first served: after an error the form is swapped for one holding the
+// typed values and error messages, and reset() would bring those back.
+const emptyForm = document.getElementById("new-request-form").cloneNode(true);
 let requestSaved = false;
 
 function wait(ms) {
@@ -157,11 +159,7 @@ window.addEventListener("pageshow", (event) => {
   if (!event.persisted || !requestSaved) return;
   requestSaved = false;
   spinner.hidden = true;
-  const form = document.getElementById("new-request-form");
-  form.reset();
-  applyType(form, form.elements.type.value);
-  applyWhenNeeded(form);
-  const button = form.querySelector('[type="submit"]');
-  button.disabled = false;
-  button.textContent = SUBMIT_LABEL;
+  const fresh = emptyForm.cloneNode(true);
+  document.getElementById("new-request-form").replaceWith(fresh);
+  bind(fresh);
 });
