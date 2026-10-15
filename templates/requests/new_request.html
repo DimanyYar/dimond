@@ -1,4 +1,5 @@
 {% extends "layouts/app.html" %}
+{% load static %}
 {% block title %}New request · dimon.d{% endblock %}
 
 {% block nav %}<a href="{% url 'home' %}">My requests</a>{% endblock %}
@@ -39,16 +40,16 @@
       <div class="field">
         <label for="f-title">Title</label>
         <input class="input" type="text" id="f-title" name="title" required maxlength="200"
-               value="{{ form.title.value|default_if_none:'' }}" placeholder="{{ copy.title }}"
+               value="{{ form.title.value|default_if_none:'' }}" placeholder="{{ copy.title }}" data-copy-placeholder="title"
                {% if form.title.errors %}aria-invalid="true" aria-describedby="title-error"{% endif %}>
         {% if form.title.errors %}<span class="error-text" id="title-error">{{ form.title.errors.0 }}</span>{% endif %}
       </div>
 
       <div class="field">
-        <label for="f-description"><span>{{ copy.description_label }}</span> <span class="optional">optional</span></label>
-        <span class="hint" id="description-hint">{{ copy.description_hint }}</span>
+        <label for="f-description"><span data-copy="description_label">{{ copy.description_label }}</span> <span class="optional">optional</span></label>
+        <span class="hint" id="description-hint" data-copy="description_hint">{{ copy.description_hint }}</span>
         <textarea class="input" id="f-description" name="description" rows="5" aria-describedby="description-hint"
-                  placeholder="{{ copy.description }}">{{ form.description.value|default_if_none:'' }}</textarea>
+                  placeholder="{{ copy.description }}" data-copy-placeholder="description">{{ form.description.value|default_if_none:'' }}</textarea>
         <details class="for-bug" {% if form.steps.value %}open{% endif %}>
           <summary>Add steps to reproduce <span class="optional">optional</span></summary>
           <textarea class="input" name="steps" rows="3" aria-label="Steps to reproduce"
@@ -59,7 +60,7 @@
       <div class="field">
         <label for="f-why">Why it matters</label>
         <input class="input" type="text" id="f-why" name="why" required
-               value="{{ form.why.value|default_if_none:'' }}" placeholder="{{ copy.why }}"
+               value="{{ form.why.value|default_if_none:'' }}" placeholder="{{ copy.why }}" data-copy-placeholder="why"
                {% if form.why.errors %}aria-invalid="true" aria-describedby="why-error"{% endif %}>
         {% if form.why.errors %}<span class="error-text" id="why-error">{{ form.why.errors.0 }}</span>{% endif %}
       </div>
@@ -74,13 +75,13 @@
             </label>
           {% endfor %}
         </div>
-        <span class="hint when-note">{{ form.when_note }}</span>
+        <span class="hint when-note" aria-live="polite" data-when-note>{{ form.when_note }}</span>
       </fieldset>
 
       <div class="field">
-        <label for="f-link"><span>{{ copy.link_label }}</span> <span class="optional not-for-bug">optional</span></label>
+        <label for="f-link"><span data-copy="link_label">{{ copy.link_label }}</span> <span class="optional not-for-bug">optional</span></label>
         <input class="input" type="text" id="f-link" name="link" maxlength="500" inputmode="url" autocomplete="url" {% if form.type.value == "bug" %}required{% endif %}
-               value="{{ form.link.value|default_if_none:'' }}" placeholder="{{ copy.link }}"
+               value="{{ form.link.value|default_if_none:'' }}" placeholder="{{ copy.link }}" data-copy-placeholder="link"
                {% if form.link.errors %}aria-invalid="true" aria-describedby="link-error"{% endif %}>
         {% if form.link.errors %}<span class="error-text" id="link-error">{{ form.link.errors.0 }}</span>{% endif %}
       </div>
@@ -88,6 +89,7 @@
       <div class="form-actions">
         <button class="btn btn-primary" type="submit">Summon Dimon</button>
         <a class="btn btn-ghost" href="{% url 'home' %}">Cancel</a>
+        <span class="error-text" role="alert" data-send-error></span>
       </div>
     </form>
     {% endwith %}
@@ -98,4 +100,21 @@
     </aside>
   </div>
 
+  <div class="spinner-overlay" id="spinner" hidden>
+    <div class="spinner-card" role="status" aria-live="polite">
+      <div class="spinner-mark" aria-hidden="true">
+        <div class="spinner-orbit"><span></span></div>
+        <div class="spinner-logo">d.</div>
+        <div class="spinner-done">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+        </div>
+      </div>
+      <p class="spinner-line" data-spinner-line>Sending…</p>
+      <div class="spinner-dots" aria-hidden="true" data-spinner-dots></div>
+    </div>
+  </div>
+
+  {{ type_copy|json_script:"type-copy" }}
+  {{ when_needed_copy|json_script:"when-needed-copy" }}
+  <script type="module" src="{% static 'js/new-request.js' %}"></script>
 {% endblock %}
