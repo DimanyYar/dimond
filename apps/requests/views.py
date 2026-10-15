@@ -22,9 +22,7 @@ def my_requests(request: HttpRequest) -> HttpResponse:
     if not selectors.has_my_requests_page(request.user):
         raise PermissionDenied
     filters = MyRequestsFilter(request.GET)
-    show = Show(filters.chosen("show", Show.OPEN))
-    types = filters.chosen_types()
-    period = Period(filters.chosen("period", Period.THREE_MONTHS))
+    show, types, period = filters.requests_filter()
     view = View(filters.chosen("view", View.BOARD))
     page = selectors.my_requests_page(
         request.user,
@@ -54,6 +52,21 @@ def my_requests(request: HttpRequest) -> HttpResponse:
         "periods": Period.choices,
     }
     return render(request, "requests/my_requests.html", context)
+
+
+@require_GET
+@login_required
+def my_requests_count(request: HttpRequest) -> HttpResponse:
+    """The label of the filter sheet's button, e.g. "Show 3 requests", for filters not yet
+    applied. The sheet asks for it each time a type or period is picked."""
+    assert isinstance(request.user, User)  # login_required lets only signed-in people in
+    if not selectors.has_my_requests_page(request.user):
+        raise PermissionDenied
+    show, types, period = MyRequestsFilter(request.GET).requests_filter()
+    count = selectors.my_requests_count(
+        request.user, show=show, types=types, period=period, now=timezone.now()
+    )
+    return render(request, "requests/show_requests_label.html", {"count": count})
 
 
 @require_http_methods(["GET", "POST"])

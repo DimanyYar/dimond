@@ -147,6 +147,11 @@ class MyRequestsFilter(forms.Form):
         value: str = self.cleaned_data.get(name) or default
         return value
 
+    def requests_filter(self) -> tuple[Show, list[RequestType], Period]:
+        """Which requests to show: everything here but the board / list switch."""
+        show = Show(self.chosen("show", Show.OPEN))
+        return show, self.chosen_types(), Period(self.chosen("period", Period.THREE_MONTHS))
+
     def chosen_types(self) -> list[RequestType]:
         """Several types at once (PRD mockups: the type chips are a multi-select)."""
         self.is_valid()

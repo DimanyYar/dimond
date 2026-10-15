@@ -102,6 +102,13 @@ def my_requests(
     return requests
 
 
+def my_requests_count(
+    user: User, *, show: Show, types: Collection[RequestType], period: Period, now: datetime
+) -> int:
+    """How many requests a filter would show, so the phone filter sheet can say it upfront."""
+    return my_requests(user, show=show, types=types, since=period_start(period, now)).count()
+
+
 def period_summary(user: User, since: datetime | None) -> dict[str, int]:
     """Counts for the summary and the Open / Closed / All switch, ignoring the type filter."""
     summary: dict[str, int] = _created_since(user, since).aggregate(

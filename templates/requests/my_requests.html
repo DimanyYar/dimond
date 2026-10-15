@@ -1,4 +1,5 @@
 {% extends "layouts/client.html" %}
+{% load static %}
 {% block title %}Your requests · dimon.d{% endblock %}
 
 {% block content %}
@@ -65,7 +66,7 @@
   </div>
 
   <div id="filters" class="sheet" popover role="dialog" aria-labelledby="filters-title">
-    <form method="get" class="stack">
+    <form method="get" class="stack" data-filter-sheet data-count-url="{% url 'my_requests_count' %}">
       <input type="hidden" name="show" value="{{ show }}">
       <input type="hidden" name="view" value="{{ view }}">
       <div class="sheet-head">
@@ -90,7 +91,7 @@
           {% endfor %}
         </div>
       </fieldset>
-      <button class="btn btn-dark btn-block" type="submit">Show requests</button>
+      <button class="btn btn-dark btn-block" type="submit"><span data-show-count>{% include "requests/show_requests_label.html" with count=page.requests|length %}</span></button>
     </form>
   </div>
 
@@ -150,4 +151,5 @@
     </div>
   {% endif %}
   {% endif %}
+  <script type="module" src="{% static 'js/my-requests.js' %}"></script>
 {% endblock %}

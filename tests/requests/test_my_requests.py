@@ -222,3 +222,24 @@ def test_month_groups_count_received_and_closed(anna):
         ("September 2026", 2, 1),
         ("August 2026", 1, 0),
     ]
+
+
+def test_filter_sheet_says_how_many_requests_it_will_show(client, anna, ruslan):
+    make(anna, "A bug")
+    make(ruslan, "Another bug")
+    make(anna, "An idea", type=RequestType.IDEA)
+    make(anna, "Shipped bug", status=ClientStatus.DONE)
+    northwind = Company.objects.create(name="Northwind")
+    make(User.objects.create_user("lee@northwind.com", company=northwind), "Northwind bug")
+    client.force_login(anna)
+    count_url = reverse("my_requests_count")
+
+    assert client.get(count_url, {"type": "bug"}).content.decode().strip() == "Show 2 requests"
+    assert client.get(count_url, {"type": "idea"}).content.decode().strip() == "Show 1 request"
+    assert client.get(count_url, {"show": "all"}).content.decode().strip() == "Show 4 requests"
+
+
+def test_only_clients_can_ask_the_filter_count(client):
+    client.force_login(User.objects.create_user("dmitry@shakuro.com", role=Role.PM))
+
+    assert client.get(reverse("my_requests_count")).status_code == 403
