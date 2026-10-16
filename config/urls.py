@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path, re_path
 
-from apps.core.views import health, home, static_file, styleguide
+from apps.core.views import favicon, health, home, static_file, styleguide
 
 urlpatterns = [
     path("", home, name="home"),
@@ -10,6 +10,7 @@ urlpatterns = [
     path("", include("apps.requests.urls")),
     path("", include("apps.files.urls")),
     path("healthz", health, name="health"),
+    path("favicon.ico", favicon),
     path("styleguide/", styleguide, name="styleguide"),
     path(settings.ADMIN_URL, admin.site.urls),
 ]
