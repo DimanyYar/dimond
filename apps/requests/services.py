@@ -2,8 +2,8 @@ from django.db import transaction
 
 from apps.accounts.models import Role, User
 
-from .models import ClientStatus, Request, RequestType, StatusEvent, WhenNeeded
-from .selectors import can_create_requests
+from .models import ClientStatus, Message, Request, RequestType, StatusEvent, WhenNeeded
+from .selectors import can_ask_for_input, can_create_requests, can_post_message
 
 
 class NotAllowedError(Exception):
@@ -49,6 +49,11 @@ def change_status(request: Request, to_status: ClientStatus, actor: User | None)
     """
     if actor is not None and actor.role != Role.PM:
         raise NotAllowedError
+    return _set_status(request, to_status, actor)
+
+
+def _set_status(request: Request, to_status: ClientStatus, actor: User | None) -> Request:
+    """Change and log the status, whoever is allowed to: callers check that themselves."""
     # Locked so the sync and the PM changing it at the same moment both end up in the log
     # with the right "from" status.
     request = Request.objects.select_for_update().get(pk=request.pk)
@@ -60,3 +65,29 @@ def change_status(request: Request, to_status: ClientStatus, actor: User | None)
     request.status = to_status
     request.save(update_fields=["status", "updated_at"])
     return request
+
+
+@transaction.atomic
+def post_message(
+    author: User, request: Request, text: str, *, ask_for_input: bool = False
+) -> Message:
+    """Add a reply to the request's thread.
+
+    With `ask_for_input` the PM's message becomes a question: the request moves to
+    "Needs your input". Any client's reply to it hands the request back to the PM as Received
+    (PRD: the client answers "Needs info" and the request returns to the PM by itself).
+    """
+    # Locked and re-read so a reply and a status change at the same moment see one status.
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    if not can_post_message(author, request):
+        raise NotAllowedError
+    if ask_for_input and not can_ask_for_input(author, request):
+        raise NotAllowedError
+    message = Message.objects.create(
+        request=request, author=author, text=text, asks_for_input=ask_for_input
+    )
+    if ask_for_input:
+        _set_status(request, ClientStatus.NEEDS_INPUT, author)
+    elif author.role == Role.CLIENT and request.status == ClientStatus.NEEDS_INPUT:
+        _set_status(request, ClientStatus.RECEIVED, author)
+    return message

@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import NamedTuple
 
 from django.db import models
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Count, Max, Q, QuerySet
 from django.utils import timezone
 
 from apps.accounts.models import Role, User
@@ -15,8 +15,10 @@ from .models import (
     IN_WORK_STATUSES,
     BoardColumn,
     ClientStatus,
+    Message,
     Request,
     RequestType,
+    StatusEvent,
 )
 
 
@@ -150,6 +152,44 @@ def by_month(requests: Iterable[Request]) -> list[MonthGroup]:
     ]
 
 
+NEEDS_YOU_SHOWN = 3
+
+
+class WaitingRequest(NamedTuple):
+    request: Request
+    question: Message | None
+
+
+@dataclass(frozen=True)
+class NeedsYou:
+    """The "Dimon needs your input" banner on My requests: a few rows and how many more."""
+
+    shown: list[WaitingRequest]
+    more: int
+
+
+def needs_you(user: User) -> NeedsYou:
+    """Requests waiting for the client's answer, longest waiting first.
+
+    Ignores the page's filters: a question from Dimon matters even when its request is
+    older than the chosen period or of another type.
+    """
+    waiting = (
+        requests_for(user)
+        .filter(status=ClientStatus.NEEDS_INPUT)
+        .annotate(
+            waiting_since=Max(
+                "status_events__created_at",
+                filter=Q(status_events__to_status=ClientStatus.NEEDS_INPUT),
+            )
+        )
+        .order_by("waiting_since", "pk")
+    )
+    total = waiting.count()
+    shown = [WaitingRequest(r, _open_question(r)) for r in waiting[:NEEDS_YOU_SHOWN]]
+    return NeedsYou(shown, total - len(shown))
+
+
 @dataclass(frozen=True)
 class MyRequestsPage:
     requests: list[Request]
@@ -157,6 +197,7 @@ class MyRequestsPage:
     months: list[MonthGroup]
     summary: dict[str, int]
     has_any_request: bool
+    needs_you: NeedsYou
 
 
 def my_requests_page(
@@ -181,4 +222,161 @@ def my_requests_page(
         months=[] if with_board else by_month(shown),
         summary=period_summary(user, since),
         has_any_request=requests_for(user).exists(),
+        needs_you=needs_you(user),
+    )
+
+
+def can_post_message(user: User, request: Request) -> bool:
+    """The client's company and the PM talk in the thread until the request is closed.
+
+    Done and Declined are final: anything new goes into a new request.
+    """
+    if not user.is_active or request.status in CLOSED_STATUSES:
+        return False
+    if user.role == Role.PM:
+        return True
+    return user.role == Role.CLIENT and user.company_id == request.company_id
+
+
+def can_ask_for_input(user: User, request: Request) -> bool:
+    """Only the PM asks, and only before the request is planned: later questions come from
+    the team in Jira (PRD: statuses and Jira mapping)."""
+    return (
+        user.is_active
+        and user.role == Role.PM
+        and request.status in (ClientStatus.RECEIVED, ClientStatus.NEEDS_INPUT)
+    )
+
+
+# What the thread says when the status changes, in the client's words.
+STATUS_EVENT_TEXT = {
+    ClientStatus.RECEIVED: "Request received",
+    ClientStatus.NEEDS_INPUT: "Waiting for your input",
+    ClientStatus.PLANNED: "Planned",
+    ClientStatus.IN_PROGRESS: "In progress — the team is working on it",
+    ClientStatus.READY_TO_CHECK: "Ready to check",
+    ClientStatus.DONE: "Done",
+    ClientStatus.DECLINED: "Declined",
+    ClientStatus.LATER: "Moved to Later",
+}
+
+
+@dataclass(frozen=True)
+class ThreadEntry:
+    """One line of the thread: a message, or a status change with its text."""
+
+    at: datetime
+    message: Message | None = None
+    event: str = ""
+    status: str = ""
+
+
+def _event_entry(event: StatusEvent) -> ThreadEntry:
+    text = STATUS_EVENT_TEXT[ClientStatus(event.to_status)]
+    if event.to_status == ClientStatus.RECEIVED and event.from_status:
+        text = "Back with Dimon"
+    return ThreadEntry(at=event.created_at, event=text, status=event.to_status)
+
+
+def thread(request: Request) -> list[ThreadEntry]:
+    """Messages and status changes, oldest first, as one conversation."""
+    messages = [
+        ThreadEntry(at=m.created_at, message=m)
+        for m in request.messages.select_related("author", "author__company")
+    ]
+    events = [_event_entry(e) for e in request.status_events.all()]
+    # A message comes before a status change made at the same moment: the PM's question
+    # first, then "Waiting for your input".
+    return sorted(messages + events, key=lambda entry: (entry.at, entry.message is None))
+
+
+PROGRESS_STEPS = (
+    ClientStatus.RECEIVED,
+    ClientStatus.PLANNED,
+    ClientStatus.IN_PROGRESS,
+    ClientStatus.READY_TO_CHECK,
+    ClientStatus.DONE,
+)
+
+
+class ProgressStep(NamedTuple):
+    name: str
+    state: str  # "done", "current", "waiting" (current, but waits for the client) or "next"
+
+
+@dataclass(frozen=True)
+class Progress:
+    """The way from Received to Done. Later and Declined are off that way, so they get a
+    sentence instead of steps."""
+
+    steps: list[ProgressStep]
+    position: int  # 1-based number of the current step
+    since: datetime
+    off_track: str = ""
+
+
+def progress(request: Request, since: datetime) -> Progress:
+    """Where the request is now. `since` is when it got its current status."""
+    if request.status == ClientStatus.LATER:
+        return Progress(
+            [],
+            0,
+            since,
+            "Accepted and parked for later. It comes back to the "
+            "plan when there’s room — you’ll see it move.",
+        )
+    if request.status == ClientStatus.DECLINED:
+        return Progress([], 0, since, "Dimon declined this request. The reason is in the thread.")
+    waiting = request.status == ClientStatus.NEEDS_INPUT
+    current = PROGRESS_STEPS.index(ClientStatus.RECEIVED if waiting else request.status)
+    steps = []
+    for i, status in enumerate(PROGRESS_STEPS):
+        name = ClientStatus(status).label
+        if i < current:
+            state = "done"
+        elif i > current:
+            state = "next"
+        elif waiting:
+            state, name = "waiting", f"{name} · needs your input"
+        else:
+            state = "current"
+        steps.append(ProgressStep(name, state))
+    return Progress(steps, current + 1, since)
+
+
+def _open_question(request: Request) -> Message | None:
+    """The PM's question the client is asked to answer, while the request waits for them.
+
+    The PM's latest question, not their latest message: a "thanks" or a nudge written
+    while waiting does not replace what was asked. Private: it takes a request the caller
+    has already read through `requests_for`, so it never widens what someone may see.
+    """
+    if request.status != ClientStatus.NEEDS_INPUT:
+        return None
+    return request.messages.filter(asks_for_input=True).last()
+
+
+@dataclass(frozen=True)
+class RequestPage:
+    request: Request
+    thread: list[ThreadEntry]
+    progress: Progress
+    question: Message | None
+    can_post: bool
+    can_ask: bool
+
+
+def request_page(user: User, pk: int) -> RequestPage:
+    """Everything the request card shows. Raises Request.DoesNotExist like `request_for`."""
+    request = request_for(user, pk)
+    entries = thread(request)
+    # Every request has at least its "Received" event, so this is never empty.
+    since = max(entry.at for entry in entries if entry.event)
+    return RequestPage(
+        request=request,
+        thread=entries,
+        progress=progress(request, since),
+        question=_open_question(request),
+        can_post=can_post_message(user, request),
+        can_ask=can_ask_for_input(user, request),
     )

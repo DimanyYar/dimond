@@ -156,3 +156,12 @@ class MyRequestsFilter(forms.Form):
         """Several types at once (PRD mockups: the type chips are a multi-select)."""
         self.is_valid()
         return [RequestType(value) for value in self.cleaned_data.get("type") or []]
+
+
+class MessageForm(forms.Form):
+    text = forms.CharField(
+        max_length=5000,
+        widget=forms.Textarea,
+        error_messages={"required": "Write a message first."},
+    )
+    ask_for_input = forms.BooleanField(required=False)
