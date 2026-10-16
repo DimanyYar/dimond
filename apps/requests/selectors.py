@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import NamedTuple
 
 from django.db import models
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Count, Max, Q, QuerySet
 from django.utils import timezone
 
 from apps.accounts.models import Role, User
@@ -152,6 +152,44 @@ def by_month(requests: Iterable[Request]) -> list[MonthGroup]:
     ]
 
 
+NEEDS_YOU_SHOWN = 3
+
+
+class WaitingRequest(NamedTuple):
+    request: Request
+    question: Message | None
+
+
+@dataclass(frozen=True)
+class NeedsYou:
+    """The "Dimon needs your input" banner on My requests: a few rows and how many more."""
+
+    shown: list[WaitingRequest]
+    more: int
+
+
+def needs_you(user: User) -> NeedsYou:
+    """Requests waiting for the client's answer, longest waiting first.
+
+    Ignores the page's filters: a question from Dimon matters even when its request is
+    older than the chosen period or of another type.
+    """
+    waiting = (
+        requests_for(user)
+        .filter(status=ClientStatus.NEEDS_INPUT)
+        .annotate(
+            waiting_since=Max(
+                "status_events__created_at",
+                filter=Q(status_events__to_status=ClientStatus.NEEDS_INPUT),
+            )
+        )
+        .order_by("waiting_since", "pk")
+    )
+    total = waiting.count()
+    shown = [WaitingRequest(r, open_question(r)) for r in waiting[:NEEDS_YOU_SHOWN]]
+    return NeedsYou(shown, total - len(shown))
+
+
 @dataclass(frozen=True)
 class MyRequestsPage:
     requests: list[Request]
@@ -159,6 +197,7 @@ class MyRequestsPage:
     months: list[MonthGroup]
     summary: dict[str, int]
     has_any_request: bool
+    needs_you: NeedsYou
 
 
 def my_requests_page(
@@ -183,6 +222,7 @@ def my_requests_page(
         months=[] if with_board else by_month(shown),
         summary=period_summary(user, since),
         has_any_request=requests_for(user).exists(),
+        needs_you=needs_you(user),
     )
 
 
@@ -304,12 +344,23 @@ def progress(request: Request, since: datetime) -> Progress:
     return Progress(steps, current + 1, since)
 
 
+def open_question(request: Request) -> Message | None:
+    """The PM's question the client is asked to answer, while the request waits for them.
+
+    The PM's latest question, not their latest message: a "thanks" or a nudge written
+    while waiting does not replace what was asked.
+    """
+    if request.status != ClientStatus.NEEDS_INPUT:
+        return None
+    return request.messages.filter(asks_for_input=True).last()
+
+
 @dataclass(frozen=True)
 class RequestPage:
     request: Request
     thread: list[ThreadEntry]
     progress: Progress
-    question: Message | None  # the PM message the client is asked to answer
+    question: Message | None
     can_post: bool
     can_ask: bool
 
@@ -318,17 +369,13 @@ def request_page(user: User, pk: int) -> RequestPage:
     """Everything the request card shows. Raises Request.DoesNotExist like `request_for`."""
     request = request_for(user, pk)
     entries = thread(request)
-    question = None
-    if request.status == ClientStatus.NEEDS_INPUT:
-        pm_messages = [e.message for e in entries if e.message and e.message.author.role == Role.PM]
-        question = pm_messages[-1] if pm_messages else None
     # Every request has at least its "Received" event, so this is never empty.
     since = max(entry.at for entry in entries if entry.event)
     return RequestPage(
         request=request,
         thread=entries,
         progress=progress(request, since),
-        question=question,
+        question=open_question(request),
         can_post=can_post_message(user, request),
         can_ask=can_ask_for_input(user, request),
     )

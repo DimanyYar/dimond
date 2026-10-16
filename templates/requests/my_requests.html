@@ -18,6 +18,10 @@
     <a class="btn btn-primary" href="{% url 'new_request' %}">Summon Dimon</a>
   </header>
 
+  {% if page.needs_you.shown %}
+    {% include "requests/needs_you_banner.html" with needs_you=page.needs_you %}
+  {% endif %}
+
   <section class="card summary" aria-labelledby="summary-title">
     <div class="summary-head">
       <h2 id="summary-title">{{ period.label }}</h2>

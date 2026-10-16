@@ -1893,3 +1893,123 @@ textarea.input {
     min-height: 48px;
   }
 }
+
+/* "Dimon needs your input" on My requests: one banner, a row per waiting request. */
+
+.needs-you-list {
+  align-items: flex-start;
+  padding: var(--space-4) 18px;
+}
+
+.needs-you-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.needs-you-body h2 {
+  font-size: 16px;
+  line-height: 36px;
+}
+
+.needs-you-body ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.needs-you-body li + li {
+  border-top: 1px solid rgb(255 86 0 / 25%);
+}
+
+.needs-you-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  min-height: 52px;
+  padding: var(--space-2) 0;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.needs-you-row:hover {
+  color: var(--ink);
+}
+
+.needs-you-row:hover .btn-primary {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.needs-you-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+}
+
+.needs-you-question {
+  color: var(--ink-soft);
+}
+
+.needs-you-question::before {
+  content: " — ";
+}
+
+.needs-you-row .btn {
+  flex: 0 0 auto;
+  font-size: 14px;
+}
+
+.needs-you-more {
+  align-self: flex-start;
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (max-width: 899px) {
+  .needs-you-list {
+    padding: var(--space-3) 14px;
+    border-radius: 14px;
+  }
+
+  .needs-you-list .banner-mark {
+    display: none;
+  }
+
+  .needs-you-row-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 14px;
+  }
+
+  /* Two lines are enough to recognise the question; the card shows it in full. */
+  .needs-you-question {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .needs-you-question::before {
+    content: none;
+  }
+
+  /* The whole row is the button on a phone; an arrow replaces the Reply pill. */
+  .needs-you-row .btn {
+    display: none;
+  }
+
+  .needs-you-row::after {
+    content: "›";
+    flex: 0 0 auto;
+    font-size: 24px;
+    line-height: 1;
+  }
+}

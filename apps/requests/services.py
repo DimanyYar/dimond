@@ -83,7 +83,9 @@ def post_message(
         raise NotAllowedError
     if ask_for_input and not can_ask_for_input(author, request):
         raise NotAllowedError
-    message = Message.objects.create(request=request, author=author, text=text)
+    message = Message.objects.create(
+        request=request, author=author, text=text, asks_for_input=ask_for_input
+    )
     if ask_for_input:
         _set_status(request, ClientStatus.NEEDS_INPUT, author)
     elif author.role == Role.CLIENT and request.status == ClientStatus.NEEDS_INPUT:

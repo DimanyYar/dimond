@@ -195,3 +195,17 @@ def test_later_and_declined_are_off_the_progress_steps(bug, anna, status):
 
     assert progress.steps == []
     assert progress.off_track
+
+
+def test_banner_keeps_the_question_after_a_pm_follow_up(bug, pm, anna):
+    services.post_message(pm, bug, "Which lead?", ask_for_input=True)
+    services.post_message(pm, bug, "Any lead from yesterday is fine.")
+
+    assert selectors.request_page(anna, bug.pk).question.text == "Which lead?"
+
+
+def test_pm_asking_again_replaces_the_question(bug, pm, anna):
+    services.post_message(pm, bug, "Which lead?", ask_for_input=True)
+    services.post_message(pm, bug, "And which form?", ask_for_input=True)
+
+    assert selectors.request_page(anna, bug.pk).question.text == "And which form?"

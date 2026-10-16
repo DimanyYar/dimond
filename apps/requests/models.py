@@ -136,6 +136,9 @@ class Message(models.Model):
     request = models.ForeignKey(Request, on_delete=models.PROTECT, related_name="messages")
     author = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
     text = models.TextField()
+    asks_for_input = models.BooleanField(
+        default=False, help_text="The PM's question that moved the request to Needs your input."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

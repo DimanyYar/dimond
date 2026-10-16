@@ -1,0 +1,30 @@
+{% comment %}
+"Dimon needs your input" on My requests: one banner, one row per waiting request, longest waiting
+first. Shows a few rows and links to the rest, so several questions never push the board off screen.
+{% endcomment %}
+{% with shown=needs_you.shown %}
+<section class="banner needs-you-list" aria-labelledby="needs-you-title">
+  <span class="banner-mark" aria-hidden="true">!</span>
+  <div class="needs-you-body">
+    <h2 id="needs-you-title" class="{% if shown|length == 1 and not needs_you.more %}visually-hidden{% endif %}">
+      {% with total=shown|length|add:needs_you.more %}{{ total }} request{{ total|pluralize }} need{{ total|pluralize:"s," }} your input{% endwith %}
+    </h2>
+    <ul>
+      {% for item in shown %}
+        <li>
+          <a class="needs-you-row" href="{{ item.request.get_absolute_url }}#reply">
+            <span class="needs-you-row-text">
+              <strong>{{ item.request.key }} · {{ item.request.title }}</strong>
+              <span class="needs-you-question">{% if item.question %}{{ item.question.text|truncatewords:20 }}{% else %}Dimon needs something from you.{% endif %}</span>
+            </span>
+            <span class="btn btn-primary" aria-hidden="true">Reply</span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+    {% if needs_you.more %}
+      <a class="needs-you-more" href="{% url 'my_requests' %}?period=all">+{{ needs_you.more }} more waiting for you</a>
+    {% endif %}
+  </div>
+</section>
+{% endwith %}
