@@ -1,9 +1,12 @@
+from collections.abc import Iterable
 from typing import Any
+from uuid import UUID
 
 from django import forms
 from django.db import models
 
 from apps.files.forms import AttachmentsField
+from apps.files.models import Attachment
 
 from .models import REQUEST_FIELDS, Request, RequestType, WhenNeeded
 from .selectors import Period, Show
@@ -101,11 +104,6 @@ class RequestForm(forms.Form):
         error_messages={"invalid": "Paste the full link, like https://crm.example.com/leads/1."},
     )
 
-    @classmethod
-    def filled_from(cls, request: Request, data: Any = None) -> "RequestForm":
-        """The form for editing: the request's current text, or what was just submitted."""
-        return cls(data, initial={field: getattr(request, field) for field in REQUEST_FIELDS})
-
     def clean(self) -> dict[str, Any]:
         super().clean()
         data = self.cleaned_data
@@ -135,9 +133,43 @@ class RequestForm(forms.Form):
 
 
 class NewRequestForm(RequestForm):
-    """The request form plus files. Editing a request's files comes with the edit form."""
+    """The request form plus files."""
 
     attachments = AttachmentsField()
+
+
+class EditRequestForm(RequestForm):
+    """The request form for an edit: new files to add and the request's files to remove."""
+
+    attachments = AttachmentsField()
+    remove = forms.TypedMultipleChoiceField(required=False, coerce=UUID)
+
+    def __init__(self, *args: Any, files_shown: Iterable[Attachment], **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.files_shown = list(files_shown)
+        remove = self.fields["remove"]
+        assert isinstance(remove, forms.TypedMultipleChoiceField)  # declared just above
+        remove.choices = [(str(file.id), file.name) for file in self.files_shown]
+
+    @classmethod
+    def for_request(
+        cls,
+        request: Request,
+        files_shown: Iterable[Attachment],
+        data: Any = None,
+        files: Any = None,
+    ) -> "EditRequestForm":
+        """The request's current text, or what was just submitted."""
+        return cls(
+            data,
+            files,
+            initial={field: getattr(request, field) for field in REQUEST_FIELDS},
+            files_shown=files_shown,
+        )
+
+    def removing(self) -> set[str]:
+        """Ids ticked for removal, as sent: they stay ticked when the form comes back."""
+        return set(self["remove"].value() or [])
 
 
 class View(models.TextChoices):
@@ -174,12 +206,18 @@ class MyRequestsFilter(forms.Form):
 
 
 class MessageForm(forms.Form):
-    text = forms.CharField(
-        max_length=5000,
-        widget=forms.Textarea,
-        error_messages={"required": "Write a message first."},
-    )
+    text = forms.CharField(max_length=5000, widget=forms.Textarea, required=False)
     ask_for_input = forms.BooleanField(required=False)
+    attachments = AttachmentsField()
+
+    def clean(self) -> dict[str, Any]:
+        super().clean()
+        data = self.cleaned_data
+        # A screenshot alone is a fine reply; an empty one is not.
+        has_files = data.get("attachments") or "attachments" in self.errors
+        if not data.get("text") and not has_files:
+            self.add_error("text", "Write a message or attach a file.")
+        return data
 
 
 class WithdrawForm(forms.Form):

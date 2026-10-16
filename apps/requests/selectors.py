@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import NamedTuple
 
 from django.db import models
-from django.db.models import Count, Max, Q, QuerySet
+from django.db.models import Count, Max, Prefetch, Q, QuerySet
 from django.utils import timezone
 
 from apps.accounts.models import Role, User
@@ -347,6 +347,8 @@ class Edit:
     editor: User
     at: datetime
     changes: list[Change]
+    added: list[str]
+    removed: list[str]
 
 
 def _shown(version: Request | RequestRevision, field: str) -> str:
@@ -358,7 +360,9 @@ def _shown(version: Request | RequestRevision, field: str) -> str:
 def edits(request: Request) -> list[Edit]:
     """The request's edits, oldest first. Each revision holds the text before an edit, so
     what it was changed to is the next revision, or the request itself for the latest."""
-    revisions = list(request.revisions.select_related("editor"))
+    revisions = list(
+        request.revisions.select_related("editor").prefetch_related("added_files", "removed_files")
+    )
     if not revisions:
         return []
     after: list[Request | RequestRevision] = [*revisions[1:], request]
@@ -371,6 +375,8 @@ def edits(request: Request) -> list[Edit]:
                 for field in REQUEST_FIELDS
                 if getattr(before, field) != getattr(new, field)
             ],
+            added=[file.name for file in before.added_files.all()],
+            removed=[file.name for file in before.removed_files.all()],
         )
         for before, new in zip(revisions, after, strict=True)
     ]
@@ -387,7 +393,9 @@ def thread(request: Request, request_edits: list[Edit]) -> list[ThreadEntry]:
     """Messages, status changes and edits, oldest first, as one conversation."""
     messages = [
         ThreadEntry(at=m.created_at, message=m)
-        for m in request.messages.select_related("author", "author__company")
+        for m in request.messages.select_related("author", "author__company").prefetch_related(
+            Prefetch("attachments", queryset=Attachment.objects.shown())
+        )
     ]
     events = [_event_entry(e) for e in request.status_events.all()]
     # An edit gets a line too, so the PM notices that the request they read has changed.
@@ -480,7 +488,9 @@ def _open_question(request: Request) -> Message | None:
 class RequestPage:
     viewer: User
     request: Request
+    # The request's own files, shown under its text; `all_files` adds those from the thread.
     files: list[Attachment]
+    all_files: list[Attachment]
     thread: list[ThreadEntry]
     edits: list[Edit]
     progress: Progress
@@ -499,12 +509,14 @@ def request_page(user: User, pk: int) -> RequestPage:
     request = request_for(user, pk)
     request_edits = edits(request)
     entries = thread(request, request_edits)
+    all_files = list(request.attachments.shown().select_related("uploaded_by"))
     # Every request has at least its "Received" event, so this is never empty.
     since = max(entry.at for entry in entries if entry.status)
     return RequestPage(
         viewer=user,
         request=request,
-        files=list(request.attachments.select_related("uploaded_by")),
+        files=[file for file in all_files if file.message_id is None],
+        all_files=all_files,
         thread=entries,
         edits=request_edits,
         progress=progress(request, since),
@@ -523,6 +535,7 @@ def request_page(user: User, pk: int) -> RequestPage:
 class EditPage:
     request: Request
     question: Message | None
+    files: list[Attachment]
 
 
 def edit_page(user: User, pk: int) -> EditPage:
@@ -532,4 +545,8 @@ def edit_page(user: User, pk: int) -> EditPage:
     `can_edit_request`'s call.
     """
     request = request_for(user, pk)
-    return EditPage(request=request, question=_open_question(request))
+    return EditPage(
+        request=request,
+        question=_open_question(request),
+        files=list(request.attachments.shown().filter(message__isnull=True)),
+    )

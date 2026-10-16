@@ -1,10 +1,11 @@
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
+from uuid import UUID
 
 from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.models import Role, User
-from apps.files.services import attach_files
+from apps.files.services import attach_files, removable_files, remove_files
 from apps.files.uploads import CheckedFile
 
 from .models import (
@@ -78,8 +79,11 @@ def edit_request(
     description: str = "",
     steps: str = "",
     link: str = "",
+    add_files: Sequence[CheckedFile] = (),
+    remove_file_ids: Collection[UUID] = (),
 ) -> Request:
-    """Rewrite the request and keep the old text as a revision for its "edited" history.
+    """Rewrite the request, add or remove its files, and keep the old text as a revision for
+    its "edited" history; the files added and removed point at that revision.
 
     Saving the form unchanged keeps no revision, so the request is not marked edited for
     nothing. The status stays: an edit is not an answer to the PM's question.
@@ -97,13 +101,17 @@ def edit_request(
         "steps": steps,
         "link": link,
     }
-    if all(getattr(request, field) == new[field] for field in REQUEST_FIELDS):
+    to_remove = removable_files(request, remove_file_ids)
+    text_unchanged = all(getattr(request, field) == new[field] for field in REQUEST_FIELDS)
+    if text_unchanged and not add_files and not to_remove:
         return request
-    RequestRevision.objects.create(
+    revision = RequestRevision.objects.create(
         request=request,
         editor=editor,
         **{field: getattr(request, field) for field in REQUEST_FIELDS},
     )
+    attach_files(request, editor, add_files, added_in=revision)
+    remove_files(to_remove, revision)
     for field in REQUEST_FIELDS:
         setattr(request, field, new[field])
     request.save()
@@ -138,9 +146,15 @@ def _set_status(request: Request, to_status: ClientStatus, actor: User | None) -
 
 @transaction.atomic
 def post_message(
-    author: User, request: Request, text: str, *, ask_for_input: bool = False
+    author: User,
+    request: Request,
+    text: str,
+    *,
+    ask_for_input: bool = False,
+    files: Sequence[CheckedFile] = (),
 ) -> Message:
-    """Add a reply to the request's thread.
+    """Add a reply, with files if any, to the request's thread. Files go in this way for as
+    long as the thread is open, whatever the status (PRD: editing a request and attachments).
 
     With `ask_for_input` the PM's message becomes a question: the request moves to
     "Needs your input". Any client's reply to it hands the request back to the PM as Received
@@ -155,6 +169,7 @@ def post_message(
     message = Message.objects.create(
         request=request, author=author, text=text, asks_for_input=ask_for_input
     )
+    attach_files(request, author, files, message=message)
     if ask_for_input:
         _set_status(request, ClientStatus.NEEDS_INPUT, author)
     elif author.role == Role.CLIENT and request.status == ClientStatus.NEEDS_INPUT:

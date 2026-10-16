@@ -24,10 +24,30 @@
 
   <div class="new-request">
     {% with copy=form.type_copy %}
-    <form method="post" class="card request-form" id="edit-request-form" novalidate>
+    <form method="post" enctype="multipart/form-data" class="card request-form" id="edit-request-form" novalidate>
       {% csrf_token %}
 
       {% include "requests/request_fields.html" %}
+
+      {% if page.files %}
+        <fieldset class="field attached-files">
+          <legend>Attached files</legend>
+          <ul class="file-chips">
+            {% for file in page.files %}
+              <li class="file-chip">
+                <a class="file-chip-name" {% include "files/open_attrs.html" %}>{{ file.name }}</a>
+                <label class="file-chip-toggle">
+                  <input type="checkbox" name="remove" value="{{ file.id }}"{% if file.id|stringformat:"s" in form.removing %} checked{% endif %}>
+                  Remove
+                </label>
+              </li>
+            {% endfor %}
+          </ul>
+          <span class="hint">A removed file leaves the card; the edit history keeps its name.</span>
+        </fieldset>
+      {% endif %}
+
+      {% include "files/attach_field.html" with field=form.attachments %}
 
       <div class="form-actions">
         {% if editable %}<button class="btn btn-primary" type="submit">Save changes</button>{% endif %}
