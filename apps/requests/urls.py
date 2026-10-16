@@ -8,4 +8,10 @@ urlpatterns = [
     path("requests/new/", views.new_request, name="new_request"),
     path("requests/<int:pk>/", views.request_detail, name="request_detail"),
     path("requests/<int:pk>/edit/", views.request_edit, name="request_edit"),
+    path("requests/<int:pk>/withdraw/", views.request_withdraw, name="request_withdraw"),
+    path(
+        "requests/<int:pk>/withdrawal/",
+        views.request_withdrawal_decision,
+        name="request_withdrawal_decision",
+    ),
 ]

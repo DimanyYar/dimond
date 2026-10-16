@@ -634,6 +634,7 @@ textarea.input {
 .status-later { background: var(--canvas); border: 1px dashed #b9b4ac; }
 .status-done { background: var(--success-soft); color: var(--success-text); }
 .status-declined { background: var(--canvas); color: var(--muted); }
+.status-withdrawn { background: var(--canvas); color: var(--muted); border: 1px solid var(--hairline); }
 
 .banner {
   display: flex;
@@ -1756,11 +1757,97 @@ textarea.input {
   color: var(--ink);
 }
 
-.btn-quiet {
-  margin-left: auto;
-  border-color: transparent;
-  background: transparent;
+/* Actions on the request card: everything a person can do with the request, in one place. */
+
+.actions-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+}
+
+.actions-card h2 {
+  margin: 0 0 var(--space-1);
+  font-size: 15px;
+}
+
+.btn-action {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.btn-action-danger {
+  color: var(--error);
+}
+
+.btn-action-danger:hover {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.withdraw summary {
+  list-style: none;
+}
+
+.withdraw summary::-webkit-details-marker {
+  display: none;
+}
+
+.withdraw[open] summary {
+  border-color: var(--error);
+}
+
+.withdraw form,
+.withdrawal-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   font-size: 14px;
+}
+
+.withdraw form {
+  margin-top: var(--space-3);
+}
+
+.withdraw .hint,
+.withdrawal-ask p {
+  margin: 0;
+}
+
+.withdraw label {
+  font-weight: 500;
+}
+
+.withdrawal-ask blockquote {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-s);
+  background: var(--canvas);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.withdrawal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.withdrawal-banner {
+  background: var(--surface);
+  border-color: var(--ink);
+}
+
+.withdrawal-text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.withdrawal-text p {
+  margin: 0;
 }
 
 /* Edit request page (#9b): a note above the form, stacked rather than in one row. */

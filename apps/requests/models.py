@@ -40,12 +40,21 @@ class ClientStatus(models.TextChoices):
     DONE = "done", "Done"
     DECLINED = "declined", "Declined"
     LATER = "later", "Later"
+    WITHDRAWN = "withdrawn", "Withdrawn"
 
 
-CLOSED_STATUSES = (ClientStatus.DONE, ClientStatus.DECLINED)
+CLOSED_STATUSES = (ClientStatus.DONE, ClientStatus.DECLINED, ClientStatus.WITHDRAWN)
 # Until a request is planned it has no Jira task yet, so the client may still rewrite it
-# (PRD: editing a request).
+# or withdraw it on the spot (PRD: editing a request).
 EDITABLE_STATUSES = (ClientStatus.RECEIVED, ClientStatus.NEEDS_INPUT)
+# Once the PM has taken it on, the client asks to withdraw and the PM decides: the team may
+# already be working on it.
+ASK_TO_WITHDRAW_STATUSES = (
+    ClientStatus.PLANNED,
+    ClientStatus.IN_PROGRESS,
+    ClientStatus.READY_TO_CHECK,
+    ClientStatus.LATER,
+)
 IN_WORK_STATUSES = (
     ClientStatus.NEEDS_INPUT,
     ClientStatus.PLANNED,
@@ -177,3 +186,39 @@ class RequestRevision(models.Model):
 
     def __str__(self) -> str:
         return f"{self.request.key} before the edit of {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class WithdrawalRequest(models.Model):
+    """A client's ask to withdraw a request the PM has already taken on. Waits until the PM
+    confirms it (the request becomes Withdrawn) or keeps the request going."""
+
+    request = models.ForeignKey(
+        Request, on_delete=models.PROTECT, related_name="withdrawal_requests"
+    )
+    requested_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
+    # The reason is a client message in the thread, so everyone reads it where they read
+    # everything else; the ask points at it for the PM's banner.
+    reason = models.OneToOneField(Message, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    confirmed = models.BooleanField(
+        null=True, blank=True, help_text="Empty while the PM has not decided."
+    )
+    decided_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+        constraints = [
+            # One open ask per request: asking twice would leave the PM two buttons for one
+            # decision.
+            models.UniqueConstraint(
+                fields=["request"],
+                condition=models.Q(confirmed__isnull=True),
+                name="one_pending_withdrawal_per_request",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"Withdraw {self.request.key}?"

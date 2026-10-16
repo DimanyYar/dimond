@@ -10,6 +10,7 @@ from django.utils import timezone
 from apps.accounts.models import Role, User
 
 from .models import (
+    ASK_TO_WITHDRAW_STATUSES,
     BOARD_COLUMNS,
     CLOSED_STATUSES,
     EDITABLE_STATUSES,
@@ -22,6 +23,7 @@ from .models import (
     RequestRevision,
     RequestType,
     StatusEvent,
+    WithdrawalRequest,
 )
 
 
@@ -255,12 +257,45 @@ def can_edit_request(user: User, request: Request) -> bool:
     """Anyone at the client's company rewrites the request until it is planned. After that the
     team works from the Jira task, so news goes into the thread instead. The PM never edits
     the client's words: their own version of the task lives in Jira (ADR 0010)."""
+    return _is_company_client(user, request) and request.status in EDITABLE_STATUSES
+
+
+def _is_company_client(user: User, request: Request) -> bool:
+    return user.is_active and user.role == Role.CLIENT and user.company_id == request.company_id
+
+
+def _pending_withdrawal(request: Request) -> WithdrawalRequest | None:
+    """The client's ask to withdraw that the PM has not decided yet. Private like
+    `_open_question`: it takes a request the caller has already read through `requests_for`.
+
+    Only while the request is open: if the sync closes it meanwhile, there is nothing left
+    to decide.
+    """
+    if request.status in CLOSED_STATUSES:
+        return None
     return (
-        user.is_active
-        and user.role == Role.CLIENT
-        and user.company_id == request.company_id
-        and request.status in EDITABLE_STATUSES
+        request.withdrawal_requests.filter(confirmed__isnull=True)
+        .select_related("requested_by", "reason")
+        .first()
     )
+
+
+def can_withdraw_now(user: User, request: Request) -> bool:
+    """Before it is planned the client withdraws on the spot: nobody works on it yet."""
+    return _is_company_client(user, request) and request.status in EDITABLE_STATUSES
+
+
+def can_ask_to_withdraw(user: User, request: Request) -> bool:
+    """From Planned on the client asks with a reason, once at a time, and the PM decides."""
+    return (
+        _is_company_client(user, request)
+        and request.status in ASK_TO_WITHDRAW_STATUSES
+        and _pending_withdrawal(request) is None
+    )
+
+
+def can_decide_withdrawal(user: User, request: Request) -> bool:
+    return user.is_active and user.role == Role.PM and _pending_withdrawal(request) is not None
 
 
 # What the thread says when the status changes, in the client's words.
@@ -273,6 +308,7 @@ STATUS_EVENT_TEXT = {
     ClientStatus.DONE: "Done",
     ClientStatus.DECLINED: "Declined",
     ClientStatus.LATER: "Moved to Later",
+    ClientStatus.WITHDRAWN: "Withdrawn",
 }
 
 
@@ -355,9 +391,20 @@ def thread(request: Request, request_edits: list[Edit]) -> list[ThreadEntry]:
     events = [_event_entry(e) for e in request.status_events.all()]
     # An edit gets a line too, so the PM notices that the request they read has changed.
     edited = [ThreadEntry(at=e.at, event=f"{e.editor} edited the request") for e in request_edits]
+    withdrawals = []
+    for ask in request.withdrawal_requests.select_related("requested_by"):
+        withdrawals.append(
+            ThreadEntry(at=ask.created_at, event=f"{ask.requested_by} asked to withdraw it")
+        )
+        # A confirmed ask shows up as the "Withdrawn" status change instead.
+        if ask.confirmed is False and ask.decided_at is not None:
+            withdrawals.append(ThreadEntry(at=ask.decided_at, event="Dimon kept the request going"))
     # A message comes before a status change made at the same moment: the PM's question
     # first, then "Waiting for your input".
-    return sorted(messages + events + edited, key=lambda entry: (entry.at, entry.message is None))
+    return sorted(
+        messages + events + edited + withdrawals,
+        key=lambda entry: (entry.at, entry.message is None),
+    )
 
 
 PROGRESS_STEPS = (
@@ -397,6 +444,8 @@ def progress(request: Request, since: datetime) -> Progress:
         )
     if request.status == ClientStatus.DECLINED:
         return Progress([], 0, since, "Dimon declined this request. The reason is in the thread.")
+    if request.status == ClientStatus.WITHDRAWN:
+        return Progress([], 0, since, "Withdrawn by the client. Any reason given is in the thread.")
     waiting = request.status == ClientStatus.NEEDS_INPUT
     current = PROGRESS_STEPS.index(ClientStatus.RECEIVED if waiting else request.status)
     steps = []
@@ -428,6 +477,7 @@ def _open_question(request: Request) -> Message | None:
 
 @dataclass(frozen=True)
 class RequestPage:
+    viewer: User
     request: Request
     thread: list[ThreadEntry]
     edits: list[Edit]
@@ -436,6 +486,10 @@ class RequestPage:
     can_post: bool
     can_ask: bool
     can_edit: bool
+    withdrawal: WithdrawalRequest | None
+    can_withdraw_now: bool
+    can_ask_to_withdraw: bool
+    can_decide_withdrawal: bool
 
 
 def request_page(user: User, pk: int) -> RequestPage:
@@ -446,6 +500,7 @@ def request_page(user: User, pk: int) -> RequestPage:
     # Every request has at least its "Received" event, so this is never empty.
     since = max(entry.at for entry in entries if entry.status)
     return RequestPage(
+        viewer=user,
         request=request,
         thread=entries,
         edits=request_edits,
@@ -454,6 +509,10 @@ def request_page(user: User, pk: int) -> RequestPage:
         can_post=can_post_message(user, request),
         can_ask=can_ask_for_input(user, request),
         can_edit=can_edit_request(user, request),
+        withdrawal=_pending_withdrawal(request),
+        can_withdraw_now=can_withdraw_now(user, request),
+        can_ask_to_withdraw=can_ask_to_withdraw(user, request),
+        can_decide_withdrawal=can_decide_withdrawal(user, request),
     )
 
 
