@@ -186,7 +186,7 @@ def needs_you(user: User) -> NeedsYou:
         .order_by("waiting_since", "pk")
     )
     total = waiting.count()
-    shown = [WaitingRequest(r, open_question(r)) for r in waiting[:NEEDS_YOU_SHOWN]]
+    shown = [WaitingRequest(r, _open_question(r)) for r in waiting[:NEEDS_YOU_SHOWN]]
     return NeedsYou(shown, total - len(shown))
 
 
@@ -344,11 +344,12 @@ def progress(request: Request, since: datetime) -> Progress:
     return Progress(steps, current + 1, since)
 
 
-def open_question(request: Request) -> Message | None:
+def _open_question(request: Request) -> Message | None:
     """The PM's question the client is asked to answer, while the request waits for them.
 
     The PM's latest question, not their latest message: a "thanks" or a nudge written
-    while waiting does not replace what was asked.
+    while waiting does not replace what was asked. Private: it takes a request the caller
+    has already read through `requests_for`, so it never widens what someone may see.
     """
     if request.status != ClientStatus.NEEDS_INPUT:
         return None
@@ -375,7 +376,7 @@ def request_page(user: User, pk: int) -> RequestPage:
         request=request,
         thread=entries,
         progress=progress(request, since),
-        question=open_question(request),
+        question=_open_question(request),
         can_post=can_post_message(user, request),
         can_ask=can_ask_for_input(user, request),
     )
