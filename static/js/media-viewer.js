@@ -20,8 +20,12 @@ let fitWidth = 0;
 viewer.classList.toggle("is-single", thumbs.length === 1);
 
 function setZoom(value) {
-  // Measured while the image still fits, so 100% is the size "Fit" showed.
-  if (zoom === null) fitWidth = image.offsetWidth;
+  // Measured while the image still fits, so 100% is the size "Fit" showed. An image that has
+  // not loaded yet has no width to scale, so zooming waits until it has one.
+  if (zoom === null && value !== null) {
+    if (!image.offsetWidth) return;
+    fitWidth = image.offsetWidth;
+  }
   zoom = value === null ? null : Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
   zoomLabel.textContent = `${zoom ?? 100}%`;
   stage.classList.toggle("is-zoomed", zoom !== null);
@@ -74,13 +78,23 @@ viewer.addEventListener("click", (event) => {
   else if (button.dataset.zoom) setZoom((zoom ?? 100) + Number(button.dataset.zoom));
 });
 
+// Keys the viewer handles do only that: an arrow key must not also scroll a zoomed image.
+const KEYS = {
+  ArrowLeft: () => show(index - 1),
+  ArrowRight: () => show(index + 1),
+  "+": () => setZoom((zoom ?? 100) + 25),
+  "=": () => setZoom((zoom ?? 100) + 25),
+  "-": () => setZoom((zoom ?? 100) - 25),
+  0: () => setZoom(null),
+};
+const ARROWS = ["ArrowLeft", "ArrowRight"];
+
 viewer.addEventListener("keydown", (event) => {
-  if (event.key === "ArrowLeft") show(index - 1);
-  else if (event.key === "ArrowRight") show(index + 1);
-  else if (image.hidden) return;
-  else if (event.key === "+" || event.key === "=") setZoom((zoom ?? 100) + 25);
-  else if (event.key === "-") setZoom((zoom ?? 100) - 25);
-  else if (event.key === "0") setZoom(null);
+  const handle = KEYS[event.key];
+  // Zoom keys mean nothing for a PDF, which has its own zoom.
+  if (handle === undefined || (image.hidden && !ARROWS.includes(event.key))) return;
+  event.preventDefault();
+  handle();
 });
 
 // Esc closes the dialog by itself; either way the PDF frame stops loading in the background.
