@@ -491,6 +491,8 @@ class RequestPage:
     # The request's own files, shown under its text; `all_files` adds those from the thread.
     files: list[Attachment]
     all_files: list[Attachment]
+    # Images and PDFs, in the same order: the ones the viewer goes through.
+    viewable_files: list[Attachment]
     thread: list[ThreadEntry]
     edits: list[Edit]
     progress: Progress
@@ -517,6 +519,7 @@ def request_page(user: User, pk: int) -> RequestPage:
         request=request,
         files=[file for file in all_files if file.message_id is None],
         all_files=all_files,
+        viewable_files=[file for file in all_files if file.shown_in_browser],
         thread=entries,
         edits=request_edits,
         progress=progress(request, since),

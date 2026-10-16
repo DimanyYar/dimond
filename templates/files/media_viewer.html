@@ -1,0 +1,48 @@
+{% comment %}The attachment viewer over the request card (mockup: MediaViewer). Needs `files`, the card's images and
+PDFs, and `r`, the request. static/js/media-viewer.js opens it from any link with data-view and fills the
+header from the chosen thumbnail.{% endcomment %}
+<dialog class="viewer" id="media-viewer" aria-labelledby="viewer-name">
+  <header class="viewer-head">
+    <div class="viewer-title">
+      <span id="viewer-name" data-viewer-name></span>
+      <span class="viewer-meta"><span data-viewer-meta></span> · {{ r.key }} · {{ r.title }}</span>
+    </div>
+    <div class="viewer-zoom" role="group" aria-label="Zoom" data-viewer-zoom>
+      <button type="button" aria-label="Zoom out" data-zoom="-25">−</button>
+      <span aria-live="polite" data-viewer-zoom-label>100%</span>
+      <button type="button" aria-label="Zoom in" data-zoom="25">+</button>
+      <button type="button" class="viewer-fit" data-zoom="fit">Fit</button>
+    </div>
+    <a class="viewer-round" href="" aria-label="Download" data-viewer-download>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+    </a>
+    <button type="button" class="viewer-round viewer-close" aria-label="Close" data-viewer-close>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </header>
+
+  <div class="viewer-stage" data-viewer-stage>
+    <button type="button" class="viewer-round viewer-prev" aria-label="Previous attachment" data-viewer-step="-1">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <img class="viewer-image" alt="" data-viewer-image hidden>
+    <iframe class="viewer-pdf" title="PDF preview" data-viewer-pdf hidden></iframe>
+    <button type="button" class="viewer-round viewer-next" aria-label="Next attachment" data-viewer-step="1">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+  </div>
+
+  <footer class="viewer-foot">
+    <div class="viewer-thumbs">
+      {% for file in files %}
+        <button type="button" class="viewer-thumb" aria-label="{{ file.name }}" aria-current="false" data-viewer-thumb
+                data-id="{{ file.id }}" data-src="{{ file.get_absolute_url }}" data-download="{{ file.get_absolute_url }}?download"
+                data-kind="{% if file.is_image %}image{% else %}pdf{% endif %}" data-name="{{ file.name }}"
+                data-meta="{{ file.uploaded_by }} · {{ file.created_at|date:'M j, H:i' }} · {{ file.size|filesizeformat }}">
+          {% if file.is_image %}<img src="{{ file.get_absolute_url }}" alt="" loading="lazy">{% else %}<span aria-hidden="true">PDF</span>{% endif %}
+        </button>
+      {% endfor %}
+    </div>
+    <span class="viewer-count" data-viewer-count></span>
+  </footer>
+</dialog>
