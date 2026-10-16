@@ -82,7 +82,8 @@ def test_colleague_withdraws_an_unplanned_request_at_once(client, bug, mark, sta
 def test_reason_of_an_instant_withdrawal_goes_into_the_thread(bug, anna):
     services.withdraw_request(anna, bug, "Found a workaround.")
 
-    lines = [e.message.text if e.message else e.event for e in selectors.thread(bug, [])]
+    thread = selectors.request_page(anna, bug.pk).thread
+    lines = [e.message.text if e.message else e.event for e in thread]
 
     assert lines[-2:] == ["Found a workaround.", "Withdrawn"]
 
