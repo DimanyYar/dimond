@@ -15,6 +15,7 @@ from .forms import (
     WHEN_NEEDED_COPY,
     MessageForm,
     MyRequestsFilter,
+    NewRequestForm,
     RequestForm,
     View,
     WithdrawalDecisionForm,
@@ -84,7 +85,7 @@ def new_request(request: HttpRequest) -> HttpResponse:
     assert isinstance(request.user, User)  # login_required lets only signed-in people in
     if not selectors.can_create_requests(request.user):
         raise PermissionDenied
-    form = RequestForm(request.POST or None)
+    form = NewRequestForm(request.POST or None, request.FILES or None)
     if form.is_valid():
         data = form.cleaned_data
         created = services.create_request(
@@ -96,6 +97,7 @@ def new_request(request: HttpRequest) -> HttpResponse:
             description=data["description"],
             steps=data["steps"],
             link=data["link"],
+            files=data["attachments"],
         )
         messages.success(request, f"{created.key} · {created.title}")
         if request.headers.get("X-Requested-With") == "fetch":
@@ -107,6 +109,8 @@ def new_request(request: HttpRequest) -> HttpResponse:
     status = 422 if form.errors else 200
     context = {
         "form": form,
+        # Sent files are dropped when the form comes back with errors; this asks for them again.
+        "reattach": bool(form.errors and request.FILES),
         "type_copy": TYPE_COPY,
         "when_needed_copy": WHEN_NEEDED_COPY,
     }

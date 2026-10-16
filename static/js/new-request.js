@@ -1,6 +1,7 @@
 // New request form: the joke spinner while the request is sent, on top of the live field
 // copy. Without this script the form still works as a plain POST.
 
+import { watchFiles } from "./attach-files.js";
 import { applyType, applyWhenNeeded, watchFields } from "./request-fields.js";
 
 // One scenario per send; the last line is always the confirmation (mockups: Spinner scenarios).
@@ -90,6 +91,7 @@ async function playSpinner() {
 
 function bind(form) {
   watchFields(form);
+  watchFiles(form);
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -141,6 +143,10 @@ function bind(form) {
       restoreButton();
       return;
     }
+    // The browser cannot refill a file input from the server's page, so the chosen files move
+    // over from the old form and the "attach them again" note is not needed.
+    withErrors.elements.attachments.files = form.elements.attachments.files;
+    withErrors.querySelector("[data-reattach]")?.remove();
     form.replaceWith(withErrors);
     bind(withErrors);
     withErrors.querySelector('[aria-invalid="true"]')?.focus();

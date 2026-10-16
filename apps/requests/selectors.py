@@ -8,6 +8,7 @@ from django.db.models import Count, Max, Q, QuerySet
 from django.utils import timezone
 
 from apps.accounts.models import Role, User
+from apps.files.models import Attachment
 
 from .models import (
     ASK_TO_WITHDRAW_STATUSES,
@@ -479,6 +480,7 @@ def _open_question(request: Request) -> Message | None:
 class RequestPage:
     viewer: User
     request: Request
+    files: list[Attachment]
     thread: list[ThreadEntry]
     edits: list[Edit]
     progress: Progress
@@ -502,6 +504,7 @@ def request_page(user: User, pk: int) -> RequestPage:
     return RequestPage(
         viewer=user,
         request=request,
+        files=list(request.attachments.select_related("uploaded_by")),
         thread=entries,
         edits=request_edits,
         progress=progress(request, since),
