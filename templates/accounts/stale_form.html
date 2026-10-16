@@ -1,0 +1,23 @@
+{% extends "layouts/sign_in.html" %}
+{% block title %}This page is out of date · dimon.d{% endblock %}
+
+{% block content %}
+  <header class="stack auth-header">
+    <h1>This page is out of date</h1>
+    {% if user.is_authenticated %}
+      <p class="muted">This page stopped working, most likely because someone signed in in another tab of this browser. Your last action didn’t go through. You’re now signed in as <strong class="ink">{{ user.name|default:user.email }}</strong>{% if user.name %} ({{ user.email }}){% endif %}.</p>
+    {% else %}
+      <p class="muted">This page stopped working, most likely because you signed in or out in another tab, or the browser cleared its cookies. Your last action didn’t go through.</p>
+    {% endif %}
+  </header>
+
+  {% if user.is_authenticated %}
+    <a class="btn btn-primary btn-block" href="{% url 'home' %}">Continue as {{ user.name|default:user.email }}</a>
+    <form method="post" action="{% url 'sign_out' %}">
+      {% csrf_token %}
+      <button class="link-button" type="submit">Not you? Sign out</button>
+    </form>
+  {% else %}
+    <a class="btn btn-primary btn-block" href="{% url 'sign_in' %}">Go to sign in</a>
+  {% endif %}
+{% endblock %}
