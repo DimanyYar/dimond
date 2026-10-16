@@ -215,3 +215,14 @@ def test_pm_finds_asks_to_withdraw_in_the_admin(client, asked, bug, anna):
 
     assert list(shown) == [asked]
     assert other not in shown
+
+
+def test_pm_reads_the_whole_reason_before_deciding(client, bug, mark, pm):
+    set_status(bug, ClientStatus.PLANNED)
+    reason = " ".join(["word"] * 80) + " and the last detail matters."
+    services.withdraw_request(mark, bug, reason)
+    client.force_login(pm)
+
+    card = client.get(card_url(bug)).content.decode()
+
+    assert f"<blockquote>{reason}</blockquote>" in card

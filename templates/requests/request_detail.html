@@ -159,7 +159,7 @@
           <div class="withdrawal-ask">
             {% if page.can_decide_withdrawal %}
               <p><strong>{{ ask.requested_by }} asked to withdraw it</strong></p>
-              <blockquote>{{ ask.reason.text|truncatewords:60 }}</blockquote>
+              <blockquote>{{ ask.reason.text }}</blockquote>
               <form method="post" action="{% url 'request_withdrawal_decision' r.pk %}" class="withdrawal-actions">
                 {% csrf_token %}
                 <button class="btn btn-dark" type="submit" name="decision" value="confirm">Withdraw it</button>
