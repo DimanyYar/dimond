@@ -5,6 +5,7 @@ from django.db import connection
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.http.response import HttpResponseBase
 from django.shortcuts import redirect, render
+from django.templatetags.static import static
 from django.utils.cache import patch_cache_control
 from django.views.decorators.http import require_GET, require_safe
 
@@ -47,3 +48,10 @@ def static_file(request: HttpRequest, path: str) -> HttpResponseBase:
     response = serve(request, path)
     patch_cache_control(response, no_cache=True)
     return response
+
+
+@require_safe
+def favicon(request: HttpRequest) -> HttpResponse:
+    """Browsers look for /favicon.ico on pages that do not name their icon, such as an image
+    opened from a request; send them to dimond's icon instead of a 404."""
+    return redirect(static("icons/favicon.ico"), permanent=True)
