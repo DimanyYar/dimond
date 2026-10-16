@@ -1807,6 +1807,120 @@ a.file-chip:hover {
   justify-content: flex-end;
 }
 
+/* The reply box's files: a small button instead of the drop zone. */
+.attach-compact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.attach-button {
+  display: none;
+}
+
+.attach.is-enhanced .attach-button {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap);
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.attach.is-enhanced .attach-button:hover,
+.attach-compact.is-dragging .attach-button {
+  border-color: var(--ink);
+}
+
+.attach-compact:has(input:focus-visible) .attach-button {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+/* Every file of the request, from the request and the thread, in the aside. */
+.files-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+
+.files-card h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.files-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.files-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* The edit form's files: ticking Remove strikes the name out until the form is saved. */
+.attached-files {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.attached-files legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+a.file-chip-name {
+  color: var(--ink);
+}
+
+.attached-files .file-chip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.file-chip-toggle input {
+  accent-color: var(--ink);
+}
+
+.file-chip:has(.file-chip-toggle input:checked) .file-chip-name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
 /* The request itself: who edited it and how, and the way to edit it until it's planned. */
 
 .request-foot {

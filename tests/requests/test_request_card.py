@@ -152,7 +152,7 @@ def test_empty_message_is_rejected_with_a_hint(client, bug, anna):
     response = client.post(url(bug), {"text": "   "})
 
     assert response.status_code == 422
-    assert b"Write a message first." in response.content
+    assert b"Write a message or attach a file." in response.content
 
 
 def test_thread_shows_messages_and_status_changes_in_order(bug, pm, anna):

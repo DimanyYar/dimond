@@ -1,4 +1,5 @@
 {% extends is_client|yesno:"layouts/client.html,layouts/app.html" %}
+{% load static %}
 {% block title %}{{ page.request.key }} · {{ page.request.title }} · dimon.d{% endblock %}
 {% block sidebar_footer %}{% if is_client %}{{ block.super }}{% else %}<span>{{ user }}</span>{% include "accounts/sign_out_button.html" %}{% endif %}{% endblock %}
 
@@ -67,6 +68,8 @@
                           <dd><del>{{ change.old|default:"—" }}</del> <ins>{{ change.new|default:"—" }}</ins></dd>
                         </div>
                       {% endfor %}
+                      {% if edit.added %}<div><dt>Added files</dt><dd><ins>{{ edit.added|join:", " }}</ins></dd></div>{% endif %}
+                      {% if edit.removed %}<div><dt>Removed files</dt><dd><del>{{ edit.removed|join:", " }}</del></dd></div>{% endif %}
                     </dl>
                   </li>
                 {% endfor %}
@@ -88,7 +91,8 @@
             <span class="muted">{% if m.author.role == 'pm' %}Dimon · {% if is_client %}your PM{% else %}PM{% endif %}{% else %}{{ m.author.company }}{% endif %}</span>
             <time class="muted" datetime="{{ m.created_at|date:'c' }}">{{ m.created_at|date:"M j, H:i" }}</time>
           </div>
-          <p class="message-text">{{ m.text }}</p>
+          {% if m.text %}<p class="message-text">{{ m.text }}</p>{% endif %}
+          {% with files=m.attachments.all %}{% if files %}{% include "files/file_list.html" %}{% endif %}{% endwith %}
         </article>
         {% endwith %}
       {% else %}
@@ -100,10 +104,10 @@
     {% endfor %}
 
     {% if page.can_post %}
-      <form id="reply" class="composer" method="post">
+      <form id="reply" class="composer" method="post" enctype="multipart/form-data">
         {% csrf_token %}
         <label for="id_text">{% if is_client %}Reply to Dimon{% else %}Reply to {{ r.company }}{% endif %}</label>
-        <textarea name="text" id="id_text" class="input" rows="3" maxlength="5000" required
+        <textarea name="text" id="id_text" class="input" rows="3" maxlength="5000"
           placeholder="{% if page.question and is_client %}Your answer goes to Dimon, your PM{% elif is_client %}Anything to add? Dimon reads everything here.{% else %}Everyone at {{ r.company }} sees this{% endif %}"
           {% if form.text.errors %}aria-invalid="true" aria-describedby="text-error"{% endif %}>{{ form.text.value|default_if_none:"" }}</textarea>
         {% if form.text.errors %}<span class="error-text" id="text-error">{{ form.text.errors.0 }}</span>{% endif %}
@@ -113,6 +117,7 @@
             Ask the client for input — the request moves to “Needs your input”
           </label>
         {% endif %}
+        {% include "files/attach_field.html" with field=form.attachments compact=True %}
         <div class="composer-actions">
           <button type="submit" class="btn {% if page.question and is_client %}btn-primary{% else %}btn-dark{% endif %}">{% if is_client %}Send to Dimon{% else %}Send to client{% endif %}</button>
         </div>
@@ -192,6 +197,19 @@
         {% endif %}
       </section>
     {% endif %}
+    {% if page.all_files %}
+      <section class="card files-card" aria-labelledby="files-title">
+        <h2 id="files-title">All attachments <span class="muted">{{ page.all_files|length }}</span></h2>
+        <ul class="files-list">
+          {% for file in page.all_files %}
+            <li>
+              <a class="file-name" {% include "files/open_attrs.html" %}>{{ file.name }}</a>
+              <span class="hint">{{ file.uploaded_by }} · <time datetime="{{ file.created_at|date:'c' }}">{{ file.created_at|date:"M j, H:i" }}</time> · {{ file.size|filesizeformat }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
     <dl class="facts">
       <div><dt>{% if is_client %}You asked for{% else %}Client asked for{% endif %}</dt><dd>{{ r.get_when_needed_display }}</dd></div>
       <div><dt>Request ID</dt><dd>{{ r.key }}</dd></div>
@@ -200,4 +218,5 @@
   </aside>
 </div>
 {% endwith %}
+{% if page.can_post %}<script type="module" src="{% static 'js/request-card.js' %}"></script>{% endif %}
 {% endblock %}

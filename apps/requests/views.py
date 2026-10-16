@@ -13,10 +13,10 @@ from . import selectors, services
 from .forms import (
     TYPE_COPY,
     WHEN_NEEDED_COPY,
+    EditRequestForm,
     MessageForm,
     MyRequestsFilter,
     NewRequestForm,
-    RequestForm,
     View,
     WithdrawalDecisionForm,
     WithdrawForm,
@@ -136,6 +136,8 @@ def _render_card(
     context = {
         "page": page,
         "form": form or MessageForm(),
+        # Sent files are dropped when the form comes back with errors; this asks for them again.
+        "reattach": bool(form and form.errors and request.FILES),
         "withdraw_form": withdraw_form or WithdrawForm(reason_required=page.can_ask_to_withdraw),
         # Picks the client's navigation; the PM's own pages come with the inbox (#12).
         "is_client": selectors.has_my_requests_page(page.viewer),
@@ -150,7 +152,7 @@ def request_detail(request: HttpRequest, pk: int) -> HttpResponse:
     page = _card_page(request, pk)
     if request.method == "GET":
         return _render_card(request, page)
-    form = MessageForm(request.POST)
+    form = MessageForm(request.POST, request.FILES)
     if not form.is_valid():
         return _render_card(request, page, form=form, status=422)
     try:
@@ -159,6 +161,7 @@ def request_detail(request: HttpRequest, pk: int) -> HttpResponse:
             page.request,
             form.cleaned_data["text"],
             ask_for_input=form.cleaned_data["ask_for_input"],
+            files=form.cleaned_data["attachments"],
         )
     except services.NotAllowedError:
         raise PermissionDenied from None
@@ -216,7 +219,9 @@ def request_edit(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == "GET" and not editable:
         # The card shows the status and no Edit button, which says why better than an error.
         return redirect(card)
-    form = RequestForm.filled_from(page.request, request.POST or None)
+    form = EditRequestForm.for_request(
+        page.request, page.files, request.POST or None, request.FILES or None
+    )
     if editable and form.is_valid():
         data = form.cleaned_data
         try:
@@ -230,6 +235,8 @@ def request_edit(request: HttpRequest, pk: int) -> HttpResponse:
                 description=data["description"],
                 steps=data["steps"],
                 link=data["link"],
+                add_files=data["attachments"],
+                remove_file_ids=data["remove"],
             )
         except services.NotAllowedError:
             editable = False  # Planned while the form was open
@@ -239,6 +246,7 @@ def request_edit(request: HttpRequest, pk: int) -> HttpResponse:
         "page": page,
         "form": form,
         "editable": editable,
+        "reattach": bool(form.errors and request.FILES),
         "type_copy": TYPE_COPY,
         "when_needed_copy": WHEN_NEEDED_COPY,
     }

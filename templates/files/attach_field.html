@@ -1,12 +1,20 @@
 {% comment %}Files to send with a form: choose, drop or paste a screenshot (Cmd+V). Needs `field`, the form's
-AttachmentsField. static/js/attach-files.js turns the plain file input into the drop zone with a list of
-chosen files; without it the browser's own file input still works.{% endcomment %}
-<div class="field attach" data-attach>
+AttachmentsField; `compact` swaps the drop zone for a small "Attach or paste" button, for the reply box.
+static/js/attach-files.js turns the plain file input into the drop zone or button with a list of chosen files;
+without it the browser's own file input still works.{% endcomment %}
+<div class="attach{% if compact %} attach-compact{% else %} field{% endif %}" data-attach>
+  {% if compact %}
+  <label class="attach-button" for="f-files">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12l-8.5 8.5a5 5 0 0 1-7-7L14 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 8"/></svg>
+    Attach or paste
+  </label>
+  {% else %}
   <label for="f-files">Screenshots &amp; files <span class="optional">optional</span></label>
   <label class="dropzone" for="f-files">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12l-8.5 8.5a5 5 0 0 1-7-7L14 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 8"/></svg>
     <span>Paste <kbd>⌘V</kbd> or drop here, or <span class="dropzone-pick">choose files</span></span>
   </label>
+  {% endif %}
   <input type="file" id="f-files" name="{{ field.html_name }}" multiple
          accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.txt,.log,.csv"
          aria-describedby="files-hint{% if field.errors %} files-error{% endif %}"
