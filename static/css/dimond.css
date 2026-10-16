@@ -786,6 +786,12 @@ kbd {
   display: none;
 }
 
+/* A long file name shortens with "…" instead of widening the page on a phone. */
+.file-chips > li {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .file-chip {
   display: inline-flex;
   align-items: center;
@@ -1890,6 +1896,8 @@ a.file-chip:hover {
 
 /* The edit form's files: ticking Remove strikes the name out until the form is saved. */
 .attached-files {
+  /* A fieldset is never narrower than its content unless told so. */
+  min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
