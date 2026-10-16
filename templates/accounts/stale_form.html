@@ -5,9 +5,9 @@
   <header class="stack auth-header">
     <h1>This page is out of date</h1>
     {% if user.is_authenticated %}
-      <p class="muted">Someone signed in in another tab of this browser, so this page stopped working. Nothing was sent. You’re now signed in as <strong class="ink">{{ user.name|default:user.email }}</strong>{% if user.name %} ({{ user.email }}){% endif %}.</p>
+      <p class="muted">This page stopped working, most likely because someone signed in in another tab of this browser. Nothing was sent. You’re now signed in as <strong class="ink">{{ user.name|default:user.email }}</strong>{% if user.name %} ({{ user.email }}){% endif %}.</p>
     {% else %}
-      <p class="muted">You signed in or out in another tab of this browser, so this page stopped working. Nothing was sent.</p>
+      <p class="muted">This page stopped working, most likely because you signed in or out in another tab, or the browser cleared its cookies. Nothing was sent.</p>
     {% endif %}
   </header>
 

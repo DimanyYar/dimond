@@ -79,8 +79,9 @@ def stale_form(request: HttpRequest, reason: str = "") -> HttpResponse:
     """Shown instead of Django's "CSRF verification failed" page (CSRF_FAILURE_VIEW).
 
     In dimond this nearly always means the person signed in or out in another tab: that
-    replaces the browser's form token, so forms in older tabs stop working. Nothing was
-    sent, so the page explains that and offers a way on, as whoever is signed in now.
+    replaces the browser's form token, so forms in older tabs stop working. Cleared cookies
+    do the same, so the page names the likely cause without insisting on it. Nothing was
+    sent, so it says that and offers a way on, as whoever is signed in now.
     """
     logger.warning("Form rejected as stale: %s", reason)
     return render(request, "accounts/stale_form.html", status=403)
