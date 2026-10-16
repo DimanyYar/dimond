@@ -1943,9 +1943,14 @@ textarea.input {
   border-color: var(--accent-hover);
 }
 
+/* One line, cut with "…": the Reply button keeps its place on the right however long the
+   title or question is. The card shows the whole text. */
 .needs-you-row-text {
   flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: 15px;
 }
 
@@ -1985,7 +1990,14 @@ textarea.input {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    white-space: normal;
     font-size: 14px;
+  }
+
+  .needs-you-row-text strong {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
   /* Two lines are enough to recognise the question; the card shows it in full. */
