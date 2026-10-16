@@ -1,8 +1,8 @@
 from django.conf import settings
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 
-from apps.core.views import health, home, styleguide
+from apps.core.views import health, home, static_file, styleguide
 
 urlpatterns = [
     path("", home, name="home"),
@@ -13,3 +13,7 @@ urlpatterns = [
     path("styleguide/", styleguide, name="styleguide"),
     path(settings.ADMIN_URL, admin.site.urls),
 ]
+
+if settings.DEBUG:
+    # Replaces runserver's own static handler, which docker-compose turns off with --nostatic.
+    urlpatterns.append(re_path(r"^static/(?P<path>.*)$", static_file))

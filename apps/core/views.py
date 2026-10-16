@@ -1,9 +1,12 @@
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.contrib.staticfiles.views import serve
 from django.db import connection
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
+from django.http.response import HttpResponseBase
 from django.shortcuts import redirect, render
-from django.views.decorators.http import require_GET
+from django.utils.cache import patch_cache_control
+from django.views.decorators.http import require_GET, require_safe
 
 from apps.accounts.models import User
 from apps.requests.selectors import has_my_requests_page
@@ -34,3 +37,13 @@ def home(request: HttpRequest) -> HttpResponse:
     if has_my_requests_page(request.user):
         return redirect("my_requests")
     return render(request, "core/home.html")
+
+
+@require_safe
+def static_file(request: HttpRequest, path: str) -> HttpResponseBase:
+    """Serves CSS and scripts in development. Without a Cache-Control header browsers keep an
+    old stylesheet for a while, so a CSS change needed a hard reload. "no-cache" makes the
+    browser ask every time; an unchanged file still comes back as a short 304."""
+    response = serve(request, path)
+    patch_cache_control(response, no_cache=True)
+    return response
