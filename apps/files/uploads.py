@@ -27,7 +27,10 @@ _SIGNATURES = (
     (b"GIF89a", "image/gif"),
     (b"%PDF-", "application/pdf"),
     (b"ID3", "audio/mpeg"),
+    # An MP3 without a tag starts with its first frame: MPEG-1 or MPEG-2, with or without a
+    # checksum (CRC) after the frame header.
     (b"\xff\xfb", "audio/mpeg"),
+    (b"\xff\xfa", "audio/mpeg"),
     (b"\xff\xf3", "audio/mpeg"),
     (b"\xff\xf2", "audio/mpeg"),
     (b"OggS", "audio/ogg"),

@@ -1,9 +1,17 @@
 import re
+from collections.abc import Iterator
 from typing import cast
 from uuid import UUID
 
 from django.contrib.auth.decorators import login_required
-from django.http import FileResponse, Http404, HttpRequest, HttpResponse, HttpResponseBase
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBase,
+    StreamingHttpResponse,
+)
 from django.utils.cache import patch_cache_control
 from django.utils.http import content_disposition_header
 from django.views.decorators.clickjacking import xframe_options_sameorigin
@@ -31,7 +39,22 @@ def _byte_range(header: str, size: int) -> tuple[int, int] | None:
     return (int(first), end) if int(first) <= end else None
 
 
-def _part_of(attachment: Attachment, header: str, as_attachment: bool) -> HttpResponse:
+def _bytes_of(attachment: Attachment, first: int, last: int) -> Iterator[bytes]:
+    """The file from byte `first` to `last`, a piece at a time: a player often asks for the
+    whole 20 MB video at once, and it should not sit in the server's memory."""
+    with attachment.file.open("rb") as stored:
+        stored.seek(first)
+        left = last - first + 1
+        while left > 0:
+            piece = stored.read(min(left, FileResponse.block_size))
+            # A file shorter on disk than recorded ends here instead of looping forever.
+            if not piece:
+                return
+            left -= len(piece)
+            yield piece
+
+
+def _part_of(attachment: Attachment, header: str, as_attachment: bool) -> HttpResponseBase:
     """A piece of a video or audio file: browsers fetch these while playing, and Safari does not
     play at all from a server that cannot send one."""
     size = attachment.size
@@ -41,11 +64,10 @@ def _part_of(attachment: Attachment, header: str, as_attachment: bool) -> HttpRe
         refused["Content-Range"] = f"bytes */{size}"
         return refused
     first, last = wanted
-    with attachment.file.open("rb") as stored:
-        stored.seek(first)
-        response = HttpResponse(
-            stored.read(last - first + 1), status=206, content_type=attachment.content_type
-        )
+    response = StreamingHttpResponse(
+        _bytes_of(attachment, first, last), status=206, content_type=attachment.content_type
+    )
+    response["Content-Length"] = str(last - first + 1)
     response["Content-Range"] = f"bytes {first}-{last}/{size}"
     # Only None for a file without a name, and every attachment has one.
     response["Content-Disposition"] = cast(

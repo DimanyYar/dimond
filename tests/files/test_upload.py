@@ -84,6 +84,7 @@ def test_images_pdf_and_plain_text_are_accepted(client, signed_in, name, content
         ("voice-note.m4a", M4A, "audio/mp4"),
         ("voice-note.webm", WEBM_AUDIO, "audio/webm"),
         ("call.mp3", b"ID3\x04\x00\x00\x00\x00\x00\x00" + b"\xff\xfb" * 8, "audio/mpeg"),
+        ("untagged.mp3", b"\xff\xfa\x90\x64" + b"\x00" * 16, "audio/mpeg"),
         ("call.ogg", b"OggS\x00\x02" + b"\x00" * 20, "audio/ogg"),
         ("call.wav", b"RIFF\x24\x00\x00\x00WAVEfmt ", "audio/wav"),
     ],
