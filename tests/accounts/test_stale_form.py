@@ -52,7 +52,7 @@ def test_resend_from_an_old_tab_explains_instead_of_a_django_error(browser, anna
     page = response.content.decode()
     assert response.status_code == 403
     assert "This page is out of date" in page
-    assert "Nothing was sent." in page
+    assert "Your last action didn’t go through." in page
     assert 'You’re now signed in as <strong class="ink">Mark T.</strong>' in page
     assert "CSRF" not in page
     assert not SignInLink.objects.exists()
