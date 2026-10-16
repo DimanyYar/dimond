@@ -27,6 +27,7 @@ def open_file(request: HttpRequest, attachment_id: UUID) -> FileResponse:
         as_attachment=not attachment.shown_in_browser,
         filename=attachment.name,
     )
-    # Client files must not stay in a shared cache (a proxy, an office gateway).
-    patch_cache_control(response, private=True)
+    # Client files stay in no cache: not in a shared proxy, and not in a browser two people
+    # share, where the next person would get the file without the access check.
+    patch_cache_control(response, private=True, no_store=True)
     return response

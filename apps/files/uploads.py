@@ -28,6 +28,9 @@ _SIGNATURES = (
 _OFFICE_AND_ARCHIVES = (b"PK\x03\x04", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", b"Rar!", b"7z\xbc\xaf")
 # Text that a browser would treat as a page or a picture with scripts, not as plain text.
 _MARKUP_STARTS = ("<!doctype", "<html", "<svg", "<?xml", "<script", "<head", "<body")
+# A text file is downloaded under this name ending, never as ".bat" or ".command": Windows and
+# macOS run those on a double click, even though their content is plain text.
+_TEXT_ENDINGS = (".txt", ".log", ".csv")
 
 
 class CheckedFile(NamedTuple):
@@ -51,7 +54,8 @@ def _content_type(head: bytes, content: bytes) -> str | None:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError:
         return None
-    if text.lstrip().lower().startswith(_MARKUP_STARTS):
+    # "#!" starts a script (shell, Python): a program, not a note.
+    if text.startswith("#!") or text.lstrip().lower().startswith(_MARKUP_STARTS):
         return None
     return "text/plain"
 
@@ -76,4 +80,6 @@ def check_upload(upload: UploadedFile[Any]) -> CheckedFile:
     content_type = _content_type(head, content)
     if content_type is None:
         raise ValidationError(f"{name}: attach images, PDF or plain text.")
+    if content_type == "text/plain" and not name.lower().endswith(_TEXT_ENDINGS):
+        name = f"{name[:251]}.txt"
     return CheckedFile(upload, name, content_type, upload.size)

@@ -65,7 +65,7 @@ def test_image_opens_in_the_browser_with_its_checked_type(client, screenshot, an
     assert response["Content-Type"] == "image/png"
     assert response["X-Content-Type-Options"] == "nosniff"
     assert response["Content-Disposition"].startswith("inline")
-    assert "private" in response["Cache-Control"]
+    assert "no-store" in response["Cache-Control"]
 
 
 def test_text_file_downloads_instead_of_opening(client, screenshot, anna):
