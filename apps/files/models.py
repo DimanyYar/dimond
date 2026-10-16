@@ -14,7 +14,21 @@ def _stored_name(attachment: "Attachment", filename: str) -> str:
 
 
 # Opened right in the browser. Anything else is downloaded, so the browser never runs it.
-SHOWN_IN_BROWSER = ("image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf")
+SHOWN_IN_BROWSER = (
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "application/pdf",
+    "video/mp4",
+    "video/quicktime",
+    "video/webm",
+    "audio/mp4",
+    "audio/webm",
+    "audio/mpeg",
+    "audio/ogg",
+    "audio/wav",
+)
 
 
 class AttachmentQuerySet(models.QuerySet["Attachment"]):
@@ -81,5 +95,8 @@ class Attachment(models.Model):
         return self.content_type in SHOWN_IN_BROWSER
 
     @property
-    def is_image(self) -> bool:
-        return self.content_type.startswith("image/")
+    def kind(self) -> str:
+        """How the viewer shows it: "image", "video", "audio" or "pdf"."""
+        if self.content_type == "application/pdf":
+            return "pdf"
+        return self.content_type.split("/")[0]
