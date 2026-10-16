@@ -357,9 +357,13 @@ def _shown(version: Request | RequestRevision, field: str) -> str:
     return str(getattr(version, field))
 
 
-def edits(request: Request) -> list[Edit]:
+def _edits(request: Request) -> list[Edit]:
     """The request's edits, oldest first. Each revision holds the text before an edit, so
-    what it was changed to is the next revision, or the request itself for the latest."""
+    what it was changed to is the next revision, or the request itself for the latest.
+
+    Private like `_open_question`: it takes a request the caller has already read through
+    `requests_for`, so it does not check access again.
+    """
     revisions = list(
         request.revisions.select_related("editor").prefetch_related("added_files", "removed_files")
     )
@@ -389,8 +393,9 @@ def _event_entry(event: StatusEvent) -> ThreadEntry:
     return ThreadEntry(at=event.created_at, event=text, status=event.to_status)
 
 
-def thread(request: Request, request_edits: list[Edit]) -> list[ThreadEntry]:
-    """Messages, status changes and edits, oldest first, as one conversation."""
+def _thread(request: Request, request_edits: list[Edit]) -> list[ThreadEntry]:
+    """Messages, status changes and edits, oldest first, as one conversation. Private like
+    `_edits`, for the same reason."""
     messages = [
         ThreadEntry(at=m.created_at, message=m)
         for m in request.messages.select_related("author", "author__company").prefetch_related(
@@ -509,8 +514,8 @@ class RequestPage:
 def request_page(user: User, pk: int) -> RequestPage:
     """Everything the request card shows. Raises Request.DoesNotExist like `request_for`."""
     request = request_for(user, pk)
-    request_edits = edits(request)
-    entries = thread(request, request_edits)
+    request_edits = _edits(request)
+    entries = _thread(request, request_edits)
     all_files = list(request.attachments.shown().select_related("uploaded_by"))
     # Every request has at least its "Received" event, so this is never empty.
     since = max(entry.at for entry in entries if entry.status)

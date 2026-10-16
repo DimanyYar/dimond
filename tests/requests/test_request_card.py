@@ -161,7 +161,7 @@ def test_thread_shows_messages_and_status_changes_in_order(bug, pm, anna):
 
     lines = [
         e.message.text if e.message else e.event
-        for e in selectors.thread(bug, selectors.edits(bug))
+        for e in selectors.request_page(anna, bug.pk).thread
     ]
 
     assert lines == [
