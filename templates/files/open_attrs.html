@@ -1,1 +1,2 @@
-{% comment %}The attributes of a link that opens `file`: images and PDFs in a new tab, anything else downloads.{% endcomment %}href="{{ file.get_absolute_url }}"{% if file.shown_in_browser %} target="_blank" rel="noopener"{% else %} download{% endif %}
+{% comment %}The attributes of a link that opens `file`: images and PDFs in the card's viewer (in a new tab without
+JavaScript), anything else downloads.{% endcomment %}href="{{ file.get_absolute_url }}"{% if file.shown_in_browser %} target="_blank" rel="noopener" data-view="{{ file.id }}"{% else %} download{% endif %}

@@ -79,3 +79,7 @@ class Attachment(models.Model):
     @property
     def shown_in_browser(self) -> bool:
         return self.content_type in SHOWN_IN_BROWSER
+
+    @property
+    def is_image(self) -> bool:
+        return self.content_type.startswith("image/")
