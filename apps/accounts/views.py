@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth import login, logout
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
@@ -8,6 +10,8 @@ from .forms import EmailForm, WelcomeForm
 from .models import Notify, SignInLink
 
 SENT_TO = "sign_in_sent_to"
+
+logger = logging.getLogger(__name__)
 
 
 @require_http_methods(["GET", "POST"])
@@ -69,3 +73,14 @@ def _expired(request: HttpRequest) -> HttpResponse:
 def sign_out(request: HttpRequest) -> HttpResponse:
     logout(request)
     return redirect("sign_in")
+
+
+def stale_form(request: HttpRequest, reason: str = "") -> HttpResponse:
+    """Shown instead of Django's "CSRF verification failed" page (CSRF_FAILURE_VIEW).
+
+    In dimond this nearly always means the person signed in or out in another tab: that
+    replaces the browser's form token, so forms in older tabs stop working. Nothing was
+    sent, so the page explains that and offers a way on, as whoever is signed in now.
+    """
+    logger.warning("Form rejected as stale: %s", reason)
+    return render(request, "accounts/stale_form.html", status=403)
