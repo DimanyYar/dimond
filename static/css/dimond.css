@@ -1757,39 +1757,61 @@ textarea.input {
   color: var(--ink);
 }
 
-.btn-quiet {
-  margin-left: auto;
-  border-color: transparent;
-  background: transparent;
-  font-size: 14px;
-}
+/* Actions on the request card: everything a person can do with the request, in one place. */
 
-/* Withdraw: the client's quiet way out under the facts, and the PM's decision banner. */
-
-.withdraw {
-  font-size: 14px;
-}
-
-.withdraw summary {
-  min-height: var(--tap);
-  display: inline-flex;
-  align-items: center;
-  padding: 0 4px;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.withdraw form {
+.actions-card {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-4);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-l);
-  background: var(--surface);
+  padding: var(--space-4) var(--space-5);
 }
 
-.withdraw .hint {
+.actions-card h2 {
+  margin: 0 0 var(--space-1);
+  font-size: 15px;
+}
+
+.btn-action {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.btn-action-danger {
+  color: var(--error);
+}
+
+.btn-action-danger:hover {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.withdraw summary {
+  list-style: none;
+}
+
+.withdraw summary::-webkit-details-marker {
+  display: none;
+}
+
+.withdraw[open] summary {
+  border-color: var(--error);
+}
+
+.withdraw form,
+.withdrawal-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 14px;
+}
+
+.withdraw form {
+  margin-top: var(--space-3);
+}
+
+.withdraw .hint,
+.withdrawal-ask p {
   margin: 0;
 }
 
@@ -1797,14 +1819,28 @@ textarea.input {
   font-weight: 500;
 }
 
+.withdrawal-ask blockquote {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-s);
+  background: var(--canvas);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.withdrawal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .withdrawal-banner {
-  flex-wrap: wrap;
   background: var(--surface);
   border-color: var(--ink);
 }
 
 .withdrawal-text {
-  flex: 1 1 320px;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1812,13 +1848,6 @@ textarea.input {
 
 .withdrawal-text p {
   margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.withdrawal-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
 }
 
 /* Edit request page (#9b): a note above the form, stacked rather than in one row. */

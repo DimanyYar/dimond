@@ -118,9 +118,7 @@ def test_after_planning_the_client_only_asks_to_withdraw(client, bug, mark, stat
     ask = selectors.request_page(mark, bug.pk).withdrawal
     assert bug.status == status
     assert (ask.requested_by, ask.reason.text) == (mark, "We switched the form to another vendor.")
-    assert (
-        "Mark T. asked Dimon to withdraw this request" in client.get(card_url(bug)).content.decode()
-    )
+    assert "Asked to withdraw · waiting for Dimon" in client.get(card_url(bug)).content.decode()
 
 
 def test_asking_to_withdraw_needs_a_reason(client, bug, anna):

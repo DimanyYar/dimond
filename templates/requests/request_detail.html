@@ -27,28 +27,14 @@
   </section>
 {% endif %}
 
-{% if page.withdrawal %}
-  {% with ask=page.withdrawal %}
+{% if page.can_decide_withdrawal %}
   <section class="banner withdrawal-banner" aria-label="Asked to withdraw">
     <div class="withdrawal-text">
-      {% if page.can_decide_withdrawal %}
-        <strong>{{ ask.requested_by }} asked to withdraw this request</strong>
-        <p>“{{ ask.reason.text|truncatewords:30 }}”</p>
-        <p class="muted">dimond doesn’t change Jira: if there’s a task, close it there yourself.</p>
-      {% else %}
-        <strong>{{ ask.requested_by }} asked Dimon to withdraw this request</strong>
-        <p>Dimon will confirm it or get back to you in the thread.</p>
-      {% endif %}
+      <strong>{{ page.withdrawal.requested_by }} asked to withdraw this request</strong>
+      <p>Withdraw it or keep it going — the reason is under Actions.</p>
     </div>
-    {% if page.can_decide_withdrawal %}
-      <form method="post" action="{% url 'request_withdrawal_decision' r.pk %}" class="withdrawal-actions">
-        {% csrf_token %}
-        <button class="btn btn-dark" type="submit" name="decision" value="confirm">Withdraw it</button>
-        <button class="btn" type="submit" name="decision" value="keep">Keep it going</button>
-      </form>
-    {% endif %}
+    <a class="btn btn-dark" href="#actions">Decide</a>
   </section>
-  {% endwith %}
 {% endif %}
 
 <div class="request-layout">
@@ -63,7 +49,7 @@
       {% if r.description %}<p class="message-text">{{ r.description }}</p>{% endif %}
       {% if r.steps %}<p class="message-text"><strong>Steps to reproduce:</strong> {{ r.steps }}</p>{% endif %}
       <p class="message-text message-why"><strong>Why it matters:</strong> {{ r.why }}</p>
-      {% if page.edits or page.can_edit %}
+      {% if page.edits %}
         <div class="request-foot">
           {% if page.edits %}
             {% with last=page.edits|last %}
@@ -87,7 +73,6 @@
             </details>
             {% endwith %}
           {% endif %}
-          {% if page.can_edit %}<a class="btn btn-quiet" href="{% url 'request_edit' r.pk %}">Edit request</a>{% endif %}
         </div>
       {% endif %}
     </article>
@@ -158,25 +143,59 @@
         </ol>
       {% endif %}
     </section>
+    {% if page.can_edit or page.can_withdraw_now or page.can_ask_to_withdraw or page.withdrawal %}
+      <section class="card actions-card" id="actions" aria-labelledby="actions-title">
+        <h2 id="actions-title">Actions</h2>
+
+        {% if page.can_edit %}
+          <a class="btn btn-action" href="{% url 'request_edit' r.pk %}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
+            Edit request
+          </a>
+        {% endif %}
+
+        {% if page.withdrawal %}
+          {% with ask=page.withdrawal %}
+          <div class="withdrawal-ask">
+            {% if page.can_decide_withdrawal %}
+              <p><strong>{{ ask.requested_by }} asked to withdraw it</strong></p>
+              <blockquote>{{ ask.reason.text|truncatewords:60 }}</blockquote>
+              <form method="post" action="{% url 'request_withdrawal_decision' r.pk %}" class="withdrawal-actions">
+                {% csrf_token %}
+                <button class="btn btn-dark" type="submit" name="decision" value="confirm">Withdraw it</button>
+                <button class="btn" type="submit" name="decision" value="keep">Keep it going</button>
+              </form>
+              <p class="hint">dimond doesn’t change Jira: if there’s a task, close it there yourself.</p>
+            {% else %}
+              <p><strong>Asked to withdraw · waiting for Dimon</strong></p>
+              <p class="hint">{{ ask.requested_by }} asked on {{ ask.created_at|date:"M j" }}. Dimon will confirm it or get back to you in the thread.</p>
+            {% endif %}
+          </div>
+          {% endwith %}
+        {% elif page.can_withdraw_now or page.can_ask_to_withdraw %}
+          <details class="withdraw"{% if withdraw_form.errors %} open{% endif %}>
+            <summary class="btn btn-action btn-action-danger">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+              {% if page.can_withdraw_now %}Withdraw request{% else %}Ask to withdraw{% endif %}
+            </summary>
+            <form method="post" action="{% url 'request_withdraw' r.pk %}">
+              {% csrf_token %}
+              <p class="hint">{% if page.can_withdraw_now %}Nobody works on it yet, so it closes right away.{% else %}Dimon has already taken it on, so they decide. Your reason goes into the thread.{% endif %}</p>
+              <label for="id_reason">{% if page.can_withdraw_now %}Why? <span class="optional">optional</span>{% else %}Why do you want to withdraw it?{% endif %}</label>
+              <textarea name="reason" id="id_reason" class="input" rows="3" maxlength="5000"{% if page.can_ask_to_withdraw %} required{% endif %}
+                {% if withdraw_form.reason.errors %}aria-invalid="true" aria-describedby="reason-error"{% endif %}>{{ withdraw_form.reason.value|default_if_none:"" }}</textarea>
+              {% if withdraw_form.reason.errors %}<span class="error-text" id="reason-error">{{ withdraw_form.reason.errors.0 }}</span>{% endif %}
+              <button type="submit" class="btn btn-dark">{% if page.can_withdraw_now %}Withdraw request{% else %}Ask Dimon to withdraw{% endif %}</button>
+            </form>
+          </details>
+        {% endif %}
+      </section>
+    {% endif %}
     <dl class="facts">
       <div><dt>{% if is_client %}You asked for{% else %}Client asked for{% endif %}</dt><dd>{{ r.get_when_needed_display }}</dd></div>
       <div><dt>Request ID</dt><dd>{{ r.key }}</dd></div>
       {% if r.link %}<div><dt>Link</dt><dd><a href="{{ r.link }}" target="_blank" rel="noopener noreferrer">{{ r.link }}</a></dd></div>{% endif %}
     </dl>
-    {% if page.can_withdraw_now or page.can_ask_to_withdraw %}
-      <details class="withdraw"{% if withdraw_form.errors %} open{% endif %}>
-        <summary>{% if page.can_withdraw_now %}Withdraw request{% else %}Ask to withdraw{% endif %}</summary>
-        <form method="post" action="{% url 'request_withdraw' r.pk %}">
-          {% csrf_token %}
-          <p class="hint">{% if page.can_withdraw_now %}Nobody works on it yet, so it closes right away.{% else %}Dimon has already taken it on, so they decide. Your reason goes into the thread.{% endif %}</p>
-          <label for="id_reason">{% if page.can_withdraw_now %}Why? <span class="optional">optional</span>{% else %}Why do you want to withdraw it?{% endif %}</label>
-          <textarea name="reason" id="id_reason" class="input" rows="3" maxlength="5000"{% if page.can_ask_to_withdraw %} required{% endif %}
-            {% if withdraw_form.reason.errors %}aria-invalid="true" aria-describedby="reason-error"{% endif %}>{{ withdraw_form.reason.value|default_if_none:"" }}</textarea>
-          {% if withdraw_form.reason.errors %}<span class="error-text" id="reason-error">{{ withdraw_form.reason.errors.0 }}</span>{% endif %}
-          <button type="submit" class="btn btn-dark">{% if page.can_withdraw_now %}Withdraw request{% else %}Ask Dimon to withdraw{% endif %}</button>
-        </form>
-      </details>
-    {% endif %}
   </aside>
 </div>
 {% endwith %}
