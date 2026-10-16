@@ -25,6 +25,7 @@ def test_unchanged_stylesheet_is_not_downloaded_again():
     assert static_file(request, "css/dimond.css").status_code == 304
 
 
+@override_settings(DEBUG=False)
 def test_django_does_not_serve_static_files_in_production():
     with pytest.raises(Http404):
         static_file(RequestFactory().get("/static/css/dimond.css"), "css/dimond.css")
