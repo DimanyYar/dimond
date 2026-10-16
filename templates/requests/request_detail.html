@@ -29,7 +29,7 @@
 
 <div class="request-layout">
   <section class="thread" aria-label="Conversation">
-    <article class="message message-client">
+    <article id="request" class="message message-client">
       <div class="message-head">
         <span class="avatar" aria-hidden="true">{{ r.author|stringformat:"s"|first|upper }}</span>
         <strong>{{ r.author }}</strong>
@@ -39,6 +39,33 @@
       {% if r.description %}<p class="message-text">{{ r.description }}</p>{% endif %}
       {% if r.steps %}<p class="message-text"><strong>Steps to reproduce:</strong> {{ r.steps }}</p>{% endif %}
       <p class="message-text message-why"><strong>Why it matters:</strong> {{ r.why }}</p>
+      {% if page.edits or page.can_edit %}
+        <div class="request-foot">
+          {% if page.edits %}
+            {% with last=page.edits|last %}
+            <details class="edit-history">
+              <summary>edited · {{ last.at|date:"M j, H:i" }}</summary>
+              <ol>
+                {% for edit in page.edits reversed %}
+                  <li>
+                    <span class="muted"><strong>{{ edit.editor }}</strong> · <time datetime="{{ edit.at|date:'c' }}">{{ edit.at|date:"M j, H:i" }}</time></span>
+                    <dl>
+                      {% for change in edit.changes %}
+                        <div>
+                          <dt>{{ change.field }}</dt>
+                          <dd><del>{{ change.old|default:"—" }}</del> <ins>{{ change.new|default:"—" }}</ins></dd>
+                        </div>
+                      {% endfor %}
+                    </dl>
+                  </li>
+                {% endfor %}
+              </ol>
+            </details>
+            {% endwith %}
+          {% endif %}
+          {% if page.can_edit %}<a class="btn btn-quiet" href="{% url 'request_edit' r.pk %}">Edit request</a>{% endif %}
+        </div>
+      {% endif %}
     </article>
 
     {% for entry in page.thread %}

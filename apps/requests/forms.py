@@ -3,7 +3,7 @@ from typing import Any
 from django import forms
 from django.db import models
 
-from .models import RequestType, WhenNeeded
+from .models import REQUEST_FIELDS, Request, RequestType, WhenNeeded
 from .selectors import Period, Show
 
 # Labels, hints and examples change with the request type (PRD: request types and fields).
@@ -79,7 +79,9 @@ WHEN_NEEDED_COPY: dict[str, dict[str, str]] = {
 }
 
 
-class NewRequestForm(forms.Form):
+class RequestForm(forms.Form):
+    """The request form, empty for a new request or filled in when editing one."""
+
     type = forms.ChoiceField(choices=RequestType.choices, initial=RequestType.BUG)
     title = forms.CharField(
         max_length=200, error_messages={"required": "Give it a title in one line."}
@@ -96,6 +98,11 @@ class NewRequestForm(forms.Form):
         assume_scheme="https",
         error_messages={"invalid": "Paste the full link, like https://crm.example.com/leads/1."},
     )
+
+    @classmethod
+    def filled_from(cls, request: Request, data: Any = None) -> "RequestForm":
+        """The form for editing: the request's current text, or what was just submitted."""
+        return cls(data, initial={field: getattr(request, field) for field in REQUEST_FIELDS})
 
     def clean(self) -> dict[str, Any]:
         super().clean()

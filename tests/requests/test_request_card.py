@@ -159,7 +159,10 @@ def test_thread_shows_messages_and_status_changes_in_order(bug, pm, anna):
     services.post_message(pm, bug, "Which lead?", ask_for_input=True)
     services.post_message(anna, bug, "Lead 48213")
 
-    lines = [e.message.text if e.message else e.event for e in selectors.thread(bug)]
+    lines = [
+        e.message.text if e.message else e.event
+        for e in selectors.thread(bug, selectors.edits(bug))
+    ]
 
     assert lines == [
         "Request received",

@@ -43,6 +43,9 @@ class ClientStatus(models.TextChoices):
 
 
 CLOSED_STATUSES = (ClientStatus.DONE, ClientStatus.DECLINED)
+# Until a request is planned it has no Jira task yet, so the client may still rewrite it
+# (PRD: editing a request).
+EDITABLE_STATUSES = (ClientStatus.RECEIVED, ClientStatus.NEEDS_INPUT)
 IN_WORK_STATUSES = (
     ClientStatus.NEEDS_INPUT,
     ClientStatus.PLANNED,
@@ -104,6 +107,10 @@ class Request(models.Model):
         return f"DMN-{self.pk}"
 
 
+# What the client fills in the form; an edit may change any of them.
+REQUEST_FIELDS = ("type", "title", "description", "steps", "why", "when_needed", "link")
+
+
 class StatusEvent(models.Model):
     """One status change. Kept forever: period summaries and PM reports are built from it."""
 
@@ -146,3 +153,27 @@ class Message(models.Model):
 
     def __str__(self) -> str:
         return f"{self.author} on {self.request.key}"
+
+
+class RequestRevision(models.Model):
+    """The request as it was before one edit. The card lists them under "edited", so the PM
+    and the client's colleagues see what changed and who changed it."""
+
+    request = models.ForeignKey(Request, on_delete=models.PROTECT, related_name="revisions")
+    editor = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="+", help_text="Who made the edit."
+    )
+    type = models.CharField(max_length=20, choices=RequestType.choices)
+    title = models.CharField(max_length=200)
+    why = models.TextField()
+    description = models.TextField(blank=True)
+    steps = models.TextField(blank=True)
+    link = models.URLField(max_length=500, blank=True)
+    when_needed = models.CharField(max_length=20, choices=WhenNeeded.choices)
+    created_at = models.DateTimeField(auto_now_add=True, help_text="When the edit was made.")
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+    def __str__(self) -> str:
+        return f"{self.request.key} before the edit of {self.created_at:%Y-%m-%d %H:%M}"

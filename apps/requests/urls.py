@@ -7,4 +7,5 @@ urlpatterns = [
     path("requests/count/", views.my_requests_count, name="my_requests_count"),
     path("requests/new/", views.new_request, name="new_request"),
     path("requests/<int:pk>/", views.request_detail, name="request_detail"),
+    path("requests/<int:pk>/edit/", views.request_edit, name="request_edit"),
 ]

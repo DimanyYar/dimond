@@ -1,8 +1,7 @@
-// New request form: per-type copy, the urgency note, and the joke spinner while
-// the request is sent. Without this script the form still works as a plain POST.
+// New request form: the joke spinner while the request is sent, on top of the live field
+// copy. Without this script the form still works as a plain POST.
 
-const typeCopy = JSON.parse(document.getElementById("type-copy").textContent);
-const whenNeededCopy = JSON.parse(document.getElementById("when-needed-copy").textContent);
+import { applyType, applyWhenNeeded, watchFields } from "./request-fields.js";
 
 // One scenario per send; the last line is always the confirmation (mockups: Spinner scenarios).
 const SCENARIOS = [
@@ -89,27 +88,8 @@ async function playSpinner() {
   await wait(DONE_MS);
 }
 
-function applyType(form, type) {
-  const copy = typeCopy[type];
-  form.querySelectorAll("[data-copy]").forEach((el) => {
-    el.textContent = copy[el.dataset.copy];
-  });
-  form.querySelectorAll("[data-copy-placeholder]").forEach((el) => {
-    el.placeholder = copy[el.dataset.copyPlaceholder];
-  });
-  form.elements.link.required = type === "bug";
-}
-
-function applyWhenNeeded(form) {
-  const value = form.elements.when_needed.value;
-  form.querySelector("[data-when-note]").textContent = whenNeededCopy[value].note;
-}
-
 function bind(form) {
-  form.addEventListener("change", (event) => {
-    if (event.target.name === "type") applyType(form, event.target.value);
-    if (event.target.name === "when_needed") applyWhenNeeded(form);
-  });
+  watchFields(form);
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
