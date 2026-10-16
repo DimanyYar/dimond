@@ -6,6 +6,11 @@ reviews:
   request_changes_workflow: false
   high_level_summary: true
   poem: false
+  pre_merge_checks:
+    # Test and function names carry the meaning (CLAUDE.md, anti-slop rule 2),
+    # so docstrings would only restate them.
+    docstrings:
+      mode: "off"
   auto_review:
     enabled: true
     drafts: false
