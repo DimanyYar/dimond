@@ -1,11 +1,11 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_GET, require_http_methods
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.models import User
 
@@ -17,6 +17,8 @@ from .forms import (
     MyRequestsFilter,
     RequestForm,
     View,
+    WithdrawalDecisionForm,
+    WithdrawForm,
 )
 from .models import Request, RequestType, WhenNeeded
 from .selectors import Period, Show
@@ -111,35 +113,86 @@ def new_request(request: HttpRequest) -> HttpResponse:
     return render(request, "requests/new_request.html", context, status=status)
 
 
+def _card_page(request: HttpRequest, pk: int) -> selectors.RequestPage:
+    assert isinstance(request.user, User)  # login_required lets only signed-in people in
+    try:
+        return selectors.request_page(request.user, pk)
+    except Request.DoesNotExist:
+        raise Http404 from None
+
+
+def _render_card(
+    request: HttpRequest,
+    page: selectors.RequestPage,
+    form: MessageForm | None = None,
+    withdraw_form: WithdrawForm | None = None,
+    status: int = 200,
+) -> HttpResponse:
+    """The card with whichever of its forms was just sent, errors and all."""
+    context = {
+        "page": page,
+        "form": form or MessageForm(),
+        "withdraw_form": withdraw_form or WithdrawForm(reason_required=page.can_ask_to_withdraw),
+        # Picks the client's navigation; the PM's own pages come with the inbox (#12).
+        "is_client": selectors.has_my_requests_page(page.viewer),
+    }
+    return render(request, "requests/request_detail.html", context, status=status)
+
+
 @require_http_methods(["GET", "POST"])
 @login_required
 def request_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """The request card with its thread; posting the form adds a message."""
-    assert isinstance(request.user, User)  # login_required lets only signed-in people in
+    page = _card_page(request, pk)
+    if request.method == "GET":
+        return _render_card(request, page)
+    form = MessageForm(request.POST)
+    if not form.is_valid():
+        return _render_card(request, page, form=form, status=422)
     try:
-        page = selectors.request_page(request.user, pk)
-    except Request.DoesNotExist:
-        raise Http404 from None
-    form = MessageForm(request.POST or None)
-    if form.is_valid():
-        try:
-            message = services.post_message(
-                request.user,
-                page.request,
-                form.cleaned_data["text"],
-                ask_for_input=form.cleaned_data["ask_for_input"],
-            )
-        except services.NotAllowedError:
-            raise PermissionDenied from None
-        return redirect(f"{page.request.get_absolute_url()}#message-{message.pk}")
-    context = {
-        "page": page,
-        "form": form,
-        # Picks the client's navigation; the PM's own pages come with the inbox (#12).
-        "is_client": selectors.has_my_requests_page(request.user),
-    }
-    status = 422 if form.errors else 200
-    return render(request, "requests/request_detail.html", context, status=status)
+        message = services.post_message(
+            page.viewer,
+            page.request,
+            form.cleaned_data["text"],
+            ask_for_input=form.cleaned_data["ask_for_input"],
+        )
+    except services.NotAllowedError:
+        raise PermissionDenied from None
+    return redirect(f"{page.request.get_absolute_url()}#message-{message.pk}")
+
+
+@require_POST
+@login_required
+def request_withdraw(request: HttpRequest, pk: int) -> HttpResponse:
+    """The client's Withdraw: closes the request at once, or asks the PM with a reason."""
+    page = _card_page(request, pk)
+    if not (page.can_withdraw_now or page.can_ask_to_withdraw):
+        raise PermissionDenied
+    form = WithdrawForm(request.POST, reason_required=page.can_ask_to_withdraw)
+    if not form.is_valid():
+        return _render_card(request, page, withdraw_form=form, status=422)
+    try:
+        services.withdraw_request(page.viewer, page.request, form.cleaned_data["reason"])
+    except services.NotAllowedError:
+        raise PermissionDenied from None
+    return redirect(page.request.get_absolute_url())
+
+
+@require_POST
+@login_required
+def request_withdrawal_decision(request: HttpRequest, pk: int) -> HttpResponse:
+    """The PM confirms the client's ask to withdraw, or keeps the request going."""
+    page = _card_page(request, pk)
+    form = WithdrawalDecisionForm(request.POST)
+    if not form.is_valid():
+        return HttpResponseBadRequest()
+    try:
+        services.decide_withdrawal(
+            page.viewer, page.request, confirm=form.cleaned_data["decision"] == "confirm"
+        )
+    except services.NotAllowedError:
+        raise PermissionDenied from None
+    return redirect(page.request.get_absolute_url())
 
 
 @require_http_methods(["GET", "POST"])

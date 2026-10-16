@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.utils import timezone
 
 from apps.accounts.models import Role, User
 
@@ -11,12 +12,16 @@ from .models import (
     RequestType,
     StatusEvent,
     WhenNeeded,
+    WithdrawalRequest,
 )
 from .selectors import (
     can_ask_for_input,
+    can_ask_to_withdraw,
     can_create_requests,
+    can_decide_withdrawal,
     can_edit_request,
     can_post_message,
+    can_withdraw_now,
 )
 
 
@@ -148,3 +153,45 @@ def post_message(
     elif author.role == Role.CLIENT and request.status == ClientStatus.NEEDS_INPUT:
         _set_status(request, ClientStatus.RECEIVED, author)
     return message
+
+
+@transaction.atomic
+def withdraw_request(client: User, request: Request, reason: str = "") -> WithdrawalRequest | None:
+    """The client's "Withdraw": closes the request at once while nobody works on it yet,
+    otherwise asks the PM, who may already have the team on it (PRD: editing a request).
+
+    The reason goes into the thread as the client's message. It is optional for an instant
+    withdrawal and required for an ask: the PM needs it to decide. Returns the ask, or None
+    when the request was withdrawn on the spot.
+    """
+    # Locked and re-read so a withdrawal and the PM planning it at the same moment see one
+    # status and pick the right path.
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    if can_withdraw_now(client, request):
+        if reason:
+            Message.objects.create(request=request, author=client, text=reason)
+        _set_status(request, ClientStatus.WITHDRAWN, client)
+        return None
+    if not can_ask_to_withdraw(client, request):
+        raise NotAllowedError
+    if not reason:
+        raise ValueError("A reason is required to ask the PM to withdraw a request.")
+    message = Message.objects.create(request=request, author=client, text=reason)
+    return WithdrawalRequest.objects.create(request=request, requested_by=client, reason=message)
+
+
+@transaction.atomic
+def decide_withdrawal(pm: User, request: Request, *, confirm: bool) -> Request:
+    """The PM's answer to a client's ask: withdraw the request, or keep it going.
+
+    dimond leaves the Jira task alone (ADR 0010); closing it there is the PM's own step.
+    """
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    if not can_decide_withdrawal(pm, request):
+        raise NotAllowedError
+    WithdrawalRequest.objects.filter(request=request, confirmed__isnull=True).update(
+        confirmed=confirm, decided_by=pm, decided_at=timezone.now()
+    )
+    if confirm:
+        return _set_status(request, ClientStatus.WITHDRAWN, pm)
+    return request

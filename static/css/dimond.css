@@ -634,6 +634,7 @@ textarea.input {
 .status-later { background: var(--canvas); border: 1px dashed #b9b4ac; }
 .status-done { background: var(--success-soft); color: var(--success-text); }
 .status-declined { background: var(--canvas); color: var(--muted); }
+.status-withdrawn { background: var(--canvas); color: var(--muted); border: 1px solid var(--hairline); }
 
 .banner {
   display: flex;
@@ -1761,6 +1762,63 @@ textarea.input {
   border-color: transparent;
   background: transparent;
   font-size: 14px;
+}
+
+/* Withdraw: the client's quiet way out under the facts, and the PM's decision banner. */
+
+.withdraw {
+  font-size: 14px;
+}
+
+.withdraw summary {
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.withdraw form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+}
+
+.withdraw .hint {
+  margin: 0;
+}
+
+.withdraw label {
+  font-weight: 500;
+}
+
+.withdrawal-banner {
+  flex-wrap: wrap;
+  background: var(--surface);
+  border-color: var(--ink);
+}
+
+.withdrawal-text {
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.withdrawal-text p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.withdrawal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 /* Edit request page (#9b): a note above the form, stacked rather than in one row. */

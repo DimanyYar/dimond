@@ -172,3 +172,21 @@ class MessageForm(forms.Form):
         error_messages={"required": "Write a message first."},
     )
     ask_for_input = forms.BooleanField(required=False)
+
+
+class WithdrawForm(forms.Form):
+    reason = forms.CharField(
+        max_length=5000,
+        required=False,
+        widget=forms.Textarea,
+        error_messages={"required": "Tell Dimon why — it helps decide what to do with the work."},
+    )
+
+    def __init__(self, *args: Any, reason_required: bool, **kwargs: Any) -> None:
+        """The reason is optional for an instant withdrawal and required for an ask."""
+        super().__init__(*args, **kwargs)
+        self.fields["reason"].required = reason_required
+
+
+class WithdrawalDecisionForm(forms.Form):
+    decision = forms.ChoiceField(choices=[("confirm", "Withdraw it"), ("keep", "Keep it going")])
