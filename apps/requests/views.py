@@ -15,7 +15,7 @@ from .forms import (
     WHEN_NEEDED_COPY,
     MessageForm,
     MyRequestsFilter,
-    NewRequestForm,
+    RequestForm,
     View,
 )
 from .models import Request, RequestType, WhenNeeded
@@ -82,7 +82,7 @@ def new_request(request: HttpRequest) -> HttpResponse:
     assert isinstance(request.user, User)  # login_required lets only signed-in people in
     if not selectors.can_create_requests(request.user):
         raise PermissionDenied
-    form = NewRequestForm(request.POST or None)
+    form = RequestForm(request.POST or None)
     if form.is_valid():
         data = form.cleaned_data
         created = services.create_request(
@@ -140,3 +140,52 @@ def request_detail(request: HttpRequest, pk: int) -> HttpResponse:
     }
     status = 422 if form.errors else 200
     return render(request, "requests/request_detail.html", context, status=status)
+
+
+@require_http_methods(["GET", "POST"])
+@login_required
+def request_edit(request: HttpRequest, pk: int) -> HttpResponse:
+    """The request form filled with the request's text; saving it goes back to the card."""
+    assert isinstance(request.user, User)  # login_required lets only signed-in people in
+    # Whoever sends requests may edit them; for them the only "no" left is the status.
+    if not selectors.can_create_requests(request.user):
+        raise PermissionDenied
+    try:
+        page = selectors.edit_page(request.user, pk)
+    except Request.DoesNotExist:
+        raise Http404 from None
+    card = page.request.get_absolute_url()
+    editable = selectors.can_edit_request(request.user, page.request)
+    if request.method == "GET" and not editable:
+        # The card shows the status and no Edit button, which says why better than an error.
+        return redirect(card)
+    form = RequestForm.filled_from(page.request, request.POST or None)
+    if editable and form.is_valid():
+        data = form.cleaned_data
+        try:
+            services.edit_request(
+                request.user,
+                page.request,
+                RequestType(data["type"]),
+                data["title"],
+                data["why"],
+                WhenNeeded(data["when_needed"]),
+                description=data["description"],
+                steps=data["steps"],
+                link=data["link"],
+            )
+        except services.NotAllowedError:
+            editable = False  # Planned while the form was open
+        else:
+            return redirect(f"{card}#request")
+    context = {
+        "page": page,
+        "form": form,
+        "editable": editable,
+        "type_copy": TYPE_COPY,
+        "when_needed_copy": WHEN_NEEDED_COPY,
+    }
+    # 409 when the request moved on while the form was open: the typed text is shown again
+    # so it can be copied into the thread.
+    status = 200 if request.method == "GET" else (422 if editable else 409)
+    return render(request, "requests/request_edit.html", context, status=status)

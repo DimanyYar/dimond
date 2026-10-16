@@ -1,0 +1,63 @@
+{% comment %}The request's fields, shared by the new request form and the edit form. Needs `form` and `copy`
+(the form's type_copy); static/js/request-fields.js switches the copy when the type changes.{% endcomment %}
+<fieldset class="choices">
+  <legend class="visually-hidden">Request type</legend>
+  <div class="row">
+    {% for value, label in form.type.field.choices %}
+      <label class="chip chip-choice">
+        <input type="radio" name="type" value="{{ value }}" {% if form.type.value == value %}checked{% endif %}>
+        {{ label }}
+      </label>
+    {% endfor %}
+  </div>
+  <span class="hint">Production down? Message your PM in chat right away, not here.</span>
+</fieldset>
+
+<div class="field">
+  <label for="f-title">Title</label>
+  <input class="input" type="text" id="f-title" name="title" required maxlength="200"
+         value="{{ form.title.value|default_if_none:'' }}" placeholder="{{ copy.title }}" data-copy-placeholder="title"
+         {% if form.title.errors %}aria-invalid="true" aria-describedby="title-error"{% endif %}>
+  {% if form.title.errors %}<span class="error-text" id="title-error">{{ form.title.errors.0 }}</span>{% endif %}
+</div>
+
+<div class="field">
+  <label for="f-description"><span data-copy="description_label">{{ copy.description_label }}</span> <span class="optional">optional</span></label>
+  <span class="hint" id="description-hint" data-copy="description_hint">{{ copy.description_hint }}</span>
+  <textarea class="input" id="f-description" name="description" rows="5" aria-describedby="description-hint"
+            placeholder="{{ copy.description }}" data-copy-placeholder="description">{{ form.description.value|default_if_none:'' }}</textarea>
+  <details class="for-bug" {% if form.steps.value %}open{% endif %}>
+    <summary>Add steps to reproduce <span class="optional">optional</span></summary>
+    <textarea class="input" name="steps" rows="3" aria-label="Steps to reproduce"
+              placeholder="1. Open a lead card  2. Add a second phone  3. Save and reload">{{ form.steps.value|default_if_none:'' }}</textarea>
+  </details>
+</div>
+
+<div class="field">
+  <label for="f-why">Why it matters</label>
+  <input class="input" type="text" id="f-why" name="why" required
+         value="{{ form.why.value|default_if_none:'' }}" placeholder="{{ copy.why }}" data-copy-placeholder="why"
+         {% if form.why.errors %}aria-invalid="true" aria-describedby="why-error"{% endif %}>
+  {% if form.why.errors %}<span class="error-text" id="why-error">{{ form.why.errors.0 }}</span>{% endif %}
+</div>
+
+<fieldset class="field choices">
+  <legend>When do you need it?</legend>
+  <div class="when-options">
+    {% for option in form.when_needed_options %}
+      <label class="choice when-option{% if option.value == 'hotfix' %} when-hotfix{% endif %}">
+        <input type="radio" name="when_needed" value="{{ option.value }}" {% if form.when_needed.value == option.value %}checked{% endif %}>
+        <span class="when-text"><strong>{{ option.label }}</strong><span class="hint">{{ option.short }}</span></span>
+      </label>
+    {% endfor %}
+  </div>
+  <span class="hint when-note" aria-live="polite" data-when-note>{{ form.when_note }}</span>
+</fieldset>
+
+<div class="field">
+  <label for="f-link"><span data-copy="link_label">{{ copy.link_label }}</span> <span class="optional not-for-bug">optional</span></label>
+  <input class="input" type="text" id="f-link" name="link" maxlength="500" inputmode="url" autocomplete="url" {% if form.type.value == "bug" %}required{% endif %}
+         value="{{ form.link.value|default_if_none:'' }}" placeholder="{{ copy.link }}" data-copy-placeholder="link"
+         {% if form.link.errors %}aria-invalid="true" aria-describedby="link-error"{% endif %}>
+  {% if form.link.errors %}<span class="error-text" id="link-error">{{ form.link.errors.0 }}</span>{% endif %}
+</div>

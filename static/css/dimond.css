@@ -1690,6 +1690,92 @@ textarea.input {
   justify-content: flex-end;
 }
 
+/* The request itself: who edited it and how, and the way to edit it until it's planned. */
+
+.request-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.edit-history {
+  flex: 1 1 240px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.edit-history summary {
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.edit-history ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.edit-history strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.edit-history dl {
+  margin: 6px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edit-history dt {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.edit-history dd {
+  margin: 2px 0 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.edit-history del {
+  color: var(--muted);
+}
+
+.edit-history ins {
+  display: block;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.btn-quiet {
+  margin-left: auto;
+  border-color: transparent;
+  background: transparent;
+  font-size: 14px;
+}
+
+/* Edit request page (#9b): a note above the form, stacked rather than in one row. */
+
+.edit-notice {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.edit-notice-stop {
+  background: var(--surface);
+  border-color: var(--ink);
+}
+
 .thread-closed {
   margin: 0;
   padding: var(--space-4);

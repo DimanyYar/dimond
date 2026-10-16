@@ -12,11 +12,14 @@ from apps.accounts.models import Role, User
 from .models import (
     BOARD_COLUMNS,
     CLOSED_STATUSES,
+    EDITABLE_STATUSES,
     IN_WORK_STATUSES,
+    REQUEST_FIELDS,
     BoardColumn,
     ClientStatus,
     Message,
     Request,
+    RequestRevision,
     RequestType,
     StatusEvent,
 )
@@ -248,6 +251,18 @@ def can_ask_for_input(user: User, request: Request) -> bool:
     )
 
 
+def can_edit_request(user: User, request: Request) -> bool:
+    """Anyone at the client's company rewrites the request until it is planned. After that the
+    team works from the Jira task, so news goes into the thread instead. The PM never edits
+    the client's words: their own version of the task lives in Jira (ADR 0010)."""
+    return (
+        user.is_active
+        and user.role == Role.CLIENT
+        and user.company_id == request.company_id
+        and request.status in EDITABLE_STATUSES
+    )
+
+
 # What the thread says when the status changes, in the client's words.
 STATUS_EVENT_TEXT = {
     ClientStatus.RECEIVED: "Request received",
@@ -263,12 +278,65 @@ STATUS_EVENT_TEXT = {
 
 @dataclass(frozen=True)
 class ThreadEntry:
-    """One line of the thread: a message, or a status change with its text."""
+    """One line of the thread: a message, a status change or an edit, with its text."""
 
     at: datetime
     message: Message | None = None
     event: str = ""
-    status: str = ""
+    status: str = ""  # empty for an edit: it does not change the status
+
+
+FIELD_LABELS = {
+    "type": "Type",
+    "title": "Title",
+    "description": "Description",
+    "steps": "Steps to reproduce",
+    "why": "Why it matters",
+    "when_needed": "When needed",
+    "link": "Link",
+}
+
+
+class Change(NamedTuple):
+    field: str
+    old: str
+    new: str
+
+
+@dataclass(frozen=True)
+class Edit:
+    """One edit of the request: who, when and which fields went from what to what."""
+
+    editor: User
+    at: datetime
+    changes: list[Change]
+
+
+def _shown(version: Request | RequestRevision, field: str) -> str:
+    if field in ("type", "when_needed"):
+        return str(getattr(version, f"get_{field}_display")())
+    return str(getattr(version, field))
+
+
+def edits(request: Request) -> list[Edit]:
+    """The request's edits, oldest first. Each revision holds the text before an edit, so
+    what it was changed to is the next revision, or the request itself for the latest."""
+    revisions = list(request.revisions.select_related("editor"))
+    if not revisions:
+        return []
+    after: list[Request | RequestRevision] = [*revisions[1:], request]
+    return [
+        Edit(
+            editor=before.editor,
+            at=before.created_at,
+            changes=[
+                Change(FIELD_LABELS[field], _shown(before, field), _shown(new, field))
+                for field in REQUEST_FIELDS
+                if getattr(before, field) != getattr(new, field)
+            ],
+        )
+        for before, new in zip(revisions, after, strict=True)
+    ]
 
 
 def _event_entry(event: StatusEvent) -> ThreadEntry:
@@ -278,16 +346,18 @@ def _event_entry(event: StatusEvent) -> ThreadEntry:
     return ThreadEntry(at=event.created_at, event=text, status=event.to_status)
 
 
-def thread(request: Request) -> list[ThreadEntry]:
-    """Messages and status changes, oldest first, as one conversation."""
+def thread(request: Request, request_edits: list[Edit]) -> list[ThreadEntry]:
+    """Messages, status changes and edits, oldest first, as one conversation."""
     messages = [
         ThreadEntry(at=m.created_at, message=m)
         for m in request.messages.select_related("author", "author__company")
     ]
     events = [_event_entry(e) for e in request.status_events.all()]
+    # An edit gets a line too, so the PM notices that the request they read has changed.
+    edited = [ThreadEntry(at=e.at, event=f"{e.editor} edited the request") for e in request_edits]
     # A message comes before a status change made at the same moment: the PM's question
     # first, then "Waiting for your input".
-    return sorted(messages + events, key=lambda entry: (entry.at, entry.message is None))
+    return sorted(messages + events + edited, key=lambda entry: (entry.at, entry.message is None))
 
 
 PROGRESS_STEPS = (
@@ -360,23 +430,44 @@ def _open_question(request: Request) -> Message | None:
 class RequestPage:
     request: Request
     thread: list[ThreadEntry]
+    edits: list[Edit]
     progress: Progress
     question: Message | None
     can_post: bool
     can_ask: bool
+    can_edit: bool
 
 
 def request_page(user: User, pk: int) -> RequestPage:
     """Everything the request card shows. Raises Request.DoesNotExist like `request_for`."""
     request = request_for(user, pk)
-    entries = thread(request)
+    request_edits = edits(request)
+    entries = thread(request, request_edits)
     # Every request has at least its "Received" event, so this is never empty.
-    since = max(entry.at for entry in entries if entry.event)
+    since = max(entry.at for entry in entries if entry.status)
     return RequestPage(
         request=request,
         thread=entries,
+        edits=request_edits,
         progress=progress(request, since),
         question=_open_question(request),
         can_post=can_post_message(user, request),
         can_ask=can_ask_for_input(user, request),
+        can_edit=can_edit_request(user, request),
     )
+
+
+@dataclass(frozen=True)
+class EditPage:
+    request: Request
+    question: Message | None
+
+
+def edit_page(user: User, pk: int) -> EditPage:
+    """The request to edit and the PM's open question, if any: editing does not answer it.
+
+    Raises Request.DoesNotExist like `request_for`; whether it may be edited now is
+    `can_edit_request`'s call.
+    """
+    request = request_for(user, pk)
+    return EditPage(request=request, question=_open_question(request))

@@ -1,0 +1,49 @@
+{% extends "layouts/client.html" %}
+{% load static %}
+{% block title %}Edit {{ page.request.key }} · dimon.d{% endblock %}
+
+{% block content %}
+{% with r=page.request %}
+  <header class="page-header">
+    <nav aria-label="Breadcrumb" class="hint"><a href="{% url 'my_requests' %}" class="muted">Requests</a> / <a href="{{ r.get_absolute_url }}" class="muted">{{ r.key }}</a> / Edit</nav>
+    <h1>Edit {{ r.key }}</h1>
+    <p class="muted">Dimon and your colleagues see what changed and who changed it.</p>
+  </header>
+
+  {% if not editable %}
+    <section class="banner edit-notice edit-notice-stop" role="alert">
+      <strong>Dimon has already taken this request into work</strong>
+      <span>It can’t be edited anymore, and your changes weren’t saved. Copy what’s new and <a href="{{ r.get_absolute_url }}#reply">add it in the thread</a>.</span>
+    </section>
+  {% elif page.question %}
+    <section class="banner edit-notice" role="note">
+      <strong>Dimon asked you a question</strong>
+      <span>Editing doesn’t answer it — <a href="{{ r.get_absolute_url }}#reply">reply in the thread</a> too, so the request goes back to Dimon.</span>
+    </section>
+  {% endif %}
+
+  <div class="new-request">
+    {% with copy=form.type_copy %}
+    <form method="post" class="card request-form" id="edit-request-form" novalidate>
+      {% csrf_token %}
+
+      {% include "requests/request_fields.html" %}
+
+      <div class="form-actions">
+        {% if editable %}<button class="btn btn-primary" type="submit">Save changes</button>{% endif %}
+        <a class="btn btn-ghost" href="{{ r.get_absolute_url }}">{% if editable %}Cancel{% else %}Back to the request{% endif %}</a>
+      </div>
+    </form>
+    {% endwith %}
+
+    <aside class="aside-note" aria-labelledby="edit-heading">
+      <h2 id="edit-heading">Until it’s planned</h2>
+      <p>You can change anything while the request is <strong>Received</strong> or <strong>Needs your input</strong>. Once Dimon plans it, the team works from the task, and anything new goes into the thread.</p>
+    </aside>
+  </div>
+
+  {{ type_copy|json_script:"type-copy" }}
+  {{ when_needed_copy|json_script:"when-needed-copy" }}
+  <script type="module" src="{% static 'js/edit-request.js' %}"></script>
+{% endwith %}
+{% endblock %}

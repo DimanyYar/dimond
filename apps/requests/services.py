@@ -2,8 +2,22 @@ from django.db import transaction
 
 from apps.accounts.models import Role, User
 
-from .models import ClientStatus, Message, Request, RequestType, StatusEvent, WhenNeeded
-from .selectors import can_ask_for_input, can_create_requests, can_post_message
+from .models import (
+    REQUEST_FIELDS,
+    ClientStatus,
+    Message,
+    Request,
+    RequestRevision,
+    RequestType,
+    StatusEvent,
+    WhenNeeded,
+)
+from .selectors import (
+    can_ask_for_input,
+    can_create_requests,
+    can_edit_request,
+    can_post_message,
+)
 
 
 class NotAllowedError(Exception):
@@ -38,6 +52,49 @@ def create_request(
         link=link,
     )
     StatusEvent.objects.create(request=request, to_status=ClientStatus.RECEIVED, actor=author)
+    return request
+
+
+@transaction.atomic
+def edit_request(
+    editor: User,
+    request: Request,
+    type: RequestType,
+    title: str,
+    why: str,
+    when_needed: WhenNeeded,
+    description: str = "",
+    steps: str = "",
+    link: str = "",
+) -> Request:
+    """Rewrite the request and keep the old text as a revision for its "edited" history.
+
+    Saving the form unchanged keeps no revision, so the request is not marked edited for
+    nothing. The status stays: an edit is not an answer to the PM's question.
+    """
+    # Locked and re-read so an edit and the PM planning it at the same moment see one status.
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    if not can_edit_request(editor, request):
+        raise NotAllowedError
+    new = {
+        "type": type,
+        "title": title,
+        "why": why,
+        "when_needed": when_needed,
+        "description": description,
+        "steps": steps,
+        "link": link,
+    }
+    if all(getattr(request, field) == new[field] for field in REQUEST_FIELDS):
+        return request
+    RequestRevision.objects.create(
+        request=request,
+        editor=editor,
+        **{field: getattr(request, field) for field in REQUEST_FIELDS},
+    )
+    for field in REQUEST_FIELDS:
+        setattr(request, field, new[field])
+    request.save()
     return request
 
 
