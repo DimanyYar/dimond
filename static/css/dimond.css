@@ -715,6 +715,122 @@ textarea.input {
   color: var(--muted);
 }
 
+/* Attachments: the drop zone in forms (shown once attach-files.js runs; without it the plain
+   file input stays) and the file chips on a request. */
+.dropzone {
+  display: none;
+}
+
+.attach.is-enhanced .dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-height: 72px;
+  padding: var(--space-3) var(--space-4);
+  border: 1.5px dashed var(--hairline-strong);
+  border-radius: var(--radius-m);
+  background: var(--canvas);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 400;
+  text-align: center;
+  cursor: pointer;
+}
+
+.attach.is-enhanced .dropzone:hover,
+.attach.is-dragging .dropzone {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.attach:has(input:focus-visible) .dropzone {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.dropzone-pick {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+kbd {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border: 1px solid var(--hairline);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.file-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.file-chips:empty {
+  display: none;
+}
+
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+li.file-chip {
+  padding-right: 2px;
+}
+
+a.file-chip:hover {
+  background: var(--hairline);
+}
+
+.file-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-chip-remove {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.file-chip-remove:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.error-text p {
+  margin: 0;
+}
+
 /* A chip that is a radio button: the type picker. */
 .chip-choice {
   position: relative;

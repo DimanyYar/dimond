@@ -29,6 +29,10 @@ docker compose up --build
   the link from Mailpit. The `worker` container sends emails every 5 seconds; its log is
   `docker compose logs -f worker`
 
+Attached files land in `uploads/` in the project folder (ignored by git; `FILES_ROOT` moves
+it). No address serves that folder: a file opens only through `/files/<id>/` after an access
+check.
+
 Stop with `Ctrl+C`; `docker compose down` removes the containers (data stays in a volume).
 
 ### Create your admin account (once)

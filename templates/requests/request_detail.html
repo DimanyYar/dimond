@@ -49,6 +49,7 @@
       {% if r.description %}<p class="message-text">{{ r.description }}</p>{% endif %}
       {% if r.steps %}<p class="message-text"><strong>Steps to reproduce:</strong> {{ r.steps }}</p>{% endif %}
       <p class="message-text message-why"><strong>Why it matters:</strong> {{ r.why }}</p>
+      {% if page.files %}{% include "files/file_list.html" with files=page.files %}{% endif %}
       {% if page.edits %}
         <div class="request-foot">
           {% if page.edits %}

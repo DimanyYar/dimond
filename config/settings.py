@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "apps.core",
     "apps.accounts",
     "apps.requests",
+    "apps.files",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -90,6 +91,10 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Attachments. Private: no address serves this folder; files go out only through
+# /files/<id>/ after an access check (PRD: files and attachment links). MEDIA_URL stays unset.
+MEDIA_ROOT = BASE_DIR / env("FILES_ROOT", "uploads")
 
 EMAIL_HOST = env("EMAIL_HOST", "localhost")
 EMAIL_PORT = int(env("EMAIL_PORT", "1025"))

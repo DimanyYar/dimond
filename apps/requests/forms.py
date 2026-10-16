@@ -3,6 +3,8 @@ from typing import Any
 from django import forms
 from django.db import models
 
+from apps.files.forms import AttachmentsField
+
 from .models import REQUEST_FIELDS, Request, RequestType, WhenNeeded
 from .selectors import Period, Show
 
@@ -130,6 +132,12 @@ class RequestForm(forms.Form):
         return WHEN_NEEDED_COPY.get(
             self["when_needed"].value(), WHEN_NEEDED_COPY[WhenNeeded.NOT_SURE]
         )["note"]
+
+
+class NewRequestForm(RequestForm):
+    """The request form plus files. Editing a request's files comes with the edit form."""
+
+    attachments = AttachmentsField()
 
 
 class View(models.TextChoices):

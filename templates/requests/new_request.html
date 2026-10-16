@@ -11,10 +11,11 @@
 
   <div class="new-request">
     {% with copy=form.type_copy %}
-    <form method="post" class="card request-form" id="new-request-form" novalidate>
+    <form method="post" enctype="multipart/form-data" class="card request-form" id="new-request-form" novalidate>
       {% csrf_token %}
 
       {% include "requests/request_fields.html" %}
+      {% include "files/attach_field.html" with field=form.attachments %}
 
       <div class="form-actions">
         <button class="btn btn-primary" type="submit">Summon Dimon</button>

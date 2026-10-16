@@ -1,7 +1,11 @@
+from collections.abc import Sequence
+
 from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.models import Role, User
+from apps.files.services import attach_files
+from apps.files.uploads import CheckedFile
 
 from .models import (
     REQUEST_FIELDS,
@@ -39,8 +43,10 @@ def create_request(
     description: str = "",
     steps: str = "",
     link: str = "",
+    files: Sequence[CheckedFile] = (),
 ) -> Request:
-    """Save a client's request as Received. The company comes from the author's account."""
+    """Save a client's request as Received, with its files. The company comes from the
+    author's account."""
     if not can_create_requests(author):
         raise NotAllowedError
     # Always true for a client (a database constraint); spelled out for the type checker.
@@ -57,6 +63,7 @@ def create_request(
         link=link,
     )
     StatusEvent.objects.create(request=request, to_status=ClientStatus.RECEIVED, actor=author)
+    attach_files(request, author, files)
     return request
 
 
