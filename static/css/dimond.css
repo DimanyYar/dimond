@@ -2454,6 +2454,8 @@ a.file-chip-name {
   border: 0;
   background: var(--viewer-bg);
   color: var(--surface);
+  /* The browser's own player and speed list come in their dark version, to match. */
+  color-scheme: dark;
 }
 
 .viewer[open] {
@@ -2607,8 +2609,76 @@ a.file-chip-name {
   background: var(--surface);
 }
 
+.viewer-video {
+  margin: auto;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-m);
+  background: #000000;
+}
+
+/* A sound file as a card: who sent it and when, above the player (mockup: MediaViewer, Audio). */
+.viewer-audio {
+  margin: auto;
+  width: min(640px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: 28px;
+  box-sizing: border-box;
+  border-radius: var(--radius-l);
+  background: var(--viewer-control);
+}
+
+.viewer-audio-who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.viewer-audio .avatar {
+  flex-basis: 40px;
+  width: 40px;
+  height: 40px;
+  color: var(--ink);
+}
+
+.viewer-audio-by {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--viewer-muted);
+}
+
+.viewer-audio-by strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--surface);
+}
+
+.viewer-audio audio {
+  width: 100%;
+}
+
+.viewer-speed select {
+  height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--panel-raised);
+  border-radius: var(--radius-pill);
+  background: var(--viewer-control);
+  color: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .viewer-image[hidden],
-.viewer-pdf[hidden] {
+.viewer-pdf[hidden],
+.viewer-video[hidden],
+.viewer-audio[hidden],
+.viewer-speed[hidden] {
   display: none;
 }
 
@@ -2658,6 +2728,10 @@ a.file-chip-name {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.viewer-thumb svg {
+  vertical-align: middle;
 }
 
 .viewer-thumb img {

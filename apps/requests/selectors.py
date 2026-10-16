@@ -496,7 +496,7 @@ class RequestPage:
     # The request's own files, shown under its text; `all_files` adds those from the thread.
     files: list[Attachment]
     all_files: list[Attachment]
-    # Images and PDFs, in the same order: the ones the viewer goes through.
+    # Images, PDFs, video and audio, in the same order: the ones the viewer goes through.
     viewable_files: list[Attachment]
     thread: list[ThreadEntry]
     edits: list[Edit]

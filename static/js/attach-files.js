@@ -4,6 +4,7 @@
 
 const MAX_FILES = 5;
 const MAX_SIZE = 10 * 1024 * 1024;
+const MAX_VIDEO_SIZE = 20 * 1024 * 1024;
 
 // A pasted screenshot arrives as "image.png"; five of those in a request are hard to tell apart.
 function named(file) {
@@ -58,7 +59,11 @@ export function watchFiles(form) {
         problems.push(`Attach up to ${MAX_FILES} files at a time.`);
         break;
       }
-      if (file.size > MAX_SIZE) {
+      if (file.type.startsWith("video/") && file.size > MAX_VIDEO_SIZE) {
+        problems.push(`${file.name} is over 20 MB. Share a link to Google Drive, Loom or YouTube instead.`);
+        continue;
+      }
+      if (!file.type.startsWith("video/") && file.size > MAX_SIZE) {
         problems.push(`${file.name} is over 10 MB. Make it smaller or share a link instead.`);
         continue;
       }

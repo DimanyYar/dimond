@@ -3,7 +3,7 @@ import pytest
 from apps.files.uploads import check_upload
 from apps.requests import services
 
-from .conftest import PDF, upload
+from .conftest import M4A, MP4, PDF, upload
 
 pytestmark = pytest.mark.django_db
 
@@ -25,6 +25,24 @@ def test_viewer_goes_through_the_cards_images_and_pdfs(client, screenshot, anna)
     assert 'data-name="spec.pdf"' in viewer
     # Text files download instead: there is nothing to look at in the viewer.
     assert 'data-name="export.log"' not in viewer
+
+
+def test_viewer_plays_video_and_audio(client, screenshot, anna):
+    request = screenshot.request
+    services.post_message(
+        anna,
+        request,
+        "Recorded it",
+        files=[check_upload(upload("form-submit.mp4", MP4)), check_upload(upload("note.m4a", M4A))],
+    )
+    client.force_login(anna)
+
+    page = client.get(request.get_absolute_url()).content.decode()
+
+    viewer = page[page.index('id="media-viewer"') :]
+    assert 'data-kind="video" data-name="form-submit.mp4"' in viewer
+    assert 'data-kind="audio" data-name="note.m4a"' in viewer
+    assert "Playback speed" in viewer
 
 
 def test_card_without_images_or_pdfs_has_no_viewer(client, anna):

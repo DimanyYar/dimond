@@ -85,3 +85,51 @@ def test_request_card_lists_its_files(client, screenshot, anna):
 
     assert f'href="/files/{screenshot.id}/"' in page
     assert "duplicates.png" in page
+
+
+def test_player_gets_the_piece_of_the_file_it_asks_for(client, screenshot, anna):
+    client.force_login(anna)
+
+    response = client.get(f"/files/{screenshot.id}/", headers={"Range": "bytes=8-15"})
+
+    assert response.status_code == 206
+    assert response.content == PNG[8:16]
+    assert response["Content-Range"] == f"bytes 8-15/{len(PNG)}"
+    assert "no-store" in response["Cache-Control"]
+
+
+@pytest.mark.parametrize(
+    ("asked", "first", "last"),
+    [("bytes=60-", 60, len(PNG) - 1), ("bytes=-10", len(PNG) - 10, len(PNG) - 1)],
+)
+def test_player_gets_the_rest_or_the_end_of_the_file(client, screenshot, anna, asked, first, last):
+    client.force_login(anna)
+
+    response = client.get(f"/files/{screenshot.id}/", headers={"Range": asked})
+
+    assert response.content == PNG[first : last + 1]
+
+
+def test_piece_beyond_the_end_of_the_file_is_refused(client, screenshot, anna):
+    client.force_login(anna)
+
+    response = client.get(f"/files/{screenshot.id}/", headers={"Range": "bytes=999-"})
+
+    assert response.status_code == 416
+    assert response["Content-Range"] == f"bytes */{len(PNG)}"
+
+
+def test_pieces_of_a_file_need_the_same_access(client, screenshot):
+    northwind = Company.objects.create(name="Northwind")
+    outsider = User.objects.create_user("lee@northwind.com", name="Lee", company=northwind)
+    client.force_login(outsider)
+
+    response = client.get(f"/files/{screenshot.id}/", headers={"Range": "bytes=0-7"})
+
+    assert response.status_code == 404
+
+
+def test_whole_file_tells_the_player_it_can_ask_for_pieces(client, screenshot, anna):
+    client.force_login(anna)
+
+    assert opened(client, screenshot)["Accept-Ranges"] == "bytes"

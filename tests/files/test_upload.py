@@ -1,10 +1,10 @@
 import pytest
 
 from apps.files.models import Attachment
-from apps.files.uploads import MAX_SIZE
+from apps.files.uploads import MAX_SIZE, MAX_VIDEO_SIZE
 from apps.requests.models import Request
 
-from .conftest import PDF, PNG, upload
+from .conftest import M4A, MP4, PDF, PNG, WEBM_AUDIO, WEBM_VIDEO, upload
 
 pytestmark = pytest.mark.django_db
 
@@ -75,6 +75,62 @@ def test_images_pdf_and_plain_text_are_accepted(client, signed_in, name, content
     assert Attachment.objects.get().content_type == content_type
 
 
+@pytest.mark.parametrize(
+    ("name", "content", "content_type"),
+    [
+        ("form-submit.mp4", MP4, "video/mp4"),
+        ("IMG_0042.MOV", MP4.replace(b"isom", b"qt  ", 1), "video/quicktime"),
+        ("screen.webm", WEBM_VIDEO, "video/webm"),
+        ("voice-note.m4a", M4A, "audio/mp4"),
+        ("voice-note.webm", WEBM_AUDIO, "audio/webm"),
+        ("call.mp3", b"ID3\x04\x00\x00\x00\x00\x00\x00" + b"\xff\xfb" * 8, "audio/mpeg"),
+        ("call.ogg", b"OggS\x00\x02" + b"\x00" * 20, "audio/ogg"),
+        ("call.wav", b"RIFF\x24\x00\x00\x00WAVEfmt ", "audio/wav"),
+    ],
+)
+def test_video_and_audio_are_accepted(client, signed_in, name, content, content_type):
+    client.post(URL, sent(upload(name, content)))
+
+    assert Attachment.objects.get().content_type == content_type
+
+
+def test_sound_only_recording_is_audio_whatever_its_name(client, signed_in):
+    client.post(URL, sent(upload("screen-recording.mp4", M4A)))
+
+    assert Attachment.objects.get().content_type == "audio/mp4"
+
+
+def test_matroska_video_is_refused_because_safari_cannot_play_it(client, signed_in):
+    mkv = WEBM_VIDEO.replace(b"\x84webm", b"\x88matroska")
+
+    response = client.post(URL, sent(upload("clip.mkv", mkv)))
+
+    assert response.status_code == 422
+    assert "clip.mkv: attach images, video, audio" in response.content.decode()
+
+
+def test_video_up_to_20_mb_is_accepted(client, signed_in):
+    client.post(URL, sent(upload("bug.mp4", MP4 + b"\x00" * (MAX_VIDEO_SIZE - len(MP4)))))
+
+    assert Attachment.objects.get().size == MAX_VIDEO_SIZE
+
+
+def test_video_over_20_mb_is_refused_with_a_hint_to_share_a_link(client, signed_in):
+    response = client.post(URL, sent(upload("bug.mp4", MP4 + b"\x00" * MAX_VIDEO_SIZE)))
+
+    assert response.status_code == 422
+    assert "bug.mp4 is over 20 MB. Share a link to Google Drive, Loom or YouTube" in (
+        response.content.decode()
+    )
+
+
+def test_audio_keeps_the_10_mb_limit(client, signed_in):
+    response = client.post(URL, sent(upload("talk.m4a", M4A + b"\x00" * MAX_SIZE)))
+
+    assert response.status_code == 422
+    assert "talk.m4a is over 10 MB" in response.content.decode()
+
+
 def test_type_comes_from_the_content_not_the_name(client, signed_in):
     client.post(URL, sent(upload("screenshot.txt", PNG)))
 
@@ -95,7 +151,7 @@ def test_svg_html_and_programs_are_refused_whatever_their_name(client, signed_in
     response = client.post(URL, sent(upload(name, content)))
 
     assert response.status_code == 422
-    assert f"{name}: attach images, PDF or plain text." in response.content.decode()
+    assert f"{name}: attach images, video, audio, PDF or plain text." in response.content.decode()
     assert not Request.objects.exists()
 
 
