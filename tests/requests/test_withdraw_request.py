@@ -202,3 +202,16 @@ def test_ask_left_open_is_dropped_when_the_sync_closes_the_request(asked, pm):
     assert selectors.request_page(pm, asked.pk).withdrawal is None
     with pytest.raises(services.NotAllowedError):
         services.decide_withdrawal(pm, asked, confirm=True)
+
+
+def test_pm_finds_asks_to_withdraw_in_the_admin(client, asked, bug, anna):
+    other = services.create_request(
+        anna, RequestType.IDEA, "Dark theme", why="Eyes.", when_needed=WhenNeeded.NOT_SURE
+    )
+    client.force_login(User.objects.create_superuser("root@example.com", password="s3cret-pass"))
+    admin_list = reverse("admin:requests_request_changelist")
+
+    shown = client.get(admin_list, {"asks_to_withdraw": "yes"}).context["cl"].result_list
+
+    assert list(shown) == [asked]
+    assert other not in shown
