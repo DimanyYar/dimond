@@ -1650,6 +1650,12 @@ a.file-chip:hover {
   font-weight: 500;
 }
 
+.voice-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .request-header .meta {
   font-size: 13px;
 }
@@ -3152,5 +3158,390 @@ a.file-chip-name {
   .viewer-next {
     top: auto;
     bottom: 76px;
+  }
+}
+
+/* "Just say it": a request said out loud (mockups: Just say it, Mobile just say it). */
+.voice-open svg {
+  flex: 0 0 auto;
+}
+
+.requests-actions,
+.new-request-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.new-request-title {
+  justify-content: space-between;
+}
+
+.voice {
+  width: min(640px, calc(100vw - 32px));
+  padding: var(--space-6);
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 30%);
+}
+
+.voice[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.voice::backdrop {
+  background: rgb(17 17 17 / 55%);
+}
+
+.voice [hidden] {
+  display: none;
+}
+
+.voice-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.voice-heading {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.voice-heading h2 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+}
+
+.voice-heading p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.voice-close {
+  flex: 0 0 var(--tap);
+  width: var(--tap);
+  height: var(--tap);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.voice-ready {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: var(--space-3) 0 var(--space-1);
+}
+
+.voice-mic {
+  width: 112px;
+  height: 112px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.voice-mic:hover {
+  background: var(--accent-hover);
+}
+
+.voice-hint {
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.voice-tips {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) 18px;
+  box-sizing: border-box;
+  border-radius: var(--radius-m);
+  background: var(--canvas);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.voice-recording,
+.voice-review {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.voice-live {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.voice-stop-wrap {
+  position: relative;
+  flex: 0 0 72px;
+  width: 72px;
+  height: 72px;
+}
+
+.voice-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: voice-ring 1.4s ease-out infinite;
+}
+
+@keyframes voice-ring {
+  from {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+
+  to {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+.voice-stop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.voice-stop span {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--ink);
+}
+
+.voice-level {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.voice-level span {
+  flex: 1 1 0;
+  height: 10%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.voice-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.voice-clock > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.voice-clock .muted {
+  font-size: 12px;
+}
+
+.voice-blink {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--error);
+  animation: recording-pulse 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-ring,
+  .voice-blink {
+    animation: none;
+  }
+}
+
+.voice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.voice-aside {
+  margin-left: auto;
+  font-size: 13px;
+}
+
+/* The recording to listen back to: a dark strip with the sound drawn as bars. */
+.voice-player {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: var(--space-3) 14px;
+  border-radius: var(--radius-m);
+  background: var(--ink);
+  color: var(--viewer-muted);
+}
+
+.voice-player .player-play-big {
+  flex-basis: var(--tap);
+  width: var(--tap);
+  height: var(--tap);
+}
+
+.voice-player .player-wave {
+  height: 36px;
+}
+
+.voice-player .player-bars {
+  gap: 2px;
+}
+
+.voice-player .player-time {
+  font-size: 13px;
+}
+
+.voice-types {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.voice-types legend {
+  float: left;
+  margin-right: var(--space-1);
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.voice-send {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.voice-switch {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* On a phone the window takes the whole screen, dark while listening, as in the mockup. */
+@media (max-width: 640px) {
+  .voice {
+    width: 100vw;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    padding: var(--space-5);
+    border-radius: 0;
+  }
+
+  .voice[data-stage="ready"],
+  .voice[data-stage="recording"] {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .voice[data-stage="ready"] .voice-heading p,
+  .voice[data-stage="recording"] .voice-heading p,
+  .voice[data-stage="ready"] .voice-hint,
+  .voice[data-stage="recording"] .muted {
+    color: var(--muted-on-panel);
+  }
+
+  .voice[data-stage="ready"] .voice-close,
+  .voice[data-stage="recording"] .voice-close {
+    border-color: var(--panel-raised);
+  }
+
+  .voice[data-stage="ready"] .voice-tips {
+    background: var(--panel-raised);
+  }
+
+  .voice-ready {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .voice-mic {
+    width: 128px;
+    height: 128px;
+    box-shadow: 0 0 0 12px rgb(255 86 0 / 18%);
+  }
+
+  .voice-live {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .voice-level {
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  .voice[data-stage="recording"] .btn-ghost {
+    color: var(--surface);
+  }
+
+  .voice[data-stage="recording"] .btn-dark {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--ink);
+  }
+
+  .voice-aside,
+  .voice-switch {
+    margin-left: 0;
   }
 }

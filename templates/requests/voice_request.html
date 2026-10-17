@@ -1,0 +1,78 @@
+{% comment %}"Just say it": a request said out loud (mockups: Just say it, Mobile just say it). Lives over the new
+request form, so "Switch to the full form" can hand the recording, title and type to it. Opened by any button with
+data-voice-open, or on arrival with ?say; static/js/voice-request.js records up to 2 minutes and sends the recording
+with a title and, if picked, a type.{% endcomment %}
+<dialog class="voice" id="voice-request" aria-labelledby="voice-title" data-stage="ready">
+  <div class="voice-head">
+    <div class="voice-heading">
+      <h2 id="voice-title" data-voice-title>Just say it</h2>
+      <p data-voice-subtitle>Describe your request out loud. We’ll keep the recording for Dimon.</p>
+    </div>
+    <button type="button" class="voice-close" aria-label="Close" data-voice-close>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <section class="voice-ready" data-voice-stage="ready">
+    <button type="button" class="voice-mic" aria-label="Start recording" data-voice-start>
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+    </button>
+    <span class="voice-hint">Tap to start · up to 2 minutes</span>
+    <div class="voice-tips">
+      <strong>Good to mention</strong>
+      <span>What happened or what you need · where in the CRM (a lead, a page) · why it matters · how urgent it is</span>
+    </div>
+  </section>
+
+  <section class="voice-recording" data-voice-stage="recording" hidden>
+    <div class="voice-live">
+      <span class="voice-stop-wrap">
+        <span class="voice-ring" aria-hidden="true"></span>
+        <button type="button" class="voice-stop" aria-label="Stop recording" data-voice-stop><span aria-hidden="true"></span></button>
+      </span>
+      <div class="voice-level" aria-hidden="true" data-voice-level></div>
+      <div class="voice-clock">
+        <span><span class="voice-blink" aria-hidden="true"></span><span data-voice-time>0:00</span></span>
+        <span class="muted">of 2:00</span>
+      </div>
+    </div>
+    <div class="voice-actions">
+      <button type="button" class="btn btn-dark" data-voice-stop>Stop and review</button>
+      <button type="button" class="btn btn-ghost" data-voice-close>Cancel</button>
+      <span class="muted voice-aside">Pauses are fine — take your time.</span>
+    </div>
+  </section>
+
+  <form class="voice-review" data-voice-stage="review" action="{% url 'new_voice_request' %}" method="post" hidden data-voice-form>
+    {% csrf_token %}
+    <div class="player voice-player" data-voice-player>
+      <audio preload="metadata" data-media></audio>
+      {% include "files/play_button.html" with big=True %}
+      <div class="player-wave">
+        <div class="player-bars" aria-hidden="true" data-bars></div>
+        {% include "files/seek_bar.html" %}
+      </div>
+      <span class="player-time"><span data-current>0:00</span> / <span data-duration>0:00</span></span>
+    </div>
+
+    <div class="field">
+      <label for="voice-request-title">Title <span class="optional">· one line, so Dimon finds it</span></label>
+      <input class="input" type="text" id="voice-request-title" name="title" maxlength="200" required autocomplete="off">
+    </div>
+
+    <fieldset class="voice-types">
+      <legend>Type <span class="optional">· optional</span></legend>
+      {% for value, label in voice_types %}
+        <label class="chip chip-choice"><input type="radio" name="type" value="{{ value }}"> {{ label }}</label>
+      {% endfor %}
+    </fieldset>
+
+    <p class="error-text" role="alert" data-voice-error></p>
+
+    <div class="voice-actions voice-send">
+      <button type="submit" class="btn btn-primary" data-voice-send>Summon Dimon</button>
+      <button type="button" class="btn" data-voice-again>Record again</button>
+      <button type="button" class="voice-switch" data-voice-switch>Switch to the full form</button>
+    </div>
+  </form>
+</dialog>

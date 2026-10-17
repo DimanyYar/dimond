@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponseBadRequest
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -18,10 +18,11 @@ from .forms import (
     MyRequestsFilter,
     NewRequestForm,
     View,
+    VoiceRequestForm,
     WithdrawalDecisionForm,
     WithdrawForm,
 )
-from .models import Request, RequestType, WhenNeeded
+from .models import FORM_TYPES, Request, RequestType, WhenNeeded
 from .selectors import Period, Show
 
 
@@ -57,7 +58,7 @@ def my_requests(request: HttpRequest) -> HttpResponse:
                 # The link a chip leads to: the same filters with this type switched on or off.
                 "toggled": [t for t in types if t != value] if value in types else [*types, value],
             }
-            for value, label in RequestType.choices
+            for value, label in FORM_TYPES
         ],
         "periods": Period.choices,
     }
@@ -113,6 +114,7 @@ def new_request(request: HttpRequest) -> HttpResponse:
         "reattach": bool(form.errors and request.FILES),
         "type_copy": TYPE_COPY,
         "when_needed_copy": WHEN_NEEDED_COPY,
+        "voice_types": FORM_TYPES,
     }
     return render(request, "requests/new_request.html", context, status=status)
 
@@ -143,6 +145,28 @@ def _render_card(
         "is_client": selectors.has_my_requests_page(page.viewer),
     }
     return render(request, "requests/request_detail.html", context, status=status)
+
+
+@require_POST
+@login_required
+def new_voice_request(request: HttpRequest) -> HttpResponse:
+    """ "Just say it" sends the recording from its own window by script; it gets the address to
+    open, or the problems to show in that window."""
+    assert isinstance(request.user, User)  # login_required lets only signed-in people in
+    if not selectors.can_create_requests(request.user):
+        raise PermissionDenied
+    form = VoiceRequestForm(request.POST, request.FILES)
+    if not form.is_valid():
+        problems = [str(error) for errors in form.errors.values() for error in errors]
+        return JsonResponse({"errors": problems}, status=422)
+    created = services.create_voice_request(
+        request.user,
+        form.cleaned_data["title"],
+        form.cleaned_data["recording"],
+        form.request_type(),
+    )
+    messages.success(request, f"{created.key} · {created.title}")
+    return HttpResponse(status=201, headers={"Location": reverse("my_requests")})
 
 
 @require_http_methods(["GET", "POST"])

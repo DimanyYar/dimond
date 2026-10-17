@@ -1,7 +1,8 @@
 // The viewer's players for video and voice notes (mockup: MediaViewer, Video and Audio): our
 // own controls instead of each browser's, so they look the same in Chrome and Safari, and one
 // playback speed holds for every file. Each control is optional: the video has a mute and a
-// full-screen button, the voice note has its sound drawn as bars.
+// full-screen button, the voice note has its sound drawn as bars, and the "Just say it" check
+// has no speed list.
 
 import { clock } from "./clock.js";
 
@@ -50,7 +51,7 @@ export function mediaPlayer(root) {
   const fullscreen = root.querySelector("[data-fullscreen]");
   const speedButton = root.querySelector("[data-speed-button]");
   const speedMenu = root.querySelector("[data-speed-menu]");
-  const speedItems = [...speedMenu.querySelectorAll("[data-speed]")];
+  const speedItems = [...(speedMenu?.querySelectorAll("[data-speed]") ?? [])];
   let drawing = null;
 
   function showPlaying() {
@@ -119,7 +120,7 @@ export function mediaPlayer(root) {
   }
 
   function closeMenu() {
-    if (speedMenu.hidden) return false;
+    if (speedMenu === null || speedMenu.hidden) return false;
     // A hidden item would drop the focus out of the viewer, and its keys with it.
     const hadFocus = speedMenu.contains(document.activeElement);
     speedMenu.hidden = true;
@@ -131,6 +132,7 @@ export function mediaPlayer(root) {
   function showSpeed() {
     media.defaultPlaybackRate = speed;
     media.playbackRate = speed;
+    if (speedButton === null) return;
     speedButton.querySelector("[data-speed-label]").textContent = `${speed}×`;
     for (const item of speedItems) item.setAttribute("aria-checked", String(Number(item.dataset.speed) === speed));
   }
@@ -175,7 +177,7 @@ export function mediaPlayer(root) {
     });
   }
 
-  speedButton.addEventListener("click", () => (speedMenu.hidden ? openMenu() : closeMenu()));
+  speedButton?.addEventListener("click", () => (speedMenu.hidden ? openMenu() : closeMenu()));
   speedItems.forEach((item, k) => {
     item.addEventListener("click", () => {
       setSpeed(Number(item.dataset.speed));
@@ -190,7 +192,7 @@ export function mediaPlayer(root) {
     });
   });
   document.addEventListener("click", (event) => {
-    if (!speedMenu.hidden && !speedMenu.parentElement.contains(event.target)) closeMenu();
+    if (speedMenu !== null && !speedMenu.hidden && !speedMenu.parentElement.contains(event.target)) closeMenu();
   });
 
   const player = {

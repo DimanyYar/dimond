@@ -15,7 +15,10 @@
       <p class="muted">Hi, {{ user.name|default:user.email }}</p>
       <h1>Your requests</h1>
     </div>
-    <a class="btn btn-primary" href="{% url 'new_request' %}">Summon Dimon</a>
+    <div class="requests-actions">
+      {% include "requests/voice_open_button.html" with link=True %}
+      <a class="btn btn-primary" href="{% url 'new_request' %}">Summon Dimon</a>
+    </div>
   </header>
 
   {% if page.needs_you.shown %}
@@ -156,4 +159,5 @@
   {% endif %}
   {% endif %}
   <script type="module" src="{% static 'js/my-requests.js' %}"></script>
+  <script type="module" src="{% static 'js/voice-request.js' %}"></script>
 {% endblock %}
