@@ -74,10 +74,12 @@ def remove_files(files: Iterable[Attachment], removed_in: RequestRevision) -> No
 
 def make_preview(attachment: Attachment) -> None:
     """Draw the small picture a tile shows: an image made smaller, a PDF's first page. A file
-    that cannot be read keeps its tile without a picture; the file itself still opens."""
+    that cannot be read keeps its tile without a picture; the file itself still opens. Storage
+    errors are left to the caller: the file is fine, so the preview waits for another try."""
+    with attachment.file.open("rb") as stored:
+        content = stored.read()
     try:
-        with attachment.file.open("rb") as stored:
-            preview = previews.draw(stored.read(), attachment.content_type)
+        preview = previews.draw(content, attachment.content_type)
     except previews.CANNOT_READ:
         log.warning("No preview for attachment %s", attachment.id, exc_info=True)
         attachment.preview_status = PreviewStatus.NONE
@@ -93,5 +95,10 @@ def make_pending_previews(limit: int = 20) -> int:
     """Make previews waiting since upload; run by the worker (ADR 0004). Returns how many."""
     pending = list(Attachment.objects.filter(preview_status=PreviewStatus.PENDING)[:limit])
     for attachment in pending:
-        make_preview(attachment)
+        try:
+            make_preview(attachment)
+        except OSError:
+            # Storage out of reach for a moment: the file stays pending for the next run, and
+            # the files after it still get their previews now.
+            log.warning("Preview postponed for attachment %s", attachment.id, exc_info=True)
     return len(pending)

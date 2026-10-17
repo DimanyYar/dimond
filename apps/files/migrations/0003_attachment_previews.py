@@ -13,8 +13,13 @@ def queue_existing_files(apps, schema_editor):
     )
     pictures.update(preview_status="pending")
     for text in Attachment.objects.filter(content_type="text/plain"):
-        with text.file.open("rb") as stored:
-            lines = stored.read(4096).decode("utf-8-sig", errors="replace").splitlines()[:6]
+        # One missing file must not stop the deploy: its tile just shows no lines.
+        try:
+            with text.file.open("rb") as stored:
+                lines = stored.read(4096).decode("utf-8-sig", errors="replace").splitlines()[:6]
+        except OSError:
+            print(f"\n  No excerpt for attachment {text.id}: its file cannot be read")
+            continue
         text.excerpt = "\n".join(line[:80] for line in lines)
         text.save(update_fields=["excerpt"])
 

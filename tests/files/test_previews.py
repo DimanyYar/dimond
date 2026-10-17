@@ -67,6 +67,19 @@ def test_broken_picture_keeps_a_tile_without_preview_and_still_opens(client, ann
     assert client.get(broken.get_absolute_url()).status_code == 200
 
 
+def test_picture_out_of_reach_waits_for_next_run_and_others_still_get_previews(anna):
+    request = sent(anna, ("first.png", picture("PNG")), ("second.png", picture("PNG")))
+    first, second = request.attachments.order_by("name")
+    first.file.storage.delete(first.file.name)
+
+    make_pending_previews()
+
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.preview_status == PreviewStatus.PENDING
+    assert second.preview_status == PreviewStatus.READY
+
+
 def test_text_file_shows_its_first_lines(anna):
     log = sent(anna, ("export.log", "\n".join(f"10:4{n} line {n}" for n in range(9)).encode()))
 
