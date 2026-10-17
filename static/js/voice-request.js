@@ -38,6 +38,9 @@ function setUp() {
   let recording = null;
   let ticking = null;
   let listening = null;
+  // From the tap until recording begins the browser may be asking for the microphone.
+  let starting = false;
+  let recordingUrl = null;
 
   function stage(name) {
     dialog.dataset.stage = name;
@@ -84,16 +87,32 @@ function setUp() {
     stream = null;
   }
 
+  // The player plays the recording from a temporary address; it is let go once not needed.
+  function forgetRecording() {
+    if (recordingUrl !== null) URL.revokeObjectURL(recordingUrl);
+    recordingUrl = null;
+  }
+
   async function start() {
+    // A second tap while the browser asks for the microphone would open a second one.
+    if (starting || recorder !== null) return;
+    starting = true;
     error.textContent = "";
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (problem) {
+      starting = false;
       stage("ready");
       dialog.querySelector(".voice-hint").textContent =
         problem.name === "NotAllowedError"
           ? "Allow the microphone for this site, then tap again."
           : "No microphone found. Use the full form instead.";
+      return;
+    }
+    starting = false;
+    // Closed while the browser was asking: the microphone goes off at once.
+    if (!dialog.open) {
+      release();
       return;
     }
     const type = TYPES.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
@@ -116,7 +135,9 @@ function setUp() {
         recording = new File([recorded], name, { type: recordedType });
       }
       stage("review");
-      player.load(URL.createObjectURL(recording));
+      forgetRecording();
+      recordingUrl = URL.createObjectURL(recording);
+      player.load(recordingUrl);
       form.elements.title.focus();
     });
     recorder.start(1000);
@@ -140,6 +161,7 @@ function setUp() {
     stop();
     release();
     player.stop();
+    forgetRecording();
     dialog.close();
   }
 
@@ -198,6 +220,7 @@ function setUp() {
   dialog.querySelectorAll("[data-voice-close]").forEach((button) => button.addEventListener("click", close));
   dialog.querySelector("[data-voice-again]").addEventListener("click", () => {
     player.stop();
+    forgetRecording();
     start();
   });
   // Esc closes the window like Close does: recording stops and nothing is kept.
