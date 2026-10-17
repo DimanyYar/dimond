@@ -776,79 +776,6 @@ kbd {
   color: var(--ink);
 }
 
-.file-chips {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.file-chips:empty {
-  display: none;
-}
-
-/* A long file name shortens with "…" instead of widening the page on a phone. */
-.file-chips > li {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.file-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-2);
-  color: var(--ink);
-  font-size: 14px;
-  text-decoration: none;
-}
-
-li.file-chip {
-  padding-right: 2px;
-}
-
-a.file-chip:hover {
-  background: var(--hairline);
-}
-
-.file-chip-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-chip-progress {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-
-.file-chip-remove {
-  flex: 0 0 32px;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 18px;
-  cursor: pointer;
-}
-
-.file-chip-remove:hover {
-  background: var(--surface);
-  color: var(--ink);
-}
-
 .error-text p {
   margin: 0;
 }
@@ -2023,31 +1950,6 @@ a.file-chip:hover {
   margin-bottom: 6px;
   font-size: 15px;
   font-weight: 500;
-}
-
-a.file-chip-name {
-  color: var(--ink);
-}
-
-.attached-files .file-chip-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 32px;
-  padding: 0 8px;
-  border-radius: var(--radius-pill);
-  color: var(--muted);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.file-chip-toggle input {
-  accent-color: var(--ink);
-}
-
-.file-chip:has(.file-chip-toggle input:checked) .file-chip-name {
-  color: var(--muted);
-  text-decoration: line-through;
 }
 
 /* The request itself: who edited it and how, and the way to edit it until it's planned. */
@@ -3766,21 +3668,167 @@ a.file-chip-name {
 }
 
 @media (max-width: 640px) {
-  .tiles:not(.tiles-small) {
+  .tiles:not(.tiles-small, .tiles-form) {
     flex-wrap: nowrap;
     overflow-x: auto;
     margin-right: calc(-1 * var(--space-4));
     padding-right: var(--space-4);
   }
 
-  .tiles:not(.tiles-small) .tile {
+  .tiles:not(.tiles-small, .tiles-form) .tile {
     --tile-w: 96px;
     --tile-h: 72px;
     flex: 0 0 auto;
   }
 
-  .tiles .tile-name,
-  .tiles .tile-meta {
+  .tiles:not(.tiles-form) .tile-name,
+  .tiles:not(.tiles-form) .tile-meta {
     display: none;
   }
+}
+
+/* Tiles in a form: files chosen to send, with × to take one out, and files already on the
+   request in the edit form, with Remove and Undo. 96 × 72 everywhere, names kept on a phone:
+   "Compressing…" and "Will be removed" are read there too. */
+.tiles-form {
+  gap: 18px;
+  padding-top: 10px;
+}
+
+.tiles-form:empty {
+  display: none;
+}
+
+.tiles-form .tile {
+  --tile-w: 96px;
+  --tile-h: 72px;
+  position: relative;
+}
+
+.tile-remove {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--surface);
+  cursor: pointer;
+}
+
+/* The circle is small so it does not hide the picture; the finger gets 44 px all the same. */
+.tile-remove::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+
+.tile-remove:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* A video's frame with the play button over its middle. */
+.has-preview .tile-play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+.tile-picture:has(.tile-progress)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgb(245 241 236 / 70%);
+}
+
+.tile-progress {
+  position: absolute;
+  z-index: 1;
+  left: 8px;
+  right: 8px;
+  bottom: 10px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--hairline);
+}
+
+.tile-progress-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.tile-percent {
+  position: absolute;
+  z-index: 1;
+  left: 8px;
+  top: 8px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile-removable {
+  width: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tile-toggle {
+  align-self: flex-start;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tile-toggle-off {
+  display: inline-block;
+  padding: 3px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-weight: 500;
+}
+
+.tile-toggle-on {
+  display: none;
+  color: var(--error);
+}
+
+.tile-undo {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.tile-toggle:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.tile-removable:has(input:checked) .tile-toggle-off {
+  display: none;
+}
+
+.tile-removable:has(input:checked) .tile-toggle-on {
+  display: inline;
+}
+
+.tile-removable:has(input:checked) .tile-picture {
+  opacity: 0.45;
+}
+
+.tile-removable:has(input:checked) .tile-name {
+  color: var(--muted);
+  text-decoration: line-through;
 }

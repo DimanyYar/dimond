@@ -32,18 +32,21 @@
       {% if page.files %}
         <fieldset class="field attached-files">
           <legend>Attached files</legend>
-          <ul class="file-chips">
+          <ul class="tiles tiles-form">
             {% for file in page.files %}
-              <li class="file-chip">
-                <a class="file-chip-name" {% include "files/open_attrs.html" %}>{{ file.name }}</a>
-                <label class="file-chip-toggle">
-                  <input type="checkbox" name="remove" value="{{ file.id }}"{% if file.id|stringformat:"s" in form.removing %} checked{% endif %}>
-                  Remove
+              <li class="tile-removable">
+                {% include "files/file_tile.html" %}
+                {# A checkbox that looks like the mockup's Remove button; checked, it reads "Will be removed · Undo". #}
+                <label class="tile-toggle">
+                  <input type="checkbox" class="visually-hidden" name="remove" value="{{ file.id }}"{% if file.id|stringformat:"s" in form.removing %} checked{% endif %}>
+                  <span class="tile-toggle-off">Remove</span>
+                  <span class="tile-toggle-on">Will be removed <span class="tile-undo">Undo</span></span>
+                  <span class="visually-hidden">{{ file.name }}</span>
                 </label>
               </li>
             {% endfor %}
           </ul>
-          <span class="hint">A removed file leaves the card; the edit history keeps its name.</span>
+          <span class="hint">Removed on Save changes, not at once. The edit history keeps the name.</span>
         </fieldset>
       {% endif %}
 
