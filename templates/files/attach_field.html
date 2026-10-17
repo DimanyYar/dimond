@@ -20,7 +20,7 @@ without it the browser's own file input still works.{% endcomment %}
          aria-describedby="files-hint{% if field.errors %} files-error{% endif %}"
          {% if field.errors %}aria-invalid="true"{% endif %}>
   <ul class="file-chips" data-attach-list aria-label="Chosen files"></ul>
-  <span class="hint" id="files-hint">Images, video, audio, PDF or plain text: up to 5 files, 10 MB each, video up to 20 MB. Word, Excel and archives can hide macros, so share a link to them instead.</span>
+  <span class="hint" id="files-hint">Images, video, audio, PDF or plain text: up to 5 files, 10 MB each. Video up to 2 minutes: we compress it in your browser. Word, Excel and archives can hide macros, so share a link to them instead.</span>
   {% if field.errors %}
     <div class="error-text" id="files-error">{% for error in field.errors %}<p>{{ error }}</p>{% endfor %}</div>
   {% elif reattach %}
