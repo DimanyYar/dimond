@@ -88,6 +88,8 @@ h2,
 h3 {
   margin: 0;
   font-weight: 500;
+  /* A title is typed by a client: a long word or a file name must wrap, not push out of its card. */
+  overflow-wrap: anywhere;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
@@ -1421,6 +1423,8 @@ a.file-chip:hover {
 }
 
 .board-column {
+  /* A grid column would otherwise grow to its widest word. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -1490,6 +1494,15 @@ a.file-chip:hover {
 .request-card h3 {
   font-size: 15px;
   line-height: 1.4;
+}
+
+/* On the board a long title stops after four lines; the card shows it whole. */
+.board .request-card h3 {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
 }
 
 .request-card-meta {
