@@ -111,6 +111,7 @@ export function formTile(file, onRemove) {
   let forgotten = false;
   function showPicture(blob) {
     if (blob === null || forgotten) return;
+    if (url !== null) URL.revokeObjectURL(url);
     url = URL.createObjectURL(blob);
     const image = element("img");
     image.alt = "";
@@ -142,6 +143,9 @@ export function formTile(file, onRemove) {
     if (kind === "pdf") picture.append(element("span", "tile-badge tile-badge-pdf", "PDF"));
   }
 
+  let framesAsked = 0;
+  let frameShown = 0;
+
   let bar = null;
   let percent = null;
   function progress(done) {
@@ -171,8 +175,14 @@ export function formTile(file, onRemove) {
     replaceFile(compressed) {
       file = compressed;
     },
+    // Asked for the original video and again for the compressed one, the two frames can
+    // arrive in either order: an older frame never covers a newer one.
     async showFrame(video) {
-      if (url === null) showPicture(await videoFrame(video));
+      const asked = ++framesAsked;
+      const frame = await videoFrame(video);
+      if (frame === null || asked < frameShown) return;
+      frameShown = asked;
+      showPicture(frame);
     },
     forget() {
       forgotten = true;

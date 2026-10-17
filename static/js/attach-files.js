@@ -62,7 +62,8 @@ export function watchFiles(form) {
       entry.progress = null;
       entry.tile.replaceFile(ready);
       entry.tile.progress(null);
-      // A video this browser could not show before compressing usually can after it.
+      // The frame of what gets uploaded; a browser that could not show the original (HEVC in
+      // Chrome) can show this one.
       entry.tile.showFrame(ready);
     } catch (problem) {
       // Removed by the client while compressing: it is already gone from the list.
