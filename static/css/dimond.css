@@ -2731,6 +2731,7 @@ a.file-chip-name {
   min-width: min(480px, 100%);
   border-radius: var(--radius-m) var(--radius-m) 0 0;
   background: #000000;
+  cursor: pointer;
 }
 
 .player-video:fullscreen {

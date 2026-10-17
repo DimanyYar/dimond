@@ -64,8 +64,10 @@ function show(next) {
     pdf.src = file.src;
   } else if (file.kind === "video") {
     video.load(file.src);
+    video.focus();
   } else {
     audio.load(file.src, { by: file.by, when: file.when });
+    audio.focus();
   }
 }
 

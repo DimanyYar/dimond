@@ -128,7 +128,15 @@ export function mediaPlayer(root) {
     for (const item of speedItems) item.setAttribute("aria-checked", String(Number(item.dataset.speed) === speed));
   }
 
+  // The button that stays: the big one over a video disappears once it plays.
+  const mainPlay = root.querySelector("[data-play]:not([data-big-play])");
   playButtons.forEach((button) => button.addEventListener("click", toggle));
+  // Like any video on the web: a click on the picture plays and pauses. Focus moves to the
+  // play button, so Space keeps working after the big button has gone.
+  for (const target of [media, root.querySelector("[data-big-play]")]) {
+    target?.addEventListener("click", () => mainPlay.focus({ preventScroll: true }));
+  }
+  if (media.matches("video")) media.addEventListener("click", toggle);
   media.addEventListener("play", showPlaying);
   media.addEventListener("pause", showPlaying);
   media.addEventListener("ended", showPlaying);
@@ -201,6 +209,10 @@ export function mediaPlayer(root) {
       media.load();
     },
     toggle,
+    // On opening a file Space should play it at once, so the play button gets the focus.
+    focus() {
+      mainPlay.focus({ preventScroll: true });
+    },
     closeMenu,
     showSpeed,
   };
