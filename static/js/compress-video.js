@@ -45,6 +45,25 @@ async function encoders(mb) {
   return { video, audio, toMp4 };
 }
 
+// MediaRecorder writes a file without its length and without an index: players show no
+// duration and cannot seek. Copying the tracks into a fresh file adds both, without
+// re-encoding, so it takes a moment even for two minutes.
+export async function finishedRecording(blob, name) {
+  const type = blob.type.split(";")[0];
+  const mb = await library();
+  const input = new mb.Input({ source: new mb.BlobSource(blob), formats: mb.ALL_FORMATS });
+  const target = new mb.BufferTarget();
+  const output = new mb.Output({
+    format: type.endsWith("mp4") ? new mb.Mp4OutputFormat({ fastStart: "in-memory" }) : new mb.WebMOutputFormat(),
+    target,
+  });
+  const conversion = await mb.Conversion.init({ input, output });
+  // Unusual recordings (Safari's Ogg, say) stay as recorded: playable, only without seeking.
+  if (!conversion.isValid) return new File([blob], name, { type });
+  await conversion.execute();
+  return new File([target.buffer], name, { type });
+}
+
 // The file to upload: `file` itself when it already fits, a smaller copy otherwise. Throws a
 // VideoProblem with words for the client when the video cannot be sent. `signal` cancels it.
 export async function readyVideo(file, { onProgress, signal }) {

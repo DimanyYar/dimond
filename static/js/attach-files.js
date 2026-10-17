@@ -4,6 +4,7 @@
 // again; the checks here only save a round trip.
 
 import { VideoProblem, readyVideo } from "./compress-video.js";
+import { watchRecorders } from "./record-media.js";
 
 const MAX_FILES = 5;
 const MAX_SIZE = 10 * 1024 * 1024;
@@ -22,7 +23,7 @@ function percent(done) {
 export function watchFiles(form) {
   const box = form.querySelector("[data-attach]");
   if (box === null) return;
-  const input = box.querySelector('input[type="file"]');
+  const input = box.querySelector("[data-attach-input]");
   const list = box.querySelector("[data-attach-list]");
   const error = box.querySelector("[data-attach-error]");
   // Files already in the input: carried over from a form the server sent back with errors.
@@ -116,13 +117,22 @@ export function watchFiles(form) {
     show();
   }
 
-  // Sending while a video is still compressing would send the form without it. Registered
+  const recorders = watchRecorders(box, {
+    add,
+    hasRoom: () => files.length < MAX_FILES,
+    showError: (text) => {
+      error.textContent = text;
+    },
+  });
+
+  // Sending while recording or compressing would send the form without that file. Registered
   // before the form's own submit handler, so it can stop that one too.
   form.addEventListener("submit", (event) => {
-    if (!files.some((entry) => entry.progress !== null)) return;
+    const recording = recorders.isRecording();
+    if (!recording && !files.some((entry) => entry.progress !== null)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    error.textContent = "Wait until the video is ready, then send.";
+    error.textContent = recording ? "Stop the recording first, then send." : "Wait until the video is ready, then send.";
   });
 
   // Picking in the dialog replaces the input's files; the earlier ones are kept in `files`.
