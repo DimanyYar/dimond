@@ -10,9 +10,11 @@ const SHORT_SIDE = 720;
 // 1 Mbit/s of picture and 96 kbit/s of sound keep two minutes at about 16 MB.
 const VIDEO_BITRATE = 1_000_000;
 const AUDIO_BITRATE = 96_000;
-// Codecs Chrome, Safari and Firefox all play. iPhone's HEVC is not on the list: Chrome on
-// Windows often cannot play it.
+// Codecs and containers Chrome, Safari and Firefox all play. iPhone's HEVC is not on the list:
+// Chrome on Windows often cannot play it. Nor is QuickTime (.mov): Firefox does not play it
+// even with H.264 inside.
 const PLAYABLE = ["avc", "vp8", "vp9"];
+const PLAYABLE_CONTAINERS = ["video/mp4", "video/webm"];
 
 export class VideoProblem extends Error {}
 
@@ -60,10 +62,12 @@ export async function readyVideo(file, { onProgress, signal }) {
   }
   const width = await track.getDisplayWidth();
   const height = await track.getDisplayHeight();
+  const container = (await input.getMimeType()).split(";")[0];
   const fits =
     file.size <= MAX_VIDEO_SIZE &&
     Math.min(width, height) <= SHORT_SIDE &&
-    PLAYABLE.includes(await track.getCodec());
+    PLAYABLE.includes(await track.getCodec()) &&
+    PLAYABLE_CONTAINERS.includes(container);
   if (fits) return file;
 
   const codecs = await encoders(mb);
@@ -91,6 +95,11 @@ export async function readyVideo(file, { onProgress, signal }) {
   });
   if (!conversion.utilizedTracks.some((used) => used.isVideoTrack())) {
     throw new VideoProblem(`${file.name}: this browser can’t read this video. ${linkHint}`);
+  }
+  // A bug shown without the client's voice over it loses half of what they meant to say.
+  const hasSound = (await input.getPrimaryAudioTrack()) !== null;
+  if (hasSound && !conversion.utilizedTracks.some((used) => used.isAudioTrack())) {
+    throw new VideoProblem(`${file.name}: this browser can’t keep the sound of this video. ${linkHint}`);
   }
   conversion.onProgress = onProgress;
   // Removed while the library was still loading: no need to start.
