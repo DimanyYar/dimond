@@ -101,3 +101,18 @@ def test_request_form_does_not_offer_not_sure_as_a_type(client, anna):
     page = client.get("/requests/new/").content.decode()
 
     assert 'value="not_sure"' not in page.split('name="when_needed"')[0]
+
+
+def test_my_requests_leads_to_the_form_with_just_say_it_open(client, anna):
+    page = client.get("/requests/").content.decode()
+
+    assert 'href="/requests/new/?say"' in page
+    # The window itself lives over the form, so a recording can move into it.
+    assert 'id="voice-request"' not in page
+
+
+def test_new_request_form_has_just_say_it_with_a_way_back_to_the_form(client, anna):
+    page = client.get("/requests/new/").content.decode()
+
+    assert 'id="voice-request"' in page
+    assert "Switch to the full form" in page

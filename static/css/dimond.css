@@ -3465,8 +3465,14 @@ a.file-chip-name {
 
 .voice-switch {
   margin-left: auto;
-  font-size: 14px;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* On a phone the window takes the whole screen, dark while listening, as in the mockup. */

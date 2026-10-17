@@ -16,7 +16,7 @@
       <h1>Your requests</h1>
     </div>
     <div class="requests-actions">
-      {% include "requests/voice_open_button.html" %}
+      {% include "requests/voice_open_button.html" with link=True %}
       <a class="btn btn-primary" href="{% url 'new_request' %}">Summon Dimon</a>
     </div>
   </header>
@@ -158,7 +158,6 @@
     </div>
   {% endif %}
   {% endif %}
-  {% include "requests/voice_request.html" %}
   <script type="module" src="{% static 'js/my-requests.js' %}"></script>
   <script type="module" src="{% static 'js/voice-request.js' %}"></script>
 {% endblock %}

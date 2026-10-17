@@ -156,6 +156,10 @@ export function watchFiles(form) {
     add([...event.dataTransfer.files]);
   });
 
+  // Files handed over by another part of the page: "Just say it" passes its recording when
+  // the client switches to the full form.
+  form.addEventListener("attach-files", (event) => add(event.detail));
+
   form.addEventListener("reset", () => {
     files.forEach((entry) => entry.stop?.abort());
     files = [];

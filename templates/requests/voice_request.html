@@ -1,6 +1,7 @@
-{% comment %}"Just say it": a request said out loud (mockups: Just say it, Mobile just say it). Opened by any button
-with data-voice-open; static/js/voice-request.js shows it, records up to 2 minutes and sends the recording with a title
-and, if picked, a type. The page's buttons stay hidden where the browser cannot record.{% endcomment %}
+{% comment %}"Just say it": a request said out loud (mockups: Just say it, Mobile just say it). Lives over the new
+request form, so "Switch to the full form" can hand the recording, title and type to it. Opened by any button with
+data-voice-open, or on arrival with ?say; static/js/voice-request.js records up to 2 minutes and sends the recording
+with a title and, if picked, a type.{% endcomment %}
 <dialog class="voice" id="voice-request" aria-labelledby="voice-title" data-stage="ready">
   <div class="voice-head">
     <div class="voice-heading">
@@ -71,7 +72,7 @@ and, if picked, a type. The page's buttons stay hidden where the browser cannot 
     <div class="voice-actions voice-send">
       <button type="submit" class="btn btn-primary" data-voice-send>Summon Dimon</button>
       <button type="button" class="btn" data-voice-again>Record again</button>
-      <a class="voice-switch" href="{% url 'new_request' %}">Switch to the full form</a>
+      <button type="button" class="voice-switch" data-voice-switch>Switch to the full form</button>
     </div>
   </form>
 </dialog>

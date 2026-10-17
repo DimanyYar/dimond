@@ -61,7 +61,6 @@ def my_requests(request: HttpRequest) -> HttpResponse:
             for value, label in FORM_TYPES
         ],
         "periods": Period.choices,
-        "voice_types": FORM_TYPES,
     }
     return render(request, "requests/my_requests.html", context)
 
