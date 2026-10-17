@@ -3738,11 +3738,10 @@ a.file-chip-name {
   display: none;
 }
 
-/* Too small to read, but the lines still tell a text file from an empty one at a glance. */
+/* The first words of the first lines: enough to tell a text file from an empty one. */
 .tiles-small .tile-excerpt,
 .files-row-picture .tile-excerpt {
   padding: 4px 5px;
-  font-size: 5px;
 }
 
 .tiles-small .tile-badge,
