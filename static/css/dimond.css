@@ -1993,6 +1993,40 @@ a.file-chip:hover {
   min-width: 0;
 }
 
+.files-card:has(.files-more:not([open])) .files-row-more {
+  display: none;
+}
+
+.files-more summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+
+.files-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.files-more summary:hover .files-more-closed,
+.files-more summary:hover .files-more-open {
+  text-decoration: underline;
+}
+
+.files-more[open] .files-more-closed,
+.files-more:not([open]) .files-more-open {
+  display: none;
+}
+
+.files-more[open] svg {
+  transform: rotate(180deg);
+}
+
 .files-row-text {
   display: flex;
   flex-direction: column;
