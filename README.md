@@ -33,6 +33,9 @@ Attached files land in `uploads/` in the project folder (ignored by git; `FILES_
 it). No address serves that folder: a file opens only through `/files/<id>/` after an access
 check.
 
+The `previews` container draws the small pictures on file tiles a few seconds after upload
+(ADR 0013); its log is `docker compose logs -f previews`. Without it, tiles say "preview soon".
+
 Stop with `Ctrl+C`; `docker compose down` removes the containers (data stays in a volume).
 
 ### Create your admin account (once)

@@ -13,6 +13,19 @@ def _stored_name(attachment: "Attachment", filename: str) -> str:
     return str(attachment.id)
 
 
+def _preview_name(attachment: "Attachment", filename: str) -> str:
+    return f"previews/{attachment.id}.webp"
+
+
+class PreviewStatus(models.TextChoices):
+    """Whether a small picture of the file exists for its tile (PRD: attachments, previews)."""
+
+    PENDING = "pending", "Being made"
+    READY = "ready", "Ready"
+    # Audio and video tiles are drawn without a picture; a file that could not be read gets none.
+    NONE = "none", "None"
+
+
 # Opened right in the browser. Anything else is downloaded, so the browser never runs it.
 SHOWN_IN_BROWSER = (
     "image/png",
@@ -70,6 +83,12 @@ class Attachment(models.Model):
         related_name="added_files",
         help_text="The edit that added it; empty when sent with the request or a reply.",
     )
+    preview = models.FileField(upload_to=_preview_name, max_length=100, blank=True)
+    preview_status = models.CharField(
+        max_length=10, choices=PreviewStatus.choices, default=PreviewStatus.NONE
+    )
+    pages = models.PositiveIntegerField(null=True, blank=True, help_text="For a PDF.")
+    excerpt = models.TextField(blank=True, help_text="A text file's first lines, for its tile.")
     removed_in = models.ForeignKey(
         RequestRevision,
         null=True,
@@ -89,6 +108,18 @@ class Attachment(models.Model):
 
     def get_absolute_url(self) -> str:
         return reverse("open_file", args=[self.id])
+
+    @property
+    def preview_url(self) -> str:
+        """Empty until the preview is made, and for files that have none."""
+        if self.preview_status != PreviewStatus.READY:
+            return ""
+        return reverse("open_preview", args=[self.id])
+
+    @property
+    def extension(self) -> str:
+        """ "PNG", "LOG": the label of a tile without a picture."""
+        return self.name.rpartition(".")[2].upper()[:4] if "." in self.name else "FILE"
 
     @property
     def shown_in_browser(self) -> bool:

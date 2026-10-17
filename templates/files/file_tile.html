@@ -1,0 +1,24 @@
+{% comment %}One file as a tile with its preview (mockup: Attachment previews). Needs `file`. The picture depends on the
+file: an image or a PDF's first page once the worker has made it, a text file's first lines, a play button for video,
+bars for sound; otherwise the file's extension. `beside_name` when the name is a link next to it already: the tile is
+then only a picture, skipped by the keyboard and screen readers.{% endcomment %}
+<a class="tile" {% include "files/open_attrs.html" %} title="{{ file.name }}"{% if beside_name %} aria-hidden="true" tabindex="-1"{% endif %}>
+  <span class="tile-picture tile-{{ file.kind }}{% if file.preview_url %} has-preview{% endif %}">
+    {% if file.preview_url %}
+      <img src="{{ file.preview_url }}" alt="" loading="lazy">
+      {% if file.kind == "pdf" %}<span class="tile-badge tile-badge-pdf">PDF</span>{% endif %}
+    {% elif file.excerpt %}
+      <span class="tile-excerpt" aria-hidden="true">{{ file.excerpt }}</span>
+      <span class="tile-badge">{{ file.extension }}</span>
+    {% elif file.kind == "video" %}
+      <span class="tile-play" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" fill="currentColor"/></svg></span>
+    {% elif file.kind == "audio" %}
+      <span class="tile-bars" aria-hidden="true">{% for height in "37284631525" %}<span style="height: {{ height }}0%"></span>{% endfor %}</span>
+    {% else %}
+      <svg class="tile-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/></svg>
+      <span class="tile-ext">{{ file.extension }}</span>
+    {% endif %}
+  </span>
+  <span class="tile-name">{{ file.name }}</span>
+  <span class="tile-meta">{% if file.kind == "audio" %}Sound{% else %}{{ file.size|filesizeformat }}{% endif %}{% if file.pages %} · {{ file.pages }} page{{ file.pages|pluralize }}{% endif %}{% if file.preview_status == "pending" %} · preview soon{% endif %}</span>
+</a>
