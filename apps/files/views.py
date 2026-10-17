@@ -105,3 +105,20 @@ def open_file(request: HttpRequest, attachment_id: UUID) -> HttpResponseBase:
     # share, where the next person would get the file without the access check.
     patch_cache_control(response, private=True, no_store=True)
     return response
+
+
+@require_safe
+@login_required
+def open_preview(request: HttpRequest, attachment_id: UUID) -> HttpResponseBase:
+    """The small picture on a file's tile, for the same people as the file itself."""
+    assert isinstance(request.user, User)  # login_required lets only signed-in people in
+    try:
+        attachment = selectors.attachment_for(request.user, attachment_id)
+    except Attachment.DoesNotExist:
+        raise Http404 from None
+    if not attachment.preview_url:
+        raise Http404
+    response = FileResponse(attachment.preview.open("rb"), content_type="image/webp")
+    # Like the file: a picture of a client's screenshot stays out of every cache.
+    patch_cache_control(response, private=True, no_store=True)
+    return response

@@ -1,12 +1,6 @@
-{% comment %}Files of a request or a reply, as chips that open them. Needs `files`.{% endcomment %}
-<ul class="file-chips" aria-label="Attached files">
+{% comment %}Files of a request or a reply, as tiles that open them. Needs `files`; `small` for a reply.{% endcomment %}
+<ul class="tiles{% if small %} tiles-small{% endif %}" aria-label="Attached files">
   {% for file in files %}
-    <li>
-      <a class="file-chip" {% include "files/open_attrs.html" %}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12l-8.5 8.5a5 5 0 0 1-7-7L14 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 8"/></svg>
-        <span class="file-chip-name">{{ file.name }}</span>
-        <span class="muted">{{ file.size|filesizeformat }}</span>
-      </a>
-    </li>
+    <li>{% include "files/file_tile.html" %}</li>
   {% endfor %}
 </ul>

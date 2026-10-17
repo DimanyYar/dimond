@@ -8,6 +8,8 @@ dependencies = [
     "django>=5.2,<5.3",
     "psycopg[binary]>=3.3.6",
     "gunicorn>=23",
+    "pillow>=11",
+    "pypdfium2>=4.30",
 ]
 
 [dependency-groups]
@@ -64,6 +66,11 @@ strict = true
 [[tool.mypy.overrides]]
 module = ["apps.*.admin"]
 disable_error_code = ["type-arg"]
+
+# PDFium's Python wrapper ships no type information (ADR 0013).
+[[tool.mypy.overrides]]
+module = ["pypdfium2"]
+ignore_missing_imports = true
 
 [tool.django-stubs]
 django_settings_module = "config.settings"

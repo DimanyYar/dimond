@@ -1986,7 +1986,14 @@ a.file-chip:hover {
   gap: var(--space-3);
 }
 
-.files-list li {
+.files-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.files-row-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -3556,5 +3563,224 @@ a.file-chip-name {
   .voice-aside,
   .voice-switch {
     margin-left: 0;
+  }
+}
+
+/* Files as tiles with a preview (mockup: Attachment previews): 120 × 90 in the request, 72 × 54
+   in a reply, 56 × 42 beside a name in "All attachments", 96 × 72 without names on a phone. */
+.tiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.tile {
+  --tile-w: 120px;
+  --tile-h: 90px;
+  width: var(--tile-w);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.tiles-small .tile {
+  --tile-w: 72px;
+  --tile-h: 54px;
+}
+
+.files-row-picture .tile {
+  --tile-w: 56px;
+  --tile-h: 42px;
+  flex: 0 0 auto;
+}
+
+.tile-picture {
+  position: relative;
+  height: var(--tile-h);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-s);
+  background: var(--canvas);
+  color: var(--muted);
+}
+
+.tile:hover .tile-picture,
+.tile:focus-visible .tile-picture {
+  border-color: var(--ink);
+}
+
+.tile:focus-visible {
+  outline: none;
+}
+
+.tile:focus-visible .tile-picture {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.tile-picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  background: var(--surface);
+}
+
+/* A file whose preview is still being made, or that has none: its extension on a dashed card. */
+.tile-picture:not(.has-preview, .tile-video, .tile-audio, .tile-text) {
+  border-style: dashed;
+  border-color: var(--hairline-strong);
+}
+
+.tile-ext {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.tile-badge {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.tile-badge-pdf {
+  background: var(--error);
+  color: var(--surface);
+}
+
+.tile-text {
+  align-items: stretch;
+  justify-content: flex-start;
+  background: var(--surface);
+}
+
+.tile-excerpt {
+  padding: 8px 9px;
+  overflow: hidden;
+  white-space: pre;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 8px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.tile-play {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgb(17 17 17 / 85%);
+  color: var(--surface);
+}
+
+.tile-audio {
+  flex-direction: row;
+  gap: 3px;
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+.tile-bars {
+  height: 50%;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.tile-bars span {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.tile-name,
+.tile-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tile-meta {
+  margin-top: -4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Small tiles show only the picture; the name is in the tooltip and in the viewer. */
+.tiles-small .tile-name,
+.tiles-small .tile-meta,
+.files-row-picture .tile-name,
+.files-row-picture .tile-meta,
+.tiles-small .tile-excerpt,
+.files-row-picture .tile-excerpt {
+  display: none;
+}
+
+.tiles-small .tile-badge,
+.files-row-picture .tile-badge {
+  left: 3px;
+  bottom: 3px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 8px;
+}
+
+.tiles-small .tile-play,
+.files-row-picture .tile-play {
+  width: 20px;
+  height: 20px;
+}
+
+.tiles-small .tile-bars,
+.files-row-picture .tile-bars {
+  gap: 2px;
+}
+
+.tiles-small .tile-bars span,
+.files-row-picture .tile-bars span {
+  width: 2px;
+}
+
+@media (max-width: 640px) {
+  .tiles:not(.tiles-small) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-right: calc(-1 * var(--space-4));
+    padding-right: var(--space-4);
+  }
+
+  .tiles:not(.tiles-small) .tile {
+    --tile-w: 96px;
+    --tile-h: 72px;
+    flex: 0 0 auto;
+  }
+
+  .tiles .tile-name,
+  .tiles .tile-meta {
+    display: none;
   }
 }

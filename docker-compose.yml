@@ -60,5 +60,20 @@ services:
       mailpit:
         condition: service_started
 
+  # Makes the small pictures on file tiles (ADR 0013). Apart from the site, so a broken or
+  # hostile image or PDF is only ever decoded here.
+  previews:
+    build: .
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+    command: python manage.py make_previews --every 5
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:

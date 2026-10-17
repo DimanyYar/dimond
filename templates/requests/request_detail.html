@@ -93,7 +93,7 @@
             <time class="muted" datetime="{{ m.created_at|date:'c' }}">{{ m.created_at|date:"M j, H:i" }}</time>
           </div>
           {% if m.text %}<p class="message-text">{{ m.text }}</p>{% endif %}
-          {% with files=m.attachments.all %}{% if files %}{% include "files/file_list.html" %}{% endif %}{% endwith %}
+          {% with files=m.attachments.all %}{% if files %}{% include "files/file_list.html" with small=True %}{% endif %}{% endwith %}
         </article>
         {% endwith %}
       {% else %}
@@ -203,9 +203,12 @@
         <h2 id="files-title">All attachments <span class="muted">{{ page.all_files|length }}</span></h2>
         <ul class="files-list">
           {% for file in page.all_files %}
-            <li>
-              <a class="file-name" {% include "files/open_attrs.html" %}>{{ file.name }}</a>
-              <span class="hint">{{ file.uploaded_by }} · <time datetime="{{ file.created_at|date:'c' }}">{{ file.created_at|date:"M j, H:i" }}</time> · {{ file.size|filesizeformat }}</span>
+            <li class="files-row">
+              <span class="files-row-picture">{% include "files/file_tile.html" with beside_name=True %}</span>
+              <span class="files-row-text">
+                <a class="file-name" {% include "files/open_attrs.html" %}>{{ file.name }}</a>
+                <span class="hint">{{ file.uploaded_by }} · <time datetime="{{ file.created_at|date:'c' }}">{{ file.created_at|date:"M j, H:i" }}</time> · {{ file.size|filesizeformat }}</span>
+              </span>
             </li>
           {% endfor %}
         </ul>
