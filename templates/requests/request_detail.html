@@ -11,6 +11,7 @@
   </nav>
   <div class="row">
     <span class="type-pill">{{ r.get_type_display }}</span>
+    {% if r.from_voice %}<span class="type-pill voice-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/></svg>Voice request</span>{% endif %}
     <span class="status status-{{ r.status }}">{{ r.get_status_display }}</span>
     <span class="muted meta">Created {{ r.created_at|date:"M j" }} by {{ r.author }}</span>
   </div>
@@ -49,7 +50,7 @@
       </div>
       {% if r.description %}<p class="message-text">{{ r.description }}</p>{% endif %}
       {% if r.steps %}<p class="message-text"><strong>Steps to reproduce:</strong> {{ r.steps }}</p>{% endif %}
-      <p class="message-text message-why"><strong>Why it matters:</strong> {{ r.why }}</p>
+      {% if r.why %}<p class="message-text message-why"><strong>Why it matters:</strong> {{ r.why }}</p>{% endif %}
       {% if page.files %}{% include "files/file_list.html" with files=page.files %}{% endif %}
       {% if page.edits %}
         <div class="request-foot">

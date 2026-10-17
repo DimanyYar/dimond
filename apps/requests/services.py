@@ -45,6 +45,7 @@ def create_request(
     steps: str = "",
     link: str = "",
     files: Sequence[CheckedFile] = (),
+    from_voice: bool = False,
 ) -> Request:
     """Save a client's request as Received, with its files. The company comes from the
     author's account."""
@@ -62,10 +63,30 @@ def create_request(
         description=description,
         steps=steps,
         link=link,
+        from_voice=from_voice,
     )
     StatusEvent.objects.create(request=request, to_status=ClientStatus.RECEIVED, actor=author)
     attach_files(request, author, files)
     return request
+
+
+def create_voice_request(
+    author: User,
+    title: str,
+    recording: CheckedFile,
+    type: RequestType = RequestType.NOT_SURE,
+) -> Request:
+    """Save a request the client said out loud ("Just say it"). Why it matters and when it is
+    needed are in the recording, so they are not asked; the PM sorts the type and urgency."""
+    return create_request(
+        author,
+        type,
+        title,
+        "",
+        WhenNeeded.NOT_SURE,
+        files=[recording],
+        from_voice=True,
+    )
 
 
 @transaction.atomic

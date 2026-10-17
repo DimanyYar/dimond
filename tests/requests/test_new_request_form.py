@@ -1,7 +1,7 @@
 import pytest
 
 from apps.accounts.models import Company, Role, User
-from apps.requests.models import ClientStatus, Request, RequestType, WhenNeeded
+from apps.requests.models import FORM_TYPES, ClientStatus, Request, WhenNeeded
 
 pytestmark = pytest.mark.django_db
 
@@ -28,7 +28,7 @@ def filled(type: str, **fields: str) -> dict[str, str]:
     return data
 
 
-@pytest.mark.parametrize("type", RequestType.values)
+@pytest.mark.parametrize("type", [value for value, _ in FORM_TYPES])
 def test_client_sends_a_request_of_each_type(client, ruslan, type):
     response = client.post(URL, filled(type, when_needed="hotfix"), follow=True)
 

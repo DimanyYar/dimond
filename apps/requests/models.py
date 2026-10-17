@@ -13,6 +13,14 @@ class RequestType(models.TextChoices):
     IMPROVEMENT = "improvement", "Improvement"
     FEATURE = "feature", "New feature"
     IDEA = "idea", "Idea"
+    # Only a voice request can leave the type open; the PM picks one when sorting it.
+    NOT_SURE = "not_sure", "Not sure"
+
+
+# The types the request form and the filters offer: a client filling in the form picks one.
+FORM_TYPES = [
+    (value, label) for value, label in RequestType.choices if value != RequestType.NOT_SURE
+]
 
 
 class WhenNeeded(models.TextChoices):
@@ -88,11 +96,19 @@ class Request(models.Model):
     author = models.ForeignKey(User, on_delete=models.PROTECT, related_name="requests")
     type = models.CharField(max_length=20, choices=RequestType.choices)
     title = models.CharField(max_length=200)
-    why = models.TextField(help_text="Why it matters: the context behind the request.")
+    why = models.TextField(
+        blank=True,
+        help_text="Why it matters: the context behind the request. Empty for a voice request, "
+        "where the client says it.",
+    )
     description = models.TextField(blank=True)
     steps = models.TextField(blank=True, help_text="Steps to reproduce; bugs only.")
     link = models.URLField(max_length=500, blank=True, help_text="Required for bugs.")
     when_needed = models.CharField(max_length=20, choices=WhenNeeded.choices)
+    from_voice = models.BooleanField(
+        default=False,
+        help_text="Sent with “Just say it”: the recording is the request, the text a draft.",
+    )
     status = models.CharField(
         max_length=20, choices=ClientStatus.choices, default=ClientStatus.RECEIVED
     )
@@ -174,7 +190,7 @@ class RequestRevision(models.Model):
     )
     type = models.CharField(max_length=20, choices=RequestType.choices)
     title = models.CharField(max_length=200)
-    why = models.TextField()
+    why = models.TextField(blank=True)
     description = models.TextField(blank=True)
     steps = models.TextField(blank=True)
     link = models.URLField(max_length=500, blank=True)

@@ -3,12 +3,14 @@ from typing import Any
 from uuid import UUID
 
 from django import forms
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.files.forms import AttachmentsField
 from apps.files.models import Attachment
+from apps.files.uploads import CheckedFile, check_upload
 
-from .models import REQUEST_FIELDS, Request, RequestType, WhenNeeded
+from .models import FORM_TYPES, REQUEST_FIELDS, Request, RequestType, WhenNeeded
 from .selectors import Period, Show
 
 # Labels, hints and examples change with the request type (PRD: request types and fields).
@@ -87,7 +89,7 @@ WHEN_NEEDED_COPY: dict[str, dict[str, str]] = {
 class RequestForm(forms.Form):
     """The request form, empty for a new request or filled in when editing one."""
 
-    type = forms.ChoiceField(choices=RequestType.choices, initial=RequestType.BUG)
+    type = forms.ChoiceField(choices=FORM_TYPES, initial=RequestType.BUG)
     title = forms.CharField(
         max_length=200, error_messages={"required": "Give it a title in one line."}
     )
@@ -138,6 +140,25 @@ class NewRequestForm(RequestForm):
     attachments = AttachmentsField()
 
 
+class VoiceRequestForm(forms.Form):
+    """ "Just say it": the recording, a title and, if the client wants, the type."""
+
+    title = forms.CharField(
+        max_length=200, error_messages={"required": "Give it a title in one line."}
+    )
+    type = forms.ChoiceField(choices=FORM_TYPES, required=False)
+    recording = forms.FileField(error_messages={"required": "Record your request first."})
+
+    def clean_recording(self) -> CheckedFile:
+        checked = check_upload(self.cleaned_data["recording"])
+        if not checked.content_type.startswith("audio/"):
+            raise ValidationError("The recording should be sound only. Record it again.")
+        return checked
+
+    def request_type(self) -> RequestType:
+        return RequestType(self.cleaned_data["type"] or RequestType.NOT_SURE)
+
+
 class EditRequestForm(RequestForm):
     """The request form for an edit: new files to add and the request's files to remove."""
 
@@ -185,7 +206,7 @@ class MyRequestsFilter(forms.Form):
     """
 
     show = forms.ChoiceField(choices=Show.choices, required=False)
-    type = forms.MultipleChoiceField(choices=RequestType.choices, required=False)
+    type = forms.MultipleChoiceField(choices=FORM_TYPES, required=False)
     period = forms.ChoiceField(choices=Period.choices, required=False)
     view = forms.ChoiceField(choices=View.choices, required=False)
 

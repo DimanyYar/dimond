@@ -5,8 +5,11 @@
 {% block content %}
   <header class="page-header">
     <nav aria-label="Breadcrumb" class="hint"><a href="{% url 'my_requests' %}" class="muted">Requests</a> / New request</nav>
-    <h1>Summon Dimon</h1>
-    <p class="muted">A few lines are enough.</p>
+    <div class="new-request-title">
+      <h1>Summon Dimon</h1>
+      {% include "requests/voice_open_button.html" %}
+    </div>
+    <p class="muted">A few lines are enough — or just say it.</p>
   </header>
 
   <div class="new-request">
@@ -47,5 +50,7 @@
 
   {{ type_copy|json_script:"type-copy" }}
   {{ when_needed_copy|json_script:"when-needed-copy" }}
+  {% include "requests/voice_request.html" %}
   <script type="module" src="{% static 'js/new-request.js' %}"></script>
+  <script type="module" src="{% static 'js/voice-request.js' %}"></script>
 {% endblock %}
