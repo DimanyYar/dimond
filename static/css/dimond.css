@@ -19,6 +19,7 @@
   --viewer-muted: #a3a19c;
   --viewer-control: #1c1c1c;
   --viewer-control-hover: #2a2a2a;
+  --viewer-track: #3a3a3a;
   --hairline: #d3cec6;
   --hairline-strong: #c4beb4;
   --hairline-soft: #ebe7e1;
@@ -2697,17 +2698,224 @@ a.file-chip-name {
   background: var(--surface);
 }
 
-.viewer-video {
+/* Our own players for video and voice notes (mockup: MediaViewer, Video and Audio). */
+.player[hidden],
+.player svg [hidden],
+.speed-menu[hidden],
+.player-icon[hidden] {
+  display: none;
+}
+
+.player {
   margin: auto;
-  max-width: 100%;
-  max-height: 100%;
   border-radius: var(--radius-m);
+  background: var(--viewer-control);
+}
+
+.player-video {
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+}
+
+.player-screen {
+  position: relative;
+}
+
+/* The header, thumbnails, stage padding and the control bar take this much of the window's
+   height; the video gets the rest. */
+.player-screen video {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100dvh - 290px);
+  min-width: min(480px, 100%);
+  border-radius: var(--radius-m) var(--radius-m) 0 0;
+  background: #000000;
+  cursor: pointer;
+}
+
+.player-video:fullscreen {
+  justify-content: center;
+  border-radius: 0;
   background: #000000;
 }
 
-/* A sound file as a card: who sent it and when, above the player (mockup: MediaViewer, Audio). */
-.viewer-audio {
-  margin: auto;
+.player-video:fullscreen video {
+  width: 100%;
+  max-height: calc(100dvh - 64px);
+  border-radius: 0;
+}
+
+.player-big-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 72px;
+  height: 72px;
+  margin: -36px 0 0 -36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--surface);
+  cursor: pointer;
+}
+
+.player.is-playing .player-big-play {
+  display: none;
+}
+
+.player-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px;
+  color: var(--viewer-muted);
+}
+
+.player-icon {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--surface);
+  cursor: pointer;
+}
+
+.player-icon:hover {
+  background: var(--viewer-control-hover);
+}
+
+.player-time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The slider: orange up to where the media is, a white knob on top. */
+.player-seek {
+  flex: 1 1 60px;
+  min-width: 0;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+}
+
+.player-seek::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) var(--progress, 0%), var(--viewer-track) var(--progress, 0%));
+}
+
+.player-seek::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) var(--progress, 0%), var(--viewer-track) var(--progress, 0%));
+}
+
+.player-seek::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  appearance: none;
+}
+
+.player-seek::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.speed {
+  position: relative;
+}
+
+.speed-button {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--viewer-track);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.speed-button[aria-expanded="true"] {
+  background: var(--viewer-track);
+}
+
+.speed-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  width: 168px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--viewer-track);
+  border-radius: var(--radius-m);
+  background: var(--viewer-line);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 50%);
+}
+
+.speed-menu-title {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--viewer-muted);
+}
+
+.speed-menu button {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--surface);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.speed-menu button:hover,
+.speed-menu button[aria-checked="true"] {
+  background: var(--viewer-control-hover);
+}
+
+.speed-check {
+  color: var(--accent);
+  visibility: hidden;
+}
+
+[aria-checked="true"] > .speed-check {
+  visibility: visible;
+}
+
+/* A voice note as a card: who sent it, a big play button and its sound as bars. */
+.player-audio {
   width: min(640px, 100%);
   display: flex;
   flex-direction: column;
@@ -2715,23 +2923,22 @@ a.file-chip-name {
   padding: 28px;
   box-sizing: border-box;
   border-radius: var(--radius-l);
-  background: var(--viewer-control);
 }
 
-.viewer-audio-who {
+.player-who {
   display: flex;
   align-items: center;
   gap: 14px;
 }
 
-.viewer-audio .avatar {
+.player-audio .avatar {
   flex-basis: 40px;
   width: 40px;
   height: 40px;
   color: var(--ink);
 }
 
-.viewer-audio-by {
+.player-by {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -2739,34 +2946,117 @@ a.file-chip-name {
   color: var(--viewer-muted);
 }
 
-.viewer-audio-by strong {
+.player-by strong {
   font-size: 15px;
   font-weight: 600;
   color: var(--surface);
 }
 
-.viewer-audio audio {
-  width: 100%;
+.player-wave-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
 }
 
-.viewer-speed select {
-  height: 36px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--panel-raised);
-  border-radius: var(--radius-pill);
-  background: var(--viewer-control);
-  color: var(--surface);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
+.player-play-big {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--ink);
   cursor: pointer;
 }
 
+.player-play-big:hover {
+  background: var(--accent-hover);
+}
+
+.player-wave {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 56px;
+  border-radius: var(--radius-s);
+}
+
+.player-bars {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.player-bars span {
+  flex: 1 1 0;
+  border-radius: 2px;
+  background: var(--viewer-track);
+}
+
+.player-bars span.is-played {
+  background: var(--accent);
+}
+
+/* The slider lies over the bars unseen: a click on the bars seeks, and so do the arrow keys. */
+.player-wave .player-seek {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+}
+
+.player-wave:has(.player-seek:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.player-audio-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: 13px;
+  color: var(--viewer-muted);
+}
+
+/* Here the speed list opens downwards, as in the mockup: the card sits mid-screen. */
+.player-audio .speed-menu {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
+.player-audio .speed-button svg {
+  transform: rotate(180deg);
+}
+
+/* On a phone the card gives the bars as much width as it can, so each stays visible. */
+@media (max-width: 640px) {
+  .player-audio {
+    padding: 20px;
+  }
+
+  .player-wave-row {
+    gap: var(--space-3);
+  }
+
+  .player-play-big {
+    flex-basis: 48px;
+    width: 48px;
+    height: 48px;
+  }
+
+  .player-bars {
+    gap: 2px;
+  }
+}
+
 .viewer-image[hidden],
-.viewer-pdf[hidden],
-.viewer-video[hidden],
-.viewer-audio[hidden],
-.viewer-speed[hidden] {
+.viewer-pdf[hidden] {
   display: none;
 }
 

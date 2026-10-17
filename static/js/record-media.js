@@ -2,6 +2,7 @@
 // or the phone's camera. Each button shows only where the browser can do it. A recording
 // joins the list like a chosen file, so a screen recording is compressed like any video.
 
+import { clock } from "./clock.js";
 import { MAX_DURATION, finishedRecording } from "./compress-video.js";
 
 const KINDS = {
@@ -26,11 +27,6 @@ const SUPPORTED = {
   voice: "MediaRecorder" in window && typeof devices?.getUserMedia === "function",
   camera: window.matchMedia("(pointer: coarse)").matches,
 };
-
-function clock(seconds) {
-  const whole = Math.floor(seconds);
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
-}
 
 // The screen first, as that is what the client asked for; then the microphone, which may be
 // refused: a recording without a voice still shows the bug.
