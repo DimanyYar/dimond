@@ -821,6 +821,13 @@ a.file-chip:hover {
   white-space: nowrap;
 }
 
+.file-chip-progress {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
 .file-chip-remove {
   flex: 0 0 32px;
   width: 32px;

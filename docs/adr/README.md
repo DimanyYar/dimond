@@ -13,3 +13,4 @@ Why the project is built the way it is. Read the record before changing what it 
 - [0009. Transactional email via django-anymail and Resend](0009-transactional-email.md)
 - [0010. What dimond reads from and writes to Jira](0010-jira-read-write-boundary.md)
 - [0011. People, roles and companies in one user model](0011-people-and-companies.md)
+- [0012. Video is compressed in the browser with mediabunny](0012-video-compression-in-the-browser.md)

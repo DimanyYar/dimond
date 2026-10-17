@@ -190,6 +190,12 @@ def test_nothing_is_saved_when_the_form_has_errors(client, signed_in, private_fo
     assert "Attach your files again" in response.content.decode()
 
 
+def test_form_says_video_is_compressed_before_upload(client, signed_in):
+    page = client.get(URL).content.decode()
+
+    assert "Video up to 2 minutes: we compress it in your browser." in page
+
+
 def test_form_explains_why_office_files_are_not_taken(client, signed_in):
     page = client.get(URL).content.decode()
 
