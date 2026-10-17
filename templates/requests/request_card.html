@@ -4,7 +4,7 @@
     <span>{{ item.get_type_display }} · {{ item.key }}</span>
     <span class="status status-{{ item.status }}">{{ item.get_status_display }}</span>
   </div>
-  <h3><a class="card-link" href="{{ item.get_absolute_url }}">{{ item.title }}</a></h3>
+  <h3><a class="card-link" href="{{ item.get_absolute_url }}" title="{{ item.title }}">{{ item.title }}</a></h3>
   <div class="request-card-meta">
     <span{% if item.when_needed == 'hotfix' %} class="hotfix"{% endif %}>Asked for: {{ item.get_when_needed_display }}</span>
     <time datetime="{{ item.created_at|date:'c' }}">{{ item.created_at|date:"M j" }}</time>
