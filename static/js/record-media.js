@@ -56,6 +56,9 @@ export function watchRecorders(box, { add, hasRoom, showError }) {
   const stopButton = bar.querySelector("[data-recording-stop]");
   const camera = box.querySelector("[data-camera-input]");
   let recorder = null;
+  // From the click until the file is in the list: the browser may still be asking for
+  // permission, and a second click or a send must wait.
+  let busy = false;
 
   box.querySelectorAll("[data-record]").forEach((button) => {
     button.hidden = !SUPPORTED[button.dataset.record];
@@ -69,24 +72,36 @@ export function watchRecorders(box, { add, hasRoom, showError }) {
   });
 
   async function start(kind) {
+    if (busy) return;
     if (!hasRoom()) {
       showError("Attach up to 5 files at a time.");
       return;
     }
     showError("");
+    busy = true;
     let stream;
     try {
       stream = kind === "screen" ? await screenStream() : await devices.getUserMedia({ audio: true });
     } catch (problem) {
+      busy = false;
       showError(problemText(kind, problem));
       return;
     }
     const type = KINDS[kind].types.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
-    // Screens are large and sharp; 2.5 Mbit/s keeps text readable before compression to 720p.
-    recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 2_500_000, audioBitsPerSecond: 96_000 });
     const chunks = [];
-    const startedAt = performance.now();
     let ticking;
+    try {
+      // Screens are large and sharp; 2.5 Mbit/s keeps text readable before compression to 720p.
+      recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 2_500_000, audioBitsPerSecond: 96_000 });
+      recorder.start(1000);
+    } catch {
+      stream.getTracks().forEach((track) => track.stop());
+      recorder = null;
+      busy = false;
+      showError("Couldn’t start recording in this browser. Attach a file instead.");
+      return;
+    }
+    const startedAt = performance.now();
     recorder.addEventListener("dataavailable", (event) => chunks.push(event.data));
     recorder.addEventListener("stop", async () => {
       clearInterval(ticking);
@@ -110,6 +125,7 @@ export function watchRecorders(box, { add, hasRoom, showError }) {
       actions.hidden = false;
       stopButton.hidden = false;
       add([file]);
+      busy = false;
     });
     // The browser's own "Stop sharing" button ends the screen track: that ends the recording too.
     stream.getVideoTracks().forEach((track) => track.addEventListener("ended", stop));
@@ -123,7 +139,6 @@ export function watchRecorders(box, { add, hasRoom, showError }) {
     time.textContent = `0:00 / ${clock(MAX_DURATION)}`;
     actions.hidden = true;
     bar.hidden = false;
-    recorder.start(1000);
     stopButton.focus();
   }
 
@@ -132,5 +147,5 @@ export function watchRecorders(box, { add, hasRoom, showError }) {
   }
 
   stopButton.addEventListener("click", stop);
-  return { isRecording: () => recorder !== null };
+  return { isRecording: () => busy };
 }

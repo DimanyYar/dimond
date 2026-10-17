@@ -40,7 +40,9 @@ def test_reply_box_offers_screen_recording_voice_note_and_camera(client, request
 
     page = client.get(card(request_)).content.decode()
 
-    reply = page[page.index('id="reply"') :]
+    reply = page[page.index('<form id="reply"') :]
+    reply = reply[: reply.index("</form>")]
+    assert 'name="attachments"' in reply
     assert 'aria-label="Record screen"' in reply
     assert 'aria-label="Voice note"' in reply
     assert 'aria-label="Camera"' in reply
