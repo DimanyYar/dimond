@@ -67,6 +67,8 @@ export function mediaPlayer(root) {
     const share = media.duration > 0 && Number.isFinite(media.duration) ? media.currentTime / media.duration : 0;
     for (const current of currents) current.textContent = clock(media.currentTime);
     seek.value = String(media.currentTime);
+    // Read out instead of the bare number, as it changes: "0:12 of 0:47".
+    seek.setAttribute("aria-valuetext", `${clock(media.currentTime)} of ${durationText(media)}`);
     seek.style.setProperty("--progress", `${share * 100}%`);
     if (bars !== null) {
       [...bars.children].forEach((bar, k) => bar.classList.toggle("is-played", k < Math.round(share * BAR_COUNT)));
@@ -76,7 +78,6 @@ export function mediaPlayer(root) {
   function showLength() {
     for (const duration of durations) duration.textContent = durationText(media);
     seek.max = Number.isFinite(media.duration) ? String(media.duration) : "0";
-    seek.setAttribute("aria-valuetext", `${clock(media.currentTime)} of ${durationText(media)}`);
   }
 
   function drawBars(heights) {
@@ -94,9 +95,12 @@ export function mediaPlayer(root) {
   async function drawSound(src) {
     drawing?.abort();
     drawing = new AbortController();
+    const { signal } = drawing;
     drawBars(Array(BAR_COUNT).fill(0.15));
     try {
-      drawBars(await peaks(src, drawing.signal));
+      const heights = await peaks(src, signal);
+      // Decoding cannot be cancelled: a note left meanwhile must not draw over the next one.
+      if (!signal.aborted) drawBars(heights);
     } catch {
       // Switched to another file, or the browser cannot decode this sound: the even bars stay
       // and still show progress and seek.
@@ -116,8 +120,11 @@ export function mediaPlayer(root) {
 
   function closeMenu() {
     if (speedMenu.hidden) return false;
+    // A hidden item would drop the focus out of the viewer, and its keys with it.
+    const hadFocus = speedMenu.contains(document.activeElement);
     speedMenu.hidden = true;
     speedButton.setAttribute("aria-expanded", "false");
+    if (hadFocus) speedButton.focus();
     return true;
   }
 
@@ -173,7 +180,6 @@ export function mediaPlayer(root) {
     item.addEventListener("click", () => {
       setSpeed(Number(item.dataset.speed));
       closeMenu();
-      speedButton.focus();
     });
     item.addEventListener("keydown", (event) => {
       const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
