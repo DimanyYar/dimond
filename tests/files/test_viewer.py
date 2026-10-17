@@ -45,6 +45,19 @@ def test_viewer_plays_video_and_audio(client, screenshot, anna):
     assert "Playback speed" in viewer
 
 
+def test_viewer_plays_with_its_own_controls_not_the_browsers(client, screenshot, anna):
+    request = screenshot.request
+    services.post_message(anna, request, "Video", files=[check_upload(upload("bug.mp4", MP4))])
+    client.force_login(anna)
+
+    page = client.get(request.get_absolute_url()).content.decode()
+
+    viewer = page[page.index('id="media-viewer"') :]
+    assert " controls" not in viewer
+    assert 'aria-label="Seek"' in viewer
+    assert 'role="menuitemradio" aria-checked="true" data-speed="1">Normal' in viewer
+
+
 def test_card_without_images_or_pdfs_has_no_viewer(client, anna):
     request = services.create_request(anna, "idea", "Quiet leads", "We lose deals", "not_sure")
     client.force_login(anna)

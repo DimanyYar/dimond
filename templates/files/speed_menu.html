@@ -1,0 +1,16 @@
+{% comment %}Playback speed for the viewer's video and audio (mockup: MediaViewer). static/js/media-viewer.js opens the
+list and keeps one speed for every file.{% endcomment %}
+<div class="speed">
+  <button type="button" class="speed-button" aria-haspopup="menu" aria-expanded="false" aria-label="Playback speed" data-speed-button>
+    <span data-speed-label>1×</span>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
+  </button>
+  <div class="speed-menu" role="menu" aria-label="Playback speed" data-speed-menu hidden>
+    <span class="speed-menu-title" aria-hidden="true">Playback speed</span>
+    <button type="button" role="menuitemradio" aria-checked="false" data-speed="0.75">0.75×<span class="speed-check" aria-hidden="true">✓</span></button>
+    <button type="button" role="menuitemradio" aria-checked="true" data-speed="1">Normal<span class="speed-check" aria-hidden="true">✓</span></button>
+    <button type="button" role="menuitemradio" aria-checked="false" data-speed="1.25">1.25×<span class="speed-check" aria-hidden="true">✓</span></button>
+    <button type="button" role="menuitemradio" aria-checked="false" data-speed="1.5">1.5×<span class="speed-check" aria-hidden="true">✓</span></button>
+    <button type="button" role="menuitemradio" aria-checked="false" data-speed="2">2×<span class="speed-check" aria-hidden="true">✓</span></button>
+  </div>
+</div>

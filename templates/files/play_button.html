@@ -1,0 +1,4 @@
+{% comment %}Play and pause for the viewer's players; `big` is the round orange one of a voice note.{% endcomment %}
+<button type="button" class="{% if big %}player-play-big{% else %}player-icon{% endif %}" aria-label="Play" data-play>
+  <svg width="{% if big %}22{% else %}18{% endif %}" height="{% if big %}22{% else %}18{% endif %}" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" fill="currentColor" data-icon-play/><g data-icon-pause hidden><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></g></svg>
+</button>

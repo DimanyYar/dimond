@@ -1,17 +1,19 @@
 // The attachment viewer: images, PDFs, video and audio open over the card instead of in a new
-// tab, with zoom for images, a speed choice for video and audio, arrows and thumbnails to go
-// through every file. Without this script the same links still open each file in a new tab.
+// tab, with zoom for images, our own players for video and voice notes (media-player.js),
+// arrows and thumbnails to go through every file. Without this script the same links still
+// open each file in a new tab.
+
+import { closeSpeedMenus, mediaPlayer } from "./media-player.js";
 
 const viewer = document.getElementById("media-viewer");
 const thumbs = [...viewer.querySelectorAll("[data-viewer-thumb]")];
 const stage = viewer.querySelector("[data-viewer-stage]");
 const image = viewer.querySelector("[data-viewer-image]");
 const pdf = viewer.querySelector("[data-viewer-pdf]");
-const video = viewer.querySelector("[data-viewer-video]");
-const audioCard = viewer.querySelector("[data-viewer-audio]");
-const audio = viewer.querySelector("[data-viewer-audio-player]");
-const speedGroup = viewer.querySelector("[data-viewer-speed]");
-const speed = viewer.querySelector("[data-viewer-speed-select]");
+const videoBox = viewer.querySelector('[data-player="video"]');
+const audioBox = viewer.querySelector('[data-player="audio"]');
+const video = mediaPlayer(videoBox);
+const audio = mediaPlayer(audioBox);
 const zoomGroup = viewer.querySelector("[data-viewer-zoom]");
 const zoomLabel = viewer.querySelector("[data-viewer-zoom-label]");
 const ZOOM_MIN = 50;
@@ -51,40 +53,28 @@ function show(next) {
   stop();
   image.hidden = file.kind !== "image";
   pdf.hidden = file.kind !== "pdf";
-  video.hidden = file.kind !== "video";
-  audioCard.hidden = file.kind !== "audio";
+  videoBox.hidden = file.kind !== "video";
+  audioBox.hidden = file.kind !== "audio";
   zoomGroup.hidden = file.kind !== "image";
-  speedGroup.hidden = file.kind !== "video" && file.kind !== "audio";
   if (file.kind === "image") {
     image.src = file.src;
     image.alt = file.name;
     setZoom(null);
   } else if (file.kind === "pdf") {
     pdf.src = file.src;
+  } else if (file.kind === "video") {
+    video.load(file.src);
   } else {
-    const player = file.kind === "video" ? video : audio;
-    if (file.kind === "audio") {
-      viewer.querySelector("[data-viewer-audio-initial]").textContent = file.by[0].toUpperCase();
-      viewer.querySelector("[data-viewer-audio-by]").textContent = file.by;
-      viewer.querySelector("[data-viewer-audio-when]").textContent = file.when;
-    }
-    player.src = file.src;
-    // A new source resets the speed; the one chosen stays for every file in the viewer.
-    player.defaultPlaybackRate = Number(speed.value);
-    player.playbackRate = Number(speed.value);
+    audio.load(file.src, { by: file.by, when: file.when });
   }
 }
 
 function stop() {
-  for (const element of [image, pdf, video, audio]) element.removeAttribute("src");
-  video.load();
-  audio.load();
+  image.removeAttribute("src");
+  pdf.removeAttribute("src");
+  video.stop();
+  audio.stop();
 }
-
-speed.addEventListener("change", () => {
-  video.playbackRate = Number(speed.value);
-  audio.playbackRate = Number(speed.value);
-});
 
 document.addEventListener("click", (event) => {
   const link = event.target.closest("a[data-view]");
@@ -119,13 +109,26 @@ const KEYS = {
 const ARROWS = ["ArrowLeft", "ArrowRight"];
 
 viewer.addEventListener("keydown", (event) => {
-  // A focused player or speed list uses the arrow keys itself: to seek, to change volume or speed.
-  if (event.target.matches("video, audio, select")) return;
+  // A focused slider seeks with the arrow keys, and the speed list moves through its choices.
+  if (event.target.matches("[data-seek], [role='menuitemradio']")) return;
+  // Space plays and pauses, as in any player; on a focused button it already presses that button.
+  if (event.key === " " && !event.target.matches("button, a")) {
+    const player = { video, audio }[thumbs[index].dataset.kind];
+    if (player === undefined) return;
+    event.preventDefault();
+    player.toggle();
+    return;
+  }
   const handle = KEYS[event.key];
   // Zoom keys mean nothing for a PDF, which has its own zoom.
   if (handle === undefined || (image.hidden && !ARROWS.includes(event.key))) return;
   event.preventDefault();
   handle();
+});
+
+// Esc with the speed list open closes only the list.
+viewer.addEventListener("cancel", (event) => {
+  if (closeSpeedMenus()) event.preventDefault();
 });
 
 // Esc closes the dialog by itself; either way nothing keeps loading or playing in the background.
