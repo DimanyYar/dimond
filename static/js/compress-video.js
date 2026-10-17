@@ -45,6 +45,33 @@ async function encoders(mb) {
   return { video, audio, toMp4 };
 }
 
+// MediaRecorder writes a file without its length and without an index: players show no
+// duration and cannot seek. Copying the tracks into a fresh file adds both, without
+// re-encoding, so it takes a moment even for two minutes.
+export async function finishedRecording(blob, name) {
+  const type = blob.type.split(";")[0];
+  const asRecorded = new File([blob], name, { type });
+  const mb = await library();
+  const input = new mb.Input({ source: new mb.BlobSource(blob), formats: mb.ALL_FORMATS });
+  const toMp4 = type.endsWith("mp4");
+  const target = new mb.BufferTarget();
+  const output = new mb.Output({
+    format: toMp4 ? new mb.Mp4OutputFormat({ fastStart: "in-memory" }) : new mb.WebMOutputFormat(),
+    target,
+  });
+  const conversion = await mb.Conversion.init({ input, output });
+  // Unusual recordings stay as recorded: playable, only without seeking. So does one whose copy
+  // would lose a track, such as the client's voice over a screen recording.
+  const tracks = await input.getTracks();
+  if (!conversion.isValid || conversion.utilizedTracks.length < tracks.length) return asRecorded;
+  await conversion.execute();
+  if (toMp4) return new File([target.buffer], name, { type });
+  // Safari's Ogg comes out as WebM: the name and type say what the file now is.
+  return new File([target.buffer], name.replace(/\.[^.]+$/, ".webm"), {
+    type: type.startsWith("audio/") ? "audio/webm" : "video/webm",
+  });
+}
+
 // The file to upload: `file` itself when it already fits, a smaller copy otherwise. Throws a
 // VideoProblem with words for the client when the video cannot be sent. `signal` cancels it.
 export async function readyVideo(file, { onProgress, signal }) {

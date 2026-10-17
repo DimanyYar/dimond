@@ -35,6 +35,19 @@ def as_edited(request, **changes):
     return data
 
 
+def test_reply_box_offers_screen_recording_voice_note_and_camera(client, request_, anna):
+    client.force_login(anna)
+
+    page = client.get(card(request_)).content.decode()
+
+    reply = page[page.index('<form id="reply"') :]
+    reply = reply[: reply.index("</form>")]
+    assert 'name="attachments"' in reply
+    assert 'aria-label="Record screen"' in reply
+    assert 'aria-label="Voice note"' in reply
+    assert 'aria-label="Camera"' in reply
+
+
 def test_client_replies_with_only_a_screenshot(client, request_, anna):
     client.force_login(anna)
 

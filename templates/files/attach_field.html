@@ -1,26 +1,50 @@
-{% comment %}Files to send with a form: choose, drop or paste a screenshot (Cmd+V). Needs `field`, the form's
-AttachmentsField; `compact` swaps the drop zone for a small "Attach or paste" button, for the reply box.
-static/js/attach-files.js turns the plain file input into the drop zone or button with a list of chosen files;
-without it the browser's own file input still works.{% endcomment %}
+{% comment %}Files to send with a form: choose, drop or paste a screenshot (Cmd+V), record the screen or a voice
+note, or take a photo or video on a phone. Needs `field`, the form's AttachmentsField; `compact` swaps the drop zone
+for a small "Attach or paste" button and icon-only record buttons, for the reply box. static/js/attach-files.js turns
+the plain file input into the drop zone or button with a list of chosen files, and shows each record button only
+where the browser can do it; without the script the browser's own file input still works.{% endcomment %}
 <div class="attach{% if compact %} attach-compact{% else %} field{% endif %}" data-attach>
-  {% if compact %}
-  <label class="attach-button" for="f-files">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12l-8.5 8.5a5 5 0 0 1-7-7L14 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 8"/></svg>
-    Attach or paste
-  </label>
-  {% else %}
+  {% if not compact %}
   <label for="f-files">Screenshots &amp; files <span class="optional">optional</span></label>
   <label class="dropzone" for="f-files">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12l-8.5 8.5a5 5 0 0 1-7-7L14 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 8"/></svg>
     <span>Paste <kbd>⌘V</kbd> or drop here, or <span class="dropzone-pick">choose files</span></span>
   </label>
   {% endif %}
-  <input type="file" id="f-files" name="{{ field.html_name }}" multiple
+  <div class="attach-actions">
+    {% if compact %}
+    <label class="attach-button" for="f-files">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12l-8.5 8.5a5 5 0 0 1-7-7L14 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 8"/></svg>
+      Attach or paste
+    </label>
+    {% endif %}
+    <button type="button" class="record-button" data-record="screen" {% if compact %}aria-label="Record screen" title="Record screen"{% endif %} hidden>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/><circle cx="12" cy="10.5" r="2.5" fill="var(--accent)" stroke="none"/></svg>
+      {% if not compact %}Record screen{% endif %}
+    </button>
+    <button type="button" class="record-button" data-record="voice" {% if compact %}aria-label="Voice note" title="Voice note"{% endif %} hidden>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4"/><path d="M8 7v10"/><path d="M12 4v16"/><path d="M16 7v10"/><path d="M20 10v4"/></svg>
+      {% if not compact %}Voice note{% endif %}
+    </button>
+    {# capture opens the phone's camera instead of the gallery; the file joins the list above. #}
+    <button type="button" class="record-button" data-camera {% if compact %}aria-label="Camera" title="Camera"{% endif %} hidden>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      {% if not compact %}Camera{% endif %}
+    </button>
+    <input type="file" class="visually-hidden" accept="image/*,video/*" capture="environment" tabindex="-1" aria-hidden="true" data-camera-input>
+  </div>
+  <div class="recording" role="status" data-recording hidden>
+    <span class="recording-dot" aria-hidden="true"></span>
+    <span data-recording-label></span>
+    <span class="recording-time" data-recording-time></span>
+    <button type="button" class="btn btn-dark recording-stop" data-recording-stop>Stop</button>
+  </div>
+  <input type="file" id="f-files" name="{{ field.html_name }}" multiple data-attach-input
          accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/webm,audio/mpeg,audio/mp4,audio/x-m4a,audio/webm,audio/ogg,audio/wav,.m4a,application/pdf,text/plain,.txt,.log,.csv"
          aria-describedby="files-hint{% if field.errors %} files-error{% endif %}"
          {% if field.errors %}aria-invalid="true"{% endif %}>
   <ul class="file-chips" data-attach-list aria-label="Chosen files"></ul>
-  <span class="hint" id="files-hint">Images, video, audio, PDF or plain text: up to 5 files, 10 MB each. Video up to 2 minutes: we compress it in your browser. Word, Excel and archives can hide macros, so share a link to them instead.</span>
+  <span class="hint" id="files-hint">Images, video, audio, PDF or plain text: up to 5 files, 10 MB each. Video and recordings up to 2 minutes: we compress them in your browser. Word, Excel and archives can hide macros, so share a link to them instead.</span>
   {% if field.errors %}
     <div class="error-text" id="files-error">{% for error in field.errors %}<p>{{ error }}</p>{% endfor %}</div>
   {% elif reattach %}

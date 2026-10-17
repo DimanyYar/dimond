@@ -1863,6 +1863,87 @@ a.file-chip:hover {
   outline-offset: 1px;
 }
 
+/* Record buttons under the drop zone (mockup: New request), icon-only beside "Attach or paste"
+   in the reply box. Each appears only where the browser can record (record-media.js). */
+.attach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.attach-actions[hidden],
+.record-button[hidden],
+.recording[hidden] {
+  display: none;
+}
+
+.record-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.attach-compact .record-button {
+  padding: 0;
+}
+
+.record-button:hover {
+  border-color: var(--ink);
+}
+
+.recording {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-radius: var(--radius-m);
+  background: var(--accent-soft);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.recording-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--error);
+  animation: recording-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording-dot {
+    animation: none;
+  }
+}
+
+.recording-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.recording-stop {
+  margin-left: auto;
+}
+
 /* Every file of the request, from the request and the thread, in the aside. */
 .files-card {
   display: flex;
