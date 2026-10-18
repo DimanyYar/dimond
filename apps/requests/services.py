@@ -13,6 +13,7 @@ from apps.files.uploads import CheckedFile
 from .models import (
     REQUEST_FIELDS,
     ClientStatus,
+    InternalNote,
     Message,
     Request,
     RequestRevision,
@@ -23,6 +24,7 @@ from .models import (
     WithdrawalRequest,
 )
 from .selectors import (
+    can_add_note,
     can_ask_for_input,
     can_ask_to_withdraw,
     can_bring_back,
@@ -311,3 +313,17 @@ def mark_handled(pm: User, request: Request) -> None:
     if not can_mark_handled(pm, request):
         raise NotAllowedError
     _mark_handled_so_far(request)
+
+
+@transaction.atomic
+def add_note(pm: User, request: Request, text: str) -> InternalNote:
+    """An internal note: only the PM reads it, the client and Jira never get it. Writing one
+    counts as dealing with the request, so a waiting reply leaves Needs you."""
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    if not can_add_note(pm, request):
+        raise NotAllowedError
+    if not text.strip():
+        raise ValueError("A note needs some text.")
+    note = InternalNote.objects.create(request=request, author=pm, text=text.strip())
+    _mark_handled_so_far(request)
+    return note

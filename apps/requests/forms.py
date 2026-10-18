@@ -237,15 +237,28 @@ class MyRequestsFilter(forms.Form):
 
 
 class MessageForm(forms.Form):
+    # The PM's switch under the thread: a reply the client reads, or a note only the PM reads.
+    kind = forms.ChoiceField(
+        choices=[("reply", "Reply"), ("note", "Internal note")], required=False
+    )
     text = forms.CharField(max_length=5000, widget=forms.Textarea, required=False)
     ask_for_input = forms.BooleanField(required=False)
     attachments = AttachmentsField()
 
+    def is_note(self) -> bool:
+        return self.cleaned_data.get("kind") == "note"
+
     def clean(self) -> dict[str, Any]:
         super().clean()
         data = self.cleaned_data
-        # A screenshot alone is a fine reply; an empty one is not.
         has_files = data.get("attachments") or "attachments" in self.errors
+        if self.is_note():
+            if has_files:
+                self.add_error("attachments", "Notes take text only. Send files in a reply.")
+            if not data.get("text"):
+                self.add_error("text", "Write the note.")
+            return data
+        # A screenshot alone is a fine reply; an empty one is not.
         if not data.get("text") and not has_files:
             self.add_error("text", "Write a message or attach a file.")
         return data
