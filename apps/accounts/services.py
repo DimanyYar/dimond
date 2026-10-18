@@ -54,16 +54,43 @@ def request_sign_in_link(email: str) -> None:
             .filter(email=email.strip().lower(), is_active=True)
             .first()
         )
-        if user is None:
-            return
+        if user is not None:
+            _queue_sign_in_link(user)
 
-        since = timezone.now() - LIFETIME[LinkKind.SIGN_IN]
-        recent = user.sign_in_links.filter(kind=LinkKind.SIGN_IN, created_at__gte=since)
-        if recent.count() >= MAX_SIGN_IN_LINKS_PER_LIFETIME:
-            logger.warning("Sign-in link limit reached for user %s", user.pk)
-            return
 
-        SignInLink.objects.create(user=user)
+def _queue_sign_in_link(locked_user: User) -> bool:
+    """Queue a sign-in link unless the person hit the limit. The caller holds the row lock."""
+    since = timezone.now() - LIFETIME[LinkKind.SIGN_IN]
+    recent = locked_user.sign_in_links.filter(kind=LinkKind.SIGN_IN, created_at__gte=since)
+    if recent.count() >= MAX_SIGN_IN_LINKS_PER_LIFETIME:
+        logger.warning("Sign-in link limit reached for user %s", locked_user.pk)
+        return False
+    SignInLink.objects.create(user=locked_user)
+    return True
+
+
+@transaction.atomic
+def send_sign_in_link(person: User) -> None:
+    """The PM's "Send a sign-in link": the same link and limit as the sign-in page.
+
+    Only for someone who has signed in before: a newcomer needs the invite, which asks their
+    name first. Raises NotAllowedError otherwise, or when the limit is reached.
+    """
+    locked = (
+        User.objects.select_for_update()
+        .filter(pk=person.pk, is_active=True, last_login__isnull=False)
+        .first()
+    )
+    if locked is None or not _queue_sign_in_link(locked):
+        raise NotAllowedError
+
+
+def update_person(person: User, *, name: str, notify: Notify) -> None:
+    """The PM corrects a person's name or what they get emails about (PRD: person page)."""
+    person.name = name
+    person.notify = notify
+    person.full_clean()
+    person.save(update_fields=["name", "notify"])
 
 
 def invite(people: Iterable[User], invited_by: User) -> int:

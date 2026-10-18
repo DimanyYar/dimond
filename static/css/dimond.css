@@ -4946,3 +4946,235 @@ kbd {
     padding-left: 0;
   }
 }
+
+/* Person page (mockup 5.0 · Person) */
+
+.person-page {
+  max-width: 1120px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.breadcrumb a {
+  color: var(--muted);
+}
+
+.breadcrumb [aria-current] {
+  color: var(--ink);
+}
+
+.person-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+.person-avatar-large {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  font-size: 20px;
+}
+
+.person-page-title {
+  flex: 1 1 280px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.person-page-title h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+  overflow-wrap: anywhere;
+}
+
+.person-page-title p {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.person-page-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.person-page-columns h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.person-profile {
+  flex: 999 1 420px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.person-profile-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.person-profile-fields .field {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.field-label {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.read-only-value {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--radius-s);
+  background: #faf8f5;
+  overflow-wrap: anywhere;
+}
+
+.person-profile .choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.choice-with-hint {
+  align-items: flex-start;
+}
+
+.choice-with-hint input {
+  flex: 0 0 18px;
+  margin-top: 2px;
+}
+
+.choice-with-hint > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.choice-title {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.person-profile-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.person-side {
+  flex: 1 1 300px;
+  max-width: 400px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.person-side .card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+}
+
+.person-side p {
+  margin: 0;
+}
+
+.person-numbers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.person-numbers p {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.person-numbers strong {
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.person-recent {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.person-access-danger {
+  border-color: #f1b8b8;
+}
+
+.person-access-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.person-access-buttons > * {
+  flex: 1 1 auto;
+}
+
+.person-access-buttons .btn {
+  white-space: nowrap;
+}
+
+.person-access-buttons .btn,
+.person-access-card > .btn {
+  width: 100%;
+}
+
+@media (max-width: 899px) {
+  .person-side {
+    max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .person-page-title h1 {
+    font-size: 22px;
+  }
+}
+
+a.person-name {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+a.person-name:hover {
+  text-decoration: underline;
+}

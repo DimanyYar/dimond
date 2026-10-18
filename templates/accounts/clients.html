@@ -77,7 +77,7 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
                       <span class="person">
                         <span class="person-avatar" aria-hidden="true">{{ row.initials }}</span>
                         <span class="person-text">
-                          <span class="person-name">{{ row.person.name|default:"Not signed in yet" }}</span>
+                          <a class="person-name" href="{% url 'person' company.pk row.person.pk %}">{{ row.person.name|default:"Not signed in yet" }}</a>
                           <span class="person-email">{{ row.person.email }}</span>
                         </span>
                       </span>
