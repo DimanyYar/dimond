@@ -9,8 +9,8 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def atlas_request():
-    atlas = Company.objects.create(name="Atlas")
+def atlas_request(pm):
+    atlas = Company.objects.create(name="Atlas", owner=pm)
     anna = User.objects.create_user("anna@atlas.test", company=atlas, name="Anna")
     return create_request(
         anna, RequestType.BUG, "Duplicate leads", why="Calls twice", when_needed=WhenNeeded.HOTFIX
@@ -19,10 +19,10 @@ def atlas_request():
 
 @pytest.mark.parametrize("debug", [True, False])
 def test_request_of_another_company_shows_a_friendly_not_found_page(
-    client, settings, atlas_request, debug
+    client, settings, atlas_request, pm, debug
 ):
     settings.DEBUG = debug
-    northwind = Company.objects.create(name="Northwind")
+    northwind = Company.objects.create(name="Northwind", owner=pm)
     client.force_login(User.objects.create_user("lee@northwind.test", company=northwind))
 
     response = client.get(atlas_request.get_absolute_url())
