@@ -3768,10 +3768,14 @@ a.file-chip-name {
 .tiles-small .tile-name,
 .tiles-small .tile-meta,
 .files-row-picture .tile-name,
-.files-row-picture .tile-meta,
+.files-row-picture .tile-meta {
+  display: none;
+}
+
+/* The first words of the first lines: enough to tell a text file from an empty one. */
 .tiles-small .tile-excerpt,
 .files-row-picture .tile-excerpt {
-  display: none;
+  padding: 4px 5px;
 }
 
 .tiles-small .tile-badge,
