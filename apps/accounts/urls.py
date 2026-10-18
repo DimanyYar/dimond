@@ -20,4 +20,14 @@ urlpatterns = [
         views.cancel_invite,
         name="cancel_invite",
     ),
+    path(
+        "clients/<int:pk>/people/<int:person_pk>/revoke/",
+        views.revoke_person,
+        name="revoke_person",
+    ),
+    path(
+        "clients/<int:pk>/people/<int:person_pk>/restore/",
+        views.restore_person,
+        name="restore_person",
+    ),
 ]

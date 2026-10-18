@@ -8,7 +8,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
-from django.db.models import Q, QuerySet
+from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -182,16 +182,41 @@ def accept_invite(token: str, name: str, notify: Notify) -> User:
     return user
 
 
+@transaction.atomic
 def revoke_access(people: Iterable[User]) -> int:
-    """Turn access off. Sessions end on the next page load; requests and replies stay.
+    """Turn access off and sign the person out on every device for good (ADR 0015).
+    Requests and replies stay with the company. Returns how many lost access.
 
     A PM who still owns clients keeps access: their clients would vanish from every PM's
     view (ADR 0014). They get a new owner first.
     """
     ids = [person.pk for person in people]
-    return User.objects.filter(pk__in=ids, is_active=True, clients__isnull=True).update(
-        is_active=False
+    owns_clients = Exists(Company.objects.filter(owner=OuterRef("pk")))
+    revoking = list(
+        User.objects.select_for_update().filter(pk__in=ids, is_active=True).exclude(owns_clients)
     )
+    for person in revoking:
+        person.is_active = False
+        # Every session carries a fingerprint of the password, and Django checks it on each
+        # page. A new unusable password changes it, so no device signed in so far gets back
+        # in, even after access returns.
+        person.set_unusable_password()
+        person.save(update_fields=["is_active", "password"])
+    # A link from before must not work again if access comes back.
+    SignInLink.objects.filter(user__in=revoking, used_at__isnull=True).delete()
+    return len(revoking)
+
+
+@transaction.atomic
+def restore_access(pm: User, person: User) -> None:
+    """Re-invite: access comes back with a new 7-day link. Devices signed in before the
+    revoke stay signed out (ADR 0015)."""
+    current = User.objects.select_for_update().filter(pk=person.pk).first()
+    if current is None or current.is_active:
+        raise NotAllowedError
+    current.is_active = True
+    current.save(update_fields=["is_active"])
+    invite([current], invited_by=pm)
 
 
 @transaction.atomic

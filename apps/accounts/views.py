@@ -106,11 +106,12 @@ def _clients_screen(
         page = selectors.clients_page(pm, pk)
     except Company.DoesNotExist:
         raise Http404 from None
-    # ?invite opens the form and ?cancel=<person> the confirmation in that row: both work
-    # without scripts, and the address can be shared or reloaded.
+    # ?invite opens the form; ?cancel=<person> and ?revoke=<person> ask in that row first.
+    # All of it works without scripts, and the address can be shared or reloaded.
     if invite_form is None and "invite" in request.GET and page.chosen is not None:
         invite_form = InviteForm(company=page.chosen)
     cancel = request.GET.get("cancel", "")
+    revoke = request.GET.get("revoke", "")
     return render(
         request,
         "accounts/clients.html",
@@ -118,6 +119,7 @@ def _clients_screen(
             "page": page,
             "invite_form": invite_form,
             "cancel_person": int(cancel) if cancel.isdigit() else None,
+            "revoke_person": int(revoke) if revoke.isdigit() else None,
         },
     )
 
@@ -192,4 +194,35 @@ def cancel_invite(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse
         messages.error(request, f"{person.email} has signed in meanwhile, so the invite stays.")
     else:
         messages.success(request, f"Invite to {person.email} cancelled. The link no longer works.")
+    return redirect("client", pk)
+
+
+@require_POST
+@login_required
+def revoke_person(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse:
+    _, person = _person(request, pk, person_pk)
+    if services.revoke_access([person]):
+        messages.success(
+            request,
+            f"Access revoked for {person.name or person.email}. They are signed out on every "
+            "device; their requests and replies stay.",
+        )
+    else:
+        messages.error(request, f"{person.email} had already lost access.")
+    return redirect("client", pk)
+
+
+@require_POST
+@login_required
+def restore_person(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse:
+    pm, person = _person(request, pk, person_pk)
+    try:
+        services.restore_access(pm, person)
+    except services.NotAllowedError:
+        messages.error(request, f"{person.email} already has access.")
+    else:
+        messages.success(
+            request,
+            f"Access is back for {person.name or person.email}: a new invite is on its way.",
+        )
     return redirect("client", pk)

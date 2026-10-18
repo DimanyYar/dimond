@@ -4525,7 +4525,7 @@ kbd {
   color: var(--muted);
 }
 
-.person-no_access td {
+.person-no_access td:not(.person-access) {
   opacity: 0.6;
 }
 
