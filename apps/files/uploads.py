@@ -18,6 +18,8 @@ MAX_SIZE = 10 * 1024 * 1024
 # Two minutes of 720p video, which is what the browser will compress a clip to (PRD: access and
 # security, attachments).
 MAX_VIDEO_SIZE = 20 * 1024 * 1024
+# A 320 × 240 JPEG is about 20 KB; anything far bigger is not a frame the form made.
+MAX_POSTER_SIZE = 256 * 1024
 
 # The first bytes each accepted format starts with.
 _SIGNATURES = (
@@ -63,6 +65,10 @@ class CheckedFile(NamedTuple):
     name: str
     content_type: str
     size: int
+    # A video's frame taken by the browser at upload (static/js/form-tile.js): a JPEG the worker
+    # turns into the video's preview. None for other files, or when the browser could not show
+    # the video.
+    poster: bytes | None = None
 
 
 def _media_type(head: bytes, content: bytes) -> str | None:
@@ -135,3 +141,13 @@ def check_upload(upload: UploadedFile[Any]) -> CheckedFile:
     if content_type == "text/plain" and not name.lower().endswith(_TEXT_ENDINGS):
         name = f"{name[:251]}.txt"
     return CheckedFile(upload, name, content_type, upload.size)
+
+
+def check_poster(upload: UploadedFile[Any]) -> bytes | None:
+    """A video's frame as the browser sent it, or None when it is not a small JPEG. Not an error
+    for the client: without a frame the tile shows a play button, as it did before."""
+    if not upload.size or upload.size > MAX_POSTER_SIZE:
+        return None
+    upload.seek(0)
+    content = upload.read()
+    return content if content.startswith(b"\xff\xd8\xff") else None
