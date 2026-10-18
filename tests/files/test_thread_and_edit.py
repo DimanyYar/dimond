@@ -202,6 +202,27 @@ def test_files_cannot_be_changed_in_the_edit_form_once_planned(client, screensho
     assert Attachment.objects.count() == 1
 
 
+def test_all_attachments_shows_five_files_and_opens_the_rest_on_show_all(client, request_, anna):
+    client.force_login(anna)
+    for k in range(5):
+        client.post(card(request_), {"text": "", "attachments": [upload(f"step-{k}.png", PNG)]})
+
+    page = client.get(card(request_)).content.decode()
+
+    panel = page[page.index("All attachments") :]
+    assert panel.count('class="files-row"') == 5
+    assert panel.count('class="files-row files-row-more"') == 1
+    assert "Show all 6" in panel
+
+
+def test_all_attachments_has_no_show_all_for_five_files_or_fewer(client, request_, anna):
+    client.force_login(anna)
+
+    page = client.get(card(request_)).content.decode()
+
+    assert "Show all" not in page
+
+
 def test_all_attachments_lists_request_and_thread_files_with_author(client, request_, anna, pm):
     client.force_login(pm)
     client.post(card(request_), {"text": "Mockup", "attachments": [upload("mockup.pdf", PDF)]})
