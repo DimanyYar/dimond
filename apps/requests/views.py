@@ -177,7 +177,7 @@ def request_detail(request: HttpRequest, pk: int) -> HttpResponse:
     page = _card_page(request, pk)
     if request.method == "GET":
         # The page was read first, so it still knows what was new before this visit.
-        services.mark_seen(page.viewer, page.request)
+        services.mark_seen(page.viewer, page.request, page.read_at)
         return _render_card(request, page)
     form = MessageForm(request.POST, request.FILES)
     if not form.is_valid():

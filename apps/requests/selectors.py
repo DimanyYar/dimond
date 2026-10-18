@@ -114,7 +114,8 @@ def my_requests(
 
 def with_unread(requests: QuerySet[Request], user: User) -> QuerySet[Request]:
     """Adds `unread`: how many messages from others came after the person last opened each
-    request. A request they never opened counts every message from others."""
+    request. A request they never opened counts every message from others. Requests the
+    person may not see are dropped, whatever the caller passed in."""
     visits = RequestVisit.objects.filter(request=OuterRef("request"), user=user)
     new_messages = (
         Message.objects.filter(request=OuterRef("pk"))
@@ -125,7 +126,8 @@ def with_unread(requests: QuerySet[Request], user: User) -> QuerySet[Request]:
         .annotate(n=Count("pk"))
         .values("n")
     )
-    return requests.annotate(unread=Coalesce(Subquery(new_messages), 0))
+    visible = requests.filter(pk__in=requests_for(user).values("pk"))
+    return visible.annotate(unread=Coalesce(Subquery(new_messages), 0))
 
 
 def my_requests_count(
@@ -511,6 +513,8 @@ def _open_question(request: Request) -> Message | None:
 class RequestPage:
     viewer: User
     request: Request
+    # When the page was read: opening it marks what came before as seen, not what came after.
+    read_at: datetime
     # The request's own files, shown under its text; `all_files` adds those from the thread.
     files: list[Attachment]
     all_files: list[Attachment]
@@ -548,6 +552,7 @@ def _new_messages(user: User, request: Request, entries: list[ThreadEntry]) -> l
 
 def request_page(user: User, pk: int) -> RequestPage:
     """Everything the request card shows. Raises Request.DoesNotExist like `request_for`."""
+    read_at = timezone.now()
     request = request_for(user, pk)
     request_edits = _edits(request)
     entries = _thread(request, request_edits)
@@ -558,6 +563,7 @@ def request_page(user: User, pk: int) -> RequestPage:
     return RequestPage(
         viewer=user,
         request=request,
+        read_at=read_at,
         files=[file for file in all_files if file.message_id is None],
         all_files=all_files,
         viewable_files=[file for file in all_files if file.shown_in_browser],

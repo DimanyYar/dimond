@@ -45,7 +45,7 @@ def bug(anna) -> Request:
 
 
 def opened(user: User, request: Request, minutes_ago: int) -> None:
-    services.mark_seen(user, request)
+    services.mark_seen(user, request, timezone.now())
     request.visits.filter(user=user).update(seen_at=timezone.now() - timedelta(minutes=minutes_ago))
 
 
@@ -178,3 +178,21 @@ def test_threads_from_before_unread_tracking_are_not_new(anna, pm, bug):
 
     assert selectors.request_page(anna, bug.pk).new_count == 0
     assert selectors.request_page(pm, bug.pk).new_count == 0
+
+
+def test_a_message_written_while_the_card_loads_stays_new(bug, anna, pm):
+    page = selectors.request_page(anna, bug.pk)
+    late = say(pm, bug, "Written a moment after the page was read", minutes_ago=0)
+    Message.objects.filter(pk=late.pk).update(created_at=page.read_at + timedelta(milliseconds=5))
+
+    services.mark_seen(anna, bug, page.read_at)
+
+    assert selectors.request_page(anna, bug.pk).new_count == 1
+
+
+def test_unread_list_drops_requests_the_person_may_not_see(bug, pm):
+    northwind = Company.objects.create(name="Northwind")
+    paul = User.objects.create_user("paul@northwind.test", company=northwind)
+
+    assert not selectors.with_unread(Request.objects.all(), paul).exists()
+    assert selectors.with_unread(Request.objects.all(), pm).get().pk == bug.pk
