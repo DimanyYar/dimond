@@ -6,7 +6,7 @@ from PIL import Image
 from apps.accounts.models import Company, User
 from apps.files.models import Attachment, PreviewStatus
 from apps.files.services import make_pending_previews
-from apps.files.uploads import check_upload
+from apps.files.uploads import MAX_POSTER_SIZE, check_upload
 from apps.requests.services import create_request
 
 from .conftest import M4A, MP4, PNG, upload
@@ -93,8 +93,9 @@ def test_video_preview_is_the_frame_the_browser_took(client, anna, private_folde
     [
         (picture("PNG"), "0.jpg"),  # not a JPEG
         (picture("JPEG"), "1.jpg"),  # a frame of a second video that was not sent
+        (picture("JPEG") + b"\x00" * MAX_POSTER_SIZE, "0.jpg"),  # far bigger than a frame
     ],
-    ids=["not-a-jpeg", "another-video"],
+    ids=["not-a-jpeg", "another-video", "too-big"],
 )
 def test_video_without_its_own_jpeg_frame_keeps_the_play_button(client, anna, frame, frame_name):
     video = video_with_frame(client, anna, frame, frame_name)
