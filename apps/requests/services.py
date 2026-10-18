@@ -75,15 +75,18 @@ def create_voice_request(
     title: str,
     recording: CheckedFile,
     type: RequestType = RequestType.NOT_SURE,
+    text: str = "",
 ) -> Request:
     """Save a request the client said out loud ("Just say it"). Why it matters and when it is
-    needed are in the recording, so they are not asked; the PM sorts the type and urgency."""
+    needed are in the recording, so they are not asked; the PM sorts the type and urgency. The
+    browser's text draft, if any, becomes the description."""
     return create_request(
         author,
         type,
         title,
         "",
         WhenNeeded.NOT_SURE,
+        description=text,
         files=[recording],
         from_voice=True,
     )

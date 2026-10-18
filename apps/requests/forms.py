@@ -141,11 +141,13 @@ class NewRequestForm(RequestForm):
 
 
 class VoiceRequestForm(forms.Form):
-    """ "Just say it": the recording, a title and, if the client wants, the type."""
+    """ "Just say it": the recording, a title, the text draft the browser wrote (checked by the
+    client) and, if the client wants, the type."""
 
     title = forms.CharField(
         max_length=200, error_messages={"required": "Give it a title in one line."}
     )
+    text = forms.CharField(required=False, max_length=5000)
     type = forms.ChoiceField(choices=FORM_TYPES, required=False)
     recording = forms.FileField(error_messages={"required": "Record your request first."})
 
