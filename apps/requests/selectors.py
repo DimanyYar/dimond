@@ -10,6 +10,7 @@ from django.db.models import (
     Case,
     Count,
     Exists,
+    F,
     Max,
     OuterRef,
     Prefetch,
@@ -211,20 +212,27 @@ def with_pm_reason(requests: QuerySet[Request]) -> QuerySet[Request]:
     has not answered yet. Any message from anyone at the client's company counts, since
     clients only ever talk to the PM.
     """
-    last_author_role = Subquery(
-        Message.objects.filter(request=OuterRef("pk"))
-        .order_by("-created_at", "-pk")
-        .values("author__role")[:1]
-    )
+    latest = Message.objects.filter(request=OuterRef("pk")).order_by("-created_at", "-pk")
+    last_author_role = Subquery(latest.values("author__role")[:1])
+    last_message_at = Subquery(latest.values("created_at")[:1])
+    # "No reply needed" covers the client's messages up to that moment, not later ones.
+    unhandled = Q(pm_handled_at__isnull=True) | Q(last_message_at__gt=F("pm_handled_at"))
     pending_ask = WithdrawalRequest.objects.filter(request=OuterRef("pk"), confirmed__isnull=True)
     pm_wrote = Message.objects.filter(request=OuterRef("pk"), author__role=Role.PM)
     open_request = ~Q(status__in=CLOSED_STATUSES)
-    return requests.alias(last_author=last_author_role).annotate(
+    return requests.alias(last_author=last_author_role, last_message_at=last_message_at).annotate(
         pm_reason=Case(
             # A request the Jira sync closed while an ask was pending has nothing left to decide.
             When(open_request & Exists(pending_ask), then=Value(PmReason.WITHDRAW)),
-            When(open_request & Q(last_author=Role.CLIENT), then=Value(PmReason.REPLIED)),
-            When(Q(status=ClientStatus.RECEIVED) & ~Exists(pm_wrote), then=Value(PmReason.NEW)),
+            When(
+                open_request & Q(last_author=Role.CLIENT) & unhandled,
+                then=Value(PmReason.REPLIED),
+            ),
+            # Once the PM handled a request (No reply needed, Later) it is no longer new.
+            When(
+                Q(status=ClientStatus.RECEIVED, pm_handled_at__isnull=True) & ~Exists(pm_wrote),
+                then=Value(PmReason.NEW),
+            ),
             default=None,
             output_field=models.CharField(),
         )
@@ -510,6 +518,31 @@ def can_decide_withdrawal(user: User, request: Request) -> bool:
     return user.is_active and user.role == Role.PM and _pending_withdrawal(request) is not None
 
 
+def _is_pm(user: User) -> bool:
+    return user.is_active and user.role == Role.PM
+
+
+def can_move_to_later(user: User, request: Request) -> bool:
+    """Later is "yes, but not now": for a request the PM has not planned yet (PRD: PM
+    buttons). Once planned, the Jira sync moves it there when the task leaves the release."""
+    return _is_pm(user) and request.status in (ClientStatus.RECEIVED, ClientStatus.NEEDS_INPUT)
+
+
+def can_bring_back(user: User, request: Request) -> bool:
+    """Until the Jira sync exists, the PM takes a request out of Later by hand."""
+    return _is_pm(user) and request.status == ClientStatus.LATER
+
+
+def can_decline(user: User, request: Request) -> bool:
+    """The PM may decline any open request, with a reason, even after the Jira task exists."""
+    return _is_pm(user) and request.status not in CLOSED_STATUSES
+
+
+def can_mark_handled(user: User, request: Request) -> bool:
+    """ "No reply needed" exists only while the client's reply waits for the PM."""
+    return _pm_reason_of(user, request) == PmReason.REPLIED
+
+
 # What the thread says when the status changes, in the client's words.
 STATUS_EVENT_TEXT = {
     ClientStatus.RECEIVED: "Request received",
@@ -728,6 +761,9 @@ class RequestPage:
     can_withdraw_now: bool
     can_ask_to_withdraw: bool
     can_decide_withdrawal: bool
+    can_move_to_later: bool
+    can_bring_back: bool
+    can_decline: bool
 
 
 def _new_messages(user: User, request: Request, entries: list[ThreadEntry]) -> list[Message]:
@@ -780,6 +816,9 @@ def request_page(user: User, pk: int) -> RequestPage:
         can_withdraw_now=can_withdraw_now(user, request),
         can_ask_to_withdraw=can_ask_to_withdraw(user, request),
         can_decide_withdrawal=can_decide_withdrawal(user, request),
+        can_move_to_later=can_move_to_later(user, request),
+        can_bring_back=can_bring_back(user, request),
+        can_decline=can_decline(user, request),
     )
 
 

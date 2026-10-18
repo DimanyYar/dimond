@@ -119,6 +119,12 @@ class Request(models.Model):
     status = models.CharField(
         max_length=20, choices=ClientStatus.choices, default=ClientStatus.RECEIVED
     )
+    pm_handled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="The PM has dealt with everything written up to this moment (No reply "
+        "needed, Later). A newer client message puts the request back into Needs you.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

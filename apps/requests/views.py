@@ -13,10 +13,12 @@ from . import selectors, services
 from .forms import (
     TYPE_COPY,
     WHEN_NEEDED_COPY,
+    DeclineForm,
     EditRequestForm,
     MessageForm,
     MyRequestsFilter,
     NewRequestForm,
+    TriageForm,
     View,
     VoiceRequestForm,
     WithdrawalDecisionForm,
@@ -146,6 +148,7 @@ def _render_card(
     page: selectors.RequestPage,
     form: MessageForm | None = None,
     withdraw_form: WithdrawForm | None = None,
+    decline_form: DeclineForm | None = None,
     status: int = 200,
 ) -> HttpResponse:
     """The card with whichever of its forms was just sent, errors and all."""
@@ -155,6 +158,7 @@ def _render_card(
         # Sent files are dropped when the form comes back with errors; this asks for them again.
         "reattach": bool(form and form.errors and request.FILES),
         "withdraw_form": withdraw_form or WithdrawForm(reason_required=page.can_ask_to_withdraw),
+        "decline_form": decline_form or DeclineForm(),
         # Picks the client's or the PM's navigation and words.
         "is_client": selectors.is_client(page.viewer),
     }
@@ -238,6 +242,45 @@ def request_withdrawal_decision(request: HttpRequest, pk: int) -> HttpResponse:
         services.decide_withdrawal(
             page.viewer, page.request, confirm=form.cleaned_data["decision"] == "confirm"
         )
+    except services.NotAllowedError:
+        raise PermissionDenied from None
+    return redirect(page.request.get_absolute_url())
+
+
+TRIAGE_ACTIONS = {
+    "later": services.move_to_later,
+    "back": services.bring_back,
+    "handled": services.mark_handled,
+}
+
+
+@require_POST
+@login_required
+def request_triage(request: HttpRequest, pk: int) -> HttpResponse:
+    """The PM's one-click actions: Move to Later, Bring back, No reply needed."""
+    page = _card_page(request, pk)
+    form = TriageForm(request.POST)
+    if not form.is_valid():
+        return HttpResponseBadRequest()
+    try:
+        TRIAGE_ACTIONS[form.cleaned_data["action"]](page.viewer, page.request)
+    except services.NotAllowedError:
+        raise PermissionDenied from None
+    return redirect(page.request.get_absolute_url())
+
+
+@require_POST
+@login_required
+def request_decline(request: HttpRequest, pk: int) -> HttpResponse:
+    """The PM declines the request; the reason goes to the client in the thread."""
+    page = _card_page(request, pk)
+    if not page.can_decline:
+        raise PermissionDenied
+    form = DeclineForm(request.POST)
+    if not form.is_valid():
+        return _render_card(request, page, decline_form=form, status=422)
+    try:
+        services.decline_request(page.viewer, page.request, form.cleaned_data["reason"])
     except services.NotAllowedError:
         raise PermissionDenied from None
     return redirect(page.request.get_absolute_url())

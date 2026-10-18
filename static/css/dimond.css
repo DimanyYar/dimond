@@ -4139,3 +4139,19 @@ kbd {
   color: var(--muted);
   text-decoration: line-through;
 }
+
+/* The PM's "No reply needed" under the client's reply: takes it out of Needs you. */
+.handled-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  font-size: 14px;
+}
+
+.triage-action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
