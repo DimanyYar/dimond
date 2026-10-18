@@ -15,3 +15,4 @@ Why the project is built the way it is. Read the record before changing what it 
 - [0011. People, roles and companies in one user model](0011-people-and-companies.md)
 - [0012. Video is compressed in the browser with mediabunny](0012-video-compression-in-the-browser.md)
 - [0013. Attachment previews with Pillow and pypdfium2, made by a worker](0013-attachment-previews.md)
+- [0014. Every PM has their own clients](0014-every-pm-has-their-own-clients.md)

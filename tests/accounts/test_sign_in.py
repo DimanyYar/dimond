@@ -15,8 +15,8 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def anna() -> User:
-    atlas = Company.objects.create(name="Atlas", email_domain="atlas-crm.com")
+def anna(pm) -> User:
+    atlas = Company.objects.create(name="Atlas", email_domain="atlas-crm.com", owner=pm)
     return User.objects.create_user("anna.k@atlas-crm.com", name="Anna K.", company=atlas)
 
 

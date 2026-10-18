@@ -1,7 +1,7 @@
 import pytest
 from django.urls import reverse
 
-from apps.accounts.models import Company, Role, User
+from apps.accounts.models import Company, User
 from apps.requests import selectors, services
 from apps.requests.models import ClientStatus, Request, RequestType, WhenNeeded
 
@@ -9,8 +9,8 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def atlas() -> Company:
-    return Company.objects.create(name="Atlas")
+def atlas(pm) -> Company:
+    return Company.objects.create(name="Atlas", owner=pm)
 
 
 @pytest.fixture
@@ -21,11 +21,6 @@ def anna(atlas) -> User:
 @pytest.fixture
 def mark(atlas) -> User:
     return User.objects.create_user("mark@atlas-crm.com", company=atlas, name="Mark T.")
-
-
-@pytest.fixture
-def pm() -> User:
-    return User.objects.create_user("dmitry@shakuro.com", role=Role.PM, name="Dmitry")
 
 
 @pytest.fixture
@@ -183,8 +178,8 @@ def test_pm_cannot_edit_the_client_request(client, bug, pm):
     assert not bug.revisions.exists()
 
 
-def test_client_cannot_edit_other_company_request(client, bug):
-    northwind = Company.objects.create(name="Northwind")
+def test_client_cannot_edit_other_company_request(client, bug, pm):
+    northwind = Company.objects.create(name="Northwind", owner=pm)
     client.force_login(User.objects.create_user("eve@northwind.com", company=northwind))
 
     assert client.get(edit_url(bug)).status_code == 404

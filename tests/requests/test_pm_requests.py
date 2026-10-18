@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 import pytest
 from django.urls import reverse
 
-from apps.accounts.models import Company, Role, User
+from apps.accounts.models import Company, User
 from apps.requests import selectors, services
 from apps.requests.models import ClientStatus, Message, Request, RequestType, WhenNeeded
 from apps.requests.selectors import Period, PmReason, Show
@@ -14,13 +14,13 @@ URL = reverse("my_requests")
 
 
 @pytest.fixture
-def atlas() -> Company:
-    return Company.objects.create(name="Atlas")
+def atlas(pm) -> Company:
+    return Company.objects.create(name="Atlas", owner=pm)
 
 
 @pytest.fixture
-def northwind() -> Company:
-    return Company.objects.create(name="Northwind")
+def northwind(pm) -> Company:
+    return Company.objects.create(name="Northwind", owner=pm)
 
 
 @pytest.fixture
@@ -36,11 +36,6 @@ def mark(atlas) -> User:
 @pytest.fixture
 def paul(northwind) -> User:
     return User.objects.create_user("paul@northwind.test", company=northwind, name="Paul")
-
-
-@pytest.fixture
-def pm() -> User:
-    return User.objects.create_user("dmitry@shakuro.com", role=Role.PM, name="Dmitry")
 
 
 def make(author: User, title: str, status=ClientStatus.RECEIVED) -> Request:
@@ -73,7 +68,7 @@ def column_of(board, request: Request) -> str:
     return slug
 
 
-def test_pm_sees_requests_of_every_client(client, pm, anna, paul):
+def test_pm_sees_requests_of_all_their_clients(client, pm, anna, paul):
     make(anna, "Atlas bug")
     make(paul, "Northwind bug")
     client.force_login(pm)

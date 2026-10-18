@@ -22,9 +22,13 @@ class PeopleInline(admin.TabularInline):
 
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
-    list_display = ["name", "email_domain", "created_at"]
+    list_display = ["name", "owner", "email_domain", "created_at"]
+    list_filter = ["owner"]
     search_fields = ["name", "email_domain"]
     inlines = [PeopleInline]
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Company]:
+        return super().get_queryset(request).select_related("owner")
 
 
 @admin.register(User)
@@ -72,3 +76,11 @@ class UserAdmin(admin.ModelAdmin):
     def revoke_access(self, request: HttpRequest, queryset: QuerySet[User]) -> None:
         revoked = services.revoke_access(queryset)
         self.message_user(request, f"Access revoked for {revoked}. Their requests stay.")
+        owners = queryset.filter(is_active=True, clients__isnull=False).distinct().count()
+        if owners:
+            self.message_user(
+                request,
+                f"Kept access for {owners} PM who still own clients. Give the clients to "
+                "another PM first.",
+                messages.WARNING,
+            )

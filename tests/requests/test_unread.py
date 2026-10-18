@@ -4,7 +4,7 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.accounts.models import Company, Role, User
+from apps.accounts.models import Company, User
 from apps.requests import selectors, services
 from apps.requests.models import ClientStatus, Message, Request, RequestType, WhenNeeded
 
@@ -14,8 +14,8 @@ MY_REQUESTS = reverse("my_requests")
 
 
 @pytest.fixture
-def atlas() -> Company:
-    return Company.objects.create(name="Atlas")
+def atlas(pm) -> Company:
+    return Company.objects.create(name="Atlas", owner=pm)
 
 
 @pytest.fixture
@@ -26,11 +26,6 @@ def anna(atlas) -> User:
 @pytest.fixture
 def mark(atlas) -> User:
     return User.objects.create_user("mark@atlas-crm.com", company=atlas, name="Mark")
-
-
-@pytest.fixture
-def pm() -> User:
-    return User.objects.create_user("dmitry@shakuro.com", role=Role.PM, name="Dmitry")
 
 
 @pytest.fixture
@@ -191,7 +186,7 @@ def test_a_message_written_while_the_card_loads_stays_new(bug, anna, pm):
 
 
 def test_unread_list_drops_requests_the_person_may_not_see(bug, pm):
-    northwind = Company.objects.create(name="Northwind")
+    northwind = Company.objects.create(name="Northwind", owner=pm)
     paul = User.objects.create_user("paul@northwind.test", company=northwind)
 
     assert not selectors.with_unread(Request.objects.all(), paul).exists()

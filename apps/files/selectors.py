@@ -9,7 +9,7 @@ from .models import Attachment
 
 
 def attachments_for(user: User) -> QuerySet[Attachment]:
-    """Files this person may open: clients those of their company's requests, the PM all.
+    """Files this person may open: those of the requests they may see (`requests_for`).
 
     The team opens only files of requests linked to a Jira task, from links in the task (PRD:
     files and attachment links). Requests get that link with the Jira integration (#15), so

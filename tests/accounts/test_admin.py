@@ -7,14 +7,18 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def pm_client(client):
-    pm = User.objects.create_superuser("dmitry@example.com", password="s3cret-pass")
-    client.force_login(pm)
+def dmitry() -> User:
+    return User.objects.create_superuser("dmitry@example.com", password="s3cret-pass")
+
+
+@pytest.fixture
+def pm_client(client, dmitry):
+    client.force_login(dmitry)
     return client
 
 
-def test_pm_adds_a_client_person_in_the_admin(pm_client):
-    atlas = Company.objects.create(name="Atlas")
+def test_pm_adds_a_client_person_in_the_admin(pm_client, dmitry):
+    atlas = Company.objects.create(name="Atlas", owner=dmitry)
 
     response = pm_client.post(
         f"/{settings.ADMIN_URL}accounts/user/add/",

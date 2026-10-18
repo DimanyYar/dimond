@@ -20,8 +20,8 @@ def dmitry() -> User:
 
 
 @pytest.fixture
-def ruslan() -> User:
-    atlas = Company.objects.create(name="Atlas", email_domain="atlas-crm.com")
+def ruslan(dmitry) -> User:
+    atlas = Company.objects.create(name="Atlas", email_domain="atlas-crm.com", owner=dmitry)
     return User.objects.create_user("ruslan.v@atlas-crm.com", company=atlas)
 
 

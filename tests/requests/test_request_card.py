@@ -9,8 +9,8 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def atlas() -> Company:
-    return Company.objects.create(name="Atlas")
+def atlas(pm) -> Company:
+    return Company.objects.create(name="Atlas", owner=pm)
 
 
 @pytest.fixture
@@ -21,11 +21,6 @@ def anna(atlas) -> User:
 @pytest.fixture
 def mark(atlas) -> User:
     return User.objects.create_user("mark@atlas-crm.com", company=atlas, name="Mark T.")
-
-
-@pytest.fixture
-def pm() -> User:
-    return User.objects.create_user("dmitry@shakuro.com", role=Role.PM, name="Dmitry")
 
 
 @pytest.fixture
@@ -59,8 +54,8 @@ def test_client_opens_their_company_request_card(client, bug, mark):
     assert b"Managers call the same person twice." in response.content
 
 
-def test_client_cannot_open_other_company_request_card(client, bug):
-    northwind = Company.objects.create(name="Northwind")
+def test_client_cannot_open_other_company_request_card(client, bug, pm):
+    northwind = Company.objects.create(name="Northwind", owner=pm)
     client.force_login(User.objects.create_user("eve@northwind.com", company=northwind))
 
     assert client.get(url(bug)).status_code == 404
