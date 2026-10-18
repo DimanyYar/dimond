@@ -108,6 +108,8 @@ def test_video_without_its_own_jpeg_frame_keeps_the_play_button(client, anna, fr
 def test_two_videos_with_one_name_each_get_their_own_frame(client, anna):
     client.force_login(anna)
     red, blue = (picture("JPEG", size=(640, 360), colour=colour) for colour in ("red", "blue"))
+    # Same name, different files: the second is a few bytes longer, which tells them apart.
+    first, second = MP4, MP4 + b"\x00" * 16
     client.post(
         "/requests/new/",
         {
@@ -115,20 +117,20 @@ def test_two_videos_with_one_name_each_get_their_own_frame(client, anna):
             "title": "Lead form sends twice",
             "why": "Managers call twice",
             "when_needed": "not_sure",
-            "attachments": [upload("clip.mp4", MP4), upload("clip.mp4", MP4)],
+            "attachments": [upload("clip.mp4", first), upload("clip.mp4", second)],
             "attachments_posters": [upload("0.jpg", red), upload("1.jpg", blue)],
         },
     )
 
     make_pending_previews()
 
-    reddish = []
-    for video in Attachment.objects.all():
+    def is_red(video):
         with video.preview.open("rb") as stored, Image.open(stored) as preview:
             red, _, blue = preview.convert("RGB").getpixel((0, 0))
-            reddish.append(red > blue)
-    # One preview is the red frame and the other the blue one, not the same frame twice.
-    assert sorted(reddish) == [False, True]
+            return red > blue
+
+    assert is_red(Attachment.objects.get(size=len(first)))
+    assert not is_red(Attachment.objects.get(size=len(second)))
 
 
 def test_broken_frame_leaves_the_video_without_preview(client, anna, private_folder):
