@@ -8,8 +8,8 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def atlas() -> Company:
-    return Company.objects.create(name="Atlas", email_domain="atlas-crm.com")
+def atlas(pm) -> Company:
+    return Company.objects.create(name="Atlas", email_domain="atlas-crm.com", owner=pm)
 
 
 def test_client_person_belongs_to_a_company(atlas):

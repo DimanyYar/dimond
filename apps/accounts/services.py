@@ -177,6 +177,12 @@ def accept_invite(token: str, name: str, notify: Notify) -> User:
 
 
 def revoke_access(people: Iterable[User]) -> int:
-    """Turn access off. Sessions end on the next page load; requests and replies stay."""
+    """Turn access off. Sessions end on the next page load; requests and replies stay.
+
+    A PM who still owns clients keeps access: their clients would vanish from every PM's
+    view (ADR 0014). They get a new owner first.
+    """
     ids = [person.pk for person in people]
-    return User.objects.filter(pk__in=ids, is_active=True).update(is_active=False)
+    return User.objects.filter(pk__in=ids, is_active=True, clients__isnull=True).update(
+        is_active=False
+    )

@@ -9,8 +9,8 @@ URL = "/requests/new/"
 
 
 @pytest.fixture
-def ruslan(client) -> User:
-    atlas = Company.objects.create(name="Atlas")
+def ruslan(client, pm) -> User:
+    atlas = Company.objects.create(name="Atlas", owner=pm)
     user = User.objects.create_user("ruslan.v@atlas-crm.com", name="Ruslan", company=atlas)
     client.force_login(user)
     return user

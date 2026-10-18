@@ -181,7 +181,7 @@ def test_sound_needs_no_preview(anna):
     assert sent(anna, ("note.m4a", M4A)).preview_status == PreviewStatus.NONE
 
 
-def test_preview_opens_only_for_people_who_may_open_the_file(client, anna):
+def test_preview_opens_only_for_people_who_may_open_the_file(client, anna, pm):
     screenshot = sent(anna, ("duplicates.png", picture("PNG")))
     make_pending_previews()
     url = f"/files/{screenshot.id}/preview/"
@@ -192,7 +192,7 @@ def test_preview_opens_only_for_people_who_may_open_the_file(client, anna):
     assert response["Content-Type"] == "image/webp"
     assert "no-store" in response["Cache-Control"]
 
-    northwind = Company.objects.create(name="Northwind")
+    northwind = Company.objects.create(name="Northwind", owner=pm)
     client.force_login(User.objects.create_user("lee@northwind.com", name="Lee", company=northwind))
     assert client.get(url).status_code == 404
 

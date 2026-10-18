@@ -64,7 +64,8 @@ class Period(models.TextChoices):
 
 
 def requests_for(user: User) -> QuerySet[Request]:
-    """Every request this person may see: clients their own company's, the PM all of them.
+    """Every request this person may see: clients their own company's, a PM those of the
+    clients they own (PRD: every PM has their own clients).
 
     The team only opens attachment links, never requests, so they get nothing here.
     """
@@ -72,7 +73,7 @@ def requests_for(user: User) -> QuerySet[Request]:
     if not user.is_active:
         return requests.none()
     if user.role == Role.PM:
-        return requests
+        return requests.filter(company__owner=user)
     if user.role == Role.CLIENT:
         return requests.filter(company=user.company)
     return requests.none()
@@ -90,8 +91,8 @@ def can_create_requests(user: User) -> bool:
 
 
 def has_my_requests_page(user: User) -> bool:
-    """The requests page is home for clients (their company's requests) and for the PM
-    (everyone's). The team only opens attachment links."""
+    """The requests page is home for clients (their company's requests) and for PMs (their
+    clients'). The team only opens attachment links."""
     return user.role in (Role.CLIENT, Role.PM)
 
 
@@ -457,20 +458,17 @@ def can_post_message(user: User, request: Request) -> bool:
 
     Done and Declined are final: anything new goes into a new request.
     """
-    if not user.is_active or request.status in CLOSED_STATUSES:
+    if request.status in CLOSED_STATUSES:
         return False
-    if user.role == Role.PM:
-        return True
-    return user.role == Role.CLIENT and user.company_id == request.company_id
+    return _is_owner_pm(user, request) or _is_company_client(user, request)
 
 
 def can_ask_for_input(user: User, request: Request) -> bool:
     """Only the PM asks, and only before the request is planned: later questions come from
     the team in Jira (PRD: statuses and Jira mapping)."""
-    return (
-        user.is_active
-        and user.role == Role.PM
-        and request.status in (ClientStatus.RECEIVED, ClientStatus.NEEDS_INPUT)
+    return _is_owner_pm(user, request) and request.status in (
+        ClientStatus.RECEIVED,
+        ClientStatus.NEEDS_INPUT,
     )
 
 
@@ -516,32 +514,36 @@ def can_ask_to_withdraw(user: User, request: Request) -> bool:
 
 
 def can_decide_withdrawal(user: User, request: Request) -> bool:
-    return user.is_active and user.role == Role.PM and _pending_withdrawal(request) is not None
+    return _is_owner_pm(user, request) and _pending_withdrawal(request) is not None
 
 
-def _is_pm(user: User) -> bool:
-    return user.is_active and user.role == Role.PM
+def _is_owner_pm(user: User, request: Request) -> bool:
+    """The PM who owns the request's client; any other PM may not even see it."""
+    return user.is_active and user.role == Role.PM and request.company.owner_id == user.pk
 
 
 def can_move_to_later(user: User, request: Request) -> bool:
     """Later is "yes, but not now": for a request the PM has not planned yet (PRD: PM
     buttons). Once planned, the Jira sync moves it there when the task leaves the release."""
-    return _is_pm(user) and request.status in (ClientStatus.RECEIVED, ClientStatus.NEEDS_INPUT)
+    return _is_owner_pm(user, request) and request.status in (
+        ClientStatus.RECEIVED,
+        ClientStatus.NEEDS_INPUT,
+    )
 
 
 def can_bring_back(user: User, request: Request) -> bool:
     """Until the Jira sync exists, the PM takes a request out of Later by hand."""
-    return _is_pm(user) and request.status == ClientStatus.LATER
+    return _is_owner_pm(user, request) and request.status == ClientStatus.LATER
 
 
 def can_decline(user: User, request: Request) -> bool:
     """The PM may decline any open request, with a reason, even after the Jira task exists."""
-    return _is_pm(user) and request.status not in CLOSED_STATUSES
+    return _is_owner_pm(user, request) and request.status not in CLOSED_STATUSES
 
 
 def can_add_note(user: User, request: Request) -> bool:
     """Only the PM writes notes, in an open request, next to the reply box."""
-    return _is_pm(user) and request.status not in CLOSED_STATUSES
+    return _is_owner_pm(user, request) and request.status not in CLOSED_STATUSES
 
 
 def can_mark_handled(user: User, request: Request) -> bool:
@@ -793,7 +795,7 @@ def _new_messages(user: User, request: Request, entries: list[ThreadEntry]) -> l
 
 
 def _pm_reason_of(user: User, request: Request) -> PmReason | None:
-    if user.role != Role.PM:
+    if not _is_owner_pm(user, request):
         return None
     return pm_reasons(requests_for(user).filter(pk=request.pk)).get(request.pk)
 

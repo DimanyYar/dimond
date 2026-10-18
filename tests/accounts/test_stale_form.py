@@ -15,8 +15,8 @@ def browser() -> Client:
 
 
 @pytest.fixture
-def atlas() -> Company:
-    return Company.objects.create(name="Atlas")
+def atlas(pm) -> Company:
+    return Company.objects.create(name="Atlas", owner=pm)
 
 
 @pytest.fixture

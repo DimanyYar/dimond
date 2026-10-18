@@ -1,15 +1,33 @@
 from typing import Any, ClassVar
 
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
 
 
+class Role(models.TextChoices):
+    CLIENT = "client", "Client"
+    TEAM = "team", "Team"
+    PM = "pm", "PM"
+
+
 class Company(models.Model):
-    """A client organisation. Everyone at a company sees all of its requests."""
+    """A client organisation. Everyone at a company sees all of its requests.
+
+    Each company belongs to the PM who works with it; other PMs never see it, its people or
+    its requests (PRD: every PM has their own clients).
+    """
 
     name = models.CharField(max_length=120, unique=True)
+    owner = models.ForeignKey(
+        "User",
+        on_delete=models.PROTECT,
+        related_name="clients",
+        limit_choices_to={"role": Role.PM, "is_active": True},
+        help_text="The PM who works with this client. Other PMs never see it.",
+    )
     email_domain = models.CharField(
         max_length=120,
         blank=True,
@@ -25,11 +43,10 @@ class Company(models.Model):
     def __str__(self) -> str:
         return self.name
 
-
-class Role(models.TextChoices):
-    CLIENT = "client", "Client"
-    TEAM = "team", "Team"
-    PM = "pm", "PM"
+    def clean(self) -> None:
+        # owner_id is still empty when the admin form left the field blank.
+        if self.owner_id is not None and not (self.owner.role == Role.PM and self.owner.is_active):
+            raise ValidationError({"owner": "Only a PM with access can own a client."})
 
 
 class Notify(models.TextChoices):
@@ -114,6 +131,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     def clean(self) -> None:
         # Runs before the uniqueness check: Anna@Atlas.com and anna@atlas.com are one person.
         self.email = self.email.strip().lower()
+        # A client nobody owns would vanish from every PM's view (ADR 0014).
+        if (
+            self.pk is not None
+            and (self.role != Role.PM or not self.is_active)
+            and self.clients.exists()
+        ):
+            raise ValidationError("This PM still owns clients. Give them to another PM first.")
 
 
 class LinkKind(models.TextChoices):
