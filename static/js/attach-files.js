@@ -21,6 +21,7 @@ export function watchFiles(form) {
   const box = form.querySelector("[data-attach]");
   if (box === null) return;
   const input = box.querySelector("[data-attach-input]");
+  const posters = box.querySelector("[data-attach-posters]");
   const list = box.querySelector("[data-attach-list]");
   const error = box.querySelector("[data-attach-error]");
   // Files already in the input: carried over from a form the server sent back with errors.
@@ -46,6 +47,18 @@ export function watchFiles(form) {
     files.filter((entry) => entry.progress === null).forEach((entry) => transfer.items.add(entry.file));
     input.files = transfer.files;
     list.replaceChildren(...files.map(tileFor));
+    sendFrames();
+  }
+
+  // Each ready video's frame goes with the form under the video's name plus ".jpg", so the
+  // server knows whose frame it is (apps/files/forms.py).
+  function sendFrames() {
+    const transfer = new DataTransfer();
+    for (const entry of files) {
+      const frame = entry.progress === null ? entry.tile.frame() : null;
+      if (frame !== null) transfer.items.add(new File([frame], `${entry.file.name}.jpg`, { type: "image/jpeg" }));
+    }
+    posters.files = transfer.files;
   }
 
   async function compress(entry) {
@@ -64,7 +77,7 @@ export function watchFiles(form) {
       entry.tile.progress(null);
       // The frame of what gets uploaded; a browser that could not show the original (HEVC in
       // Chrome) can show this one.
-      entry.tile.showFrame(ready);
+      entry.tile.showFrame(ready).then(sendFrames);
     } catch (problem) {
       // Removed by the client while compressing: it is already gone from the list.
       if (entry.stop.signal.aborted) return;
@@ -99,7 +112,7 @@ export function watchFiles(form) {
         entry.stop = new AbortController();
         tileFor(entry);
         entry.tile.progress(0);
-        entry.tile.showFrame(entry.file);
+        entry.tile.showFrame(entry.file).then(sendFrames);
         compress(entry);
       }
     }

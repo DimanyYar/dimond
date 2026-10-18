@@ -26,10 +26,10 @@ def _excerpt(checked: CheckedFile) -> str:
     return "\n".join(line[:EXCERPT_WIDTH] for line in lines)
 
 
-def _preview_status(content_type: str) -> PreviewStatus:
-    if content_type.startswith("image/") or content_type == "application/pdf":
+def _preview_status(checked: CheckedFile) -> PreviewStatus:
+    if checked.content_type.startswith("image/") or checked.content_type == "application/pdf":
         return PreviewStatus.PENDING
-    return PreviewStatus.NONE
+    return PreviewStatus.PENDING if checked.poster else PreviewStatus.NONE
 
 
 def attach_files(
@@ -53,7 +53,9 @@ def attach_files(
             name=checked.name,
             content_type=checked.content_type,
             size=checked.size,
-            preview_status=_preview_status(checked.content_type),
+            preview_status=_preview_status(checked),
+            # The video's frame waits here for the worker, which replaces it with the preview.
+            preview=ContentFile(checked.poster, name="poster.jpg") if checked.poster else "",
             excerpt=_excerpt(checked) if checked.content_type == "text/plain" else "",
         )
         for checked in files
@@ -73,18 +75,25 @@ def remove_files(files: Iterable[Attachment], removed_in: RequestRevision) -> No
 
 
 def make_preview(attachment: Attachment) -> None:
-    """Draw the small picture a tile shows: an image made smaller, a PDF's first page. A file
-    that cannot be read keeps its tile without a picture; the file itself still opens. Storage
-    errors are left to the caller: the file is fine, so the preview waits for another try."""
-    with attachment.file.open("rb") as stored:
+    """Draw the small picture a tile shows: an image made smaller, a PDF's first page, a video's
+    frame the browser sent. A file that cannot be read keeps its tile without a picture; the
+    file itself still opens. Storage errors are left to the caller: the file is fine, so the
+    preview waits for another try."""
+    is_video = attachment.kind == "video"
+    source = attachment.preview if is_video else attachment.file
+    with source.open("rb") as stored:
         content = stored.read()
     try:
-        preview = previews.draw(content, attachment.content_type)
+        preview = previews.draw(content, "image/jpeg" if is_video else attachment.content_type)
     except previews.CANNOT_READ:
         log.warning("No preview for attachment %s", attachment.id, exc_info=True)
+        if is_video:
+            attachment.preview.delete(save=False)
         attachment.preview_status = PreviewStatus.NONE
-        attachment.save(update_fields=["preview_status"])
+        attachment.save(update_fields=["preview", "preview_status"])
         return
+    if is_video:
+        attachment.preview.delete(save=False)
     attachment.preview.save("preview.webp", ContentFile(preview.webp), save=False)
     attachment.pages = preview.pages
     attachment.preview_status = PreviewStatus.READY

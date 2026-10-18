@@ -90,8 +90,8 @@ async function firstLines(file) {
 }
 
 // The tile for one chosen file. `onRemove` runs when × is pressed. Returns the element, a way
-// to show compressing progress (a number from 0 to 1, or null when done) and `forget`, which
-// lets go of the picture's temporary address once the tile is gone.
+// to show compressing progress (a number from 0 to 1, or null when done), a video's frame and
+// `forget`, which lets go of the picture's temporary address once the tile is gone.
 export function formTile(file, onRemove) {
   const kind = kindOf(file);
   const tile = element("li", "tile");
@@ -145,6 +145,7 @@ export function formTile(file, onRemove) {
 
   let framesAsked = 0;
   let frameShown = 0;
+  let latestFrame = null;
 
   let bar = null;
   let percent = null;
@@ -182,7 +183,13 @@ export function formTile(file, onRemove) {
       const frame = await videoFrame(video);
       if (frame === null || asked < frameShown) return;
       frameShown = asked;
+      latestFrame = frame;
       showPicture(frame);
+    },
+    // The frame on a video's tile, sent with the form so the card shows it too; null before
+    // there is one.
+    frame() {
+      return latestFrame;
     },
     forget() {
       forgotten = true;
