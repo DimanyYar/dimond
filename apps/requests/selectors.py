@@ -4,7 +4,8 @@ from datetime import date, datetime, timedelta
 from typing import NamedTuple
 
 from django.db import models
-from django.db.models import Count, Max, Prefetch, Q, QuerySet
+from django.db.models import Count, Exists, Max, OuterRef, Prefetch, Q, QuerySet, Subquery
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from apps.accounts.models import Role, User
@@ -23,6 +24,7 @@ from .models import (
     Request,
     RequestRevision,
     RequestType,
+    RequestVisit,
     StatusEvent,
     WithdrawalRequest,
 )
@@ -108,6 +110,24 @@ def my_requests(
     if types:
         requests = requests.filter(type__in=types)
     return requests
+
+
+def with_unread(requests: QuerySet[Request], user: User) -> QuerySet[Request]:
+    """Adds `unread`: how many messages from others came after the person last opened each
+    request. A request they never opened counts every message from others. Requests the
+    person may not see are dropped, whatever the caller passed in."""
+    visits = RequestVisit.objects.filter(request=OuterRef("request"), user=user)
+    new_messages = (
+        Message.objects.filter(request=OuterRef("pk"))
+        .exclude(author=user)
+        .filter(Q(created_at__gt=Subquery(visits.values("seen_at")[:1])) | ~Exists(visits))
+        .order_by()
+        .values("request")
+        .annotate(n=Count("pk"))
+        .values("n")
+    )
+    visible = requests.filter(pk__in=requests_for(user).values("pk"))
+    return visible.annotate(unread=Coalesce(Subquery(new_messages), 0))
 
 
 def my_requests_count(
@@ -221,7 +241,7 @@ def my_requests_page(
     small. Revisit when a company passes a few hundred requests.
     """
     since = period_start(period, now)
-    shown = list(my_requests(user, show=show, types=types, since=since))
+    shown = list(with_unread(my_requests(user, show=show, types=types, since=since), user))
     return MyRequestsPage(
         requests=shown,
         board=board(shown) if with_board else [],
@@ -493,12 +513,18 @@ def _open_question(request: Request) -> Message | None:
 class RequestPage:
     viewer: User
     request: Request
+    # When the page was read: opening it marks what came before as seen, not what came after.
+    read_at: datetime
     # The request's own files, shown under its text; `all_files` adds those from the thread.
     files: list[Attachment]
     all_files: list[Attachment]
     # Images, PDFs, video and audio, in the same order: the ones the viewer goes through.
     viewable_files: list[Attachment]
     thread: list[ThreadEntry]
+    # The first message from others since the viewer last opened the request: the thread
+    # draws a "new" line above it. `new_count` says how many there are.
+    first_new: Message | None
+    new_count: int
     edits: list[Edit]
     progress: Progress
     question: Message | None
@@ -511,21 +537,39 @@ class RequestPage:
     can_decide_withdrawal: bool
 
 
+def _new_messages(user: User, request: Request, entries: list[ThreadEntry]) -> list[Message]:
+    """Messages from others the person has not seen yet, oldest first. Private like
+    `_thread`: the request comes from `requests_for`."""
+    visit = RequestVisit.objects.filter(request=request, user=user).first()
+    return [
+        entry.message
+        for entry in entries
+        if entry.message is not None
+        and entry.message.author_id != user.pk
+        and (visit is None or entry.message.created_at > visit.seen_at)
+    ]
+
+
 def request_page(user: User, pk: int) -> RequestPage:
     """Everything the request card shows. Raises Request.DoesNotExist like `request_for`."""
+    read_at = timezone.now()
     request = request_for(user, pk)
     request_edits = _edits(request)
     entries = _thread(request, request_edits)
+    new = _new_messages(user, request, entries)
     all_files = list(request.attachments.shown().select_related("uploaded_by"))
     # Every request has at least its "Received" event, so this is never empty.
     since = max(entry.at for entry in entries if entry.status)
     return RequestPage(
         viewer=user,
         request=request,
+        read_at=read_at,
         files=[file for file in all_files if file.message_id is None],
         all_files=all_files,
         viewable_files=[file for file in all_files if file.shown_in_browser],
         thread=entries,
+        first_new=new[0] if new else None,
+        new_count=len(new),
         edits=request_edits,
         progress=progress(request, since),
         question=_open_question(request),

@@ -1,4 +1,5 @@
 from collections.abc import Collection, Sequence
+from datetime import datetime
 from uuid import UUID
 
 from django.db import transaction
@@ -15,6 +16,7 @@ from .models import (
     Request,
     RequestRevision,
     RequestType,
+    RequestVisit,
     StatusEvent,
     WhenNeeded,
     WithdrawalRequest,
@@ -241,3 +243,12 @@ def decide_withdrawal(pm: User, request: Request, *, confirm: bool) -> Request:
     if confirm:
         return _set_status(request, ClientStatus.WITHDRAWN, pm)
     return request
+
+
+def mark_seen(user: User, request: Request, read_at: datetime) -> None:
+    """The person has opened the request: messages up to `read_at`, when the page was read,
+    are no longer new to them. A message written while the page was being built stays new.
+
+    Takes a request the caller has already read through `requests_for`.
+    """
+    RequestVisit.objects.update_or_create(request=request, user=user, defaults={"seen_at": read_at})

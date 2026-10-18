@@ -76,6 +76,11 @@ class BoardColumn(NamedTuple):
     name: str
     statuses: tuple[ClientStatus, ...]
 
+    @property
+    def mixes_statuses(self) -> bool:
+        """Cards in a column that holds several statuses say which one they are in."""
+        return len(self.statuses) > 1
+
 
 # Fewer columns than statuses: the client cares whether a request waits for them, waits in
 # line, is being built, needs checking, was parked or is over.
@@ -238,3 +243,20 @@ class WithdrawalRequest(models.Model):
 
     def __str__(self) -> str:
         return f"Withdraw {self.request.key}?"
+
+
+class RequestVisit(models.Model):
+    """When a person last opened a request. Messages from others after that moment are new
+    to them: the board shows "2 new" and the thread a "new since" line (PRD: unread)."""
+
+    request = models.ForeignKey(Request, on_delete=models.CASCADE, related_name="visits")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="+")
+    seen_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["request", "user"], name="one_visit_per_person")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user} saw {self.request.key} at {self.seen_at:%Y-%m-%d %H:%M}"

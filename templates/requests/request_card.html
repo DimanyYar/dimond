@@ -1,12 +1,21 @@
-{% comment %}One request on the board or in the list. The whole card opens the request.{% endcomment %}
-<article class="request-card{% if item.status == 'needs_input' %} needs-you{% endif %}">
-  <div class="request-card-meta">
-    <span>{{ item.get_type_display }} · {{ item.key }}</span>
-    <span class="status status-{{ item.status }}">{{ item.get_status_display }}</span>
+{% comment %}One request on the board or in the phone list. The whole card opens the request.
+`show_status`: the card names its status where its column holds several, and always on a phone.
+The top line never wraps: the key keeps its place and a long type is cut, so nothing slides.{% endcomment %}
+<article class="request-card{% if item.status == 'needs_input' %} needs-you{% endif %}{% if item.unread %} has-new{% endif %}">
+  <div class="request-card-head">
+    <span class="request-card-context">{{ item.get_type_display }}</span>
+    <span class="request-card-key">{{ item.key }}</span>
   </div>
   <h3><a class="card-link" href="{{ item.get_absolute_url }}" title="{{ item.title }}">{{ item.title }}</a></h3>
+  {% if show_status %}
+    <div class="request-card-chips"><span class="status status-{{ item.status }}">{{ item.get_status_display }}</span></div>
+  {% endif %}
   <div class="request-card-meta">
-    <span{% if item.when_needed == 'hotfix' %} class="hotfix"{% endif %}>Asked for: {{ item.get_when_needed_display }}</span>
-    <time datetime="{{ item.created_at|date:'c' }}">{{ item.created_at|date:"M j" }}</time>
+    <span class="request-card-want{% if item.when_needed == 'hotfix' %} hotfix{% endif %}"><span class="visually-hidden">Asked for: </span>{{ item.get_when_needed_display }}</span>
+    {% if item.unread %}
+      {% include "requests/unread_badge.html" with count=item.unread %}
+    {% else %}
+      <time datetime="{{ item.created_at|date:'c' }}">{{ item.created_at|date:"M j" }}</time>
+    {% endif %}
   </div>
 </article>
