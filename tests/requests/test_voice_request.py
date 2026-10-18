@@ -16,8 +16,8 @@ def private_folder(settings, tmp_path):
 
 
 @pytest.fixture
-def anna(client) -> User:
-    atlas = Company.objects.create(name="Atlas")
+def anna(client, pm) -> User:
+    atlas = Company.objects.create(name="Atlas", owner=pm)
     user = User.objects.create_user("anna@atlas-crm.com", name="Anna", company=atlas)
     client.force_login(user)
     return user

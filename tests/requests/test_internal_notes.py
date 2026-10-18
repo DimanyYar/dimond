@@ -1,7 +1,7 @@
 import pytest
 from django.urls import reverse
 
-from apps.accounts.models import Company, Role, User
+from apps.accounts.models import Company, User
 from apps.requests import selectors, services
 from apps.requests.models import ClientStatus, Request, RequestType, WhenNeeded
 
@@ -11,18 +11,13 @@ NOTE = "Olga thinks two days; check archived sources with her"
 
 
 @pytest.fixture
-def atlas() -> Company:
-    return Company.objects.create(name="Atlas")
+def atlas(pm) -> Company:
+    return Company.objects.create(name="Atlas", owner=pm)
 
 
 @pytest.fixture
 def anna(atlas) -> User:
     return User.objects.create_user("anna@atlas.test", company=atlas, name="Anna")
-
-
-@pytest.fixture
-def pm() -> User:
-    return User.objects.create_user("dmitry@shakuro.com", role=Role.PM, name="Dmitry")
 
 
 @pytest.fixture

@@ -23,15 +23,15 @@ def test_client_opens_a_file_of_own_company_request(client, screenshot, atlas):
     assert b"".join(response.streaming_content) == PNG
 
 
-def test_client_cannot_open_other_company_file(client, screenshot):
-    northwind = Company.objects.create(name="Northwind")
+def test_client_cannot_open_other_company_file(client, screenshot, pm):
+    northwind = Company.objects.create(name="Northwind", owner=pm)
     outsider = User.objects.create_user("lee@northwind.com", name="Lee", company=northwind)
     client.force_login(outsider)
 
     assert opened(client, screenshot).status_code == 404
 
 
-def test_pm_opens_any_file(client, screenshot, pm):
+def test_pm_opens_a_file_of_their_client(client, screenshot, pm):
     client.force_login(pm)
 
     assert opened(client, screenshot).status_code == 200
@@ -122,8 +122,8 @@ def test_piece_beyond_the_end_of_the_file_is_refused(client, screenshot, anna):
     assert response["Content-Range"] == f"bytes */{len(PNG)}"
 
 
-def test_pieces_of_a_file_need_the_same_access(client, screenshot):
-    northwind = Company.objects.create(name="Northwind")
+def test_pieces_of_a_file_need_the_same_access(client, screenshot, pm):
+    northwind = Company.objects.create(name="Northwind", owner=pm)
     outsider = User.objects.create_user("lee@northwind.com", name="Lee", company=northwind)
     client.force_login(outsider)
 

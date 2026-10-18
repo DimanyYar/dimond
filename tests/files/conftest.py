@@ -30,8 +30,8 @@ def upload(name: str, content: bytes) -> SimpleUploadedFile:
 
 
 @pytest.fixture
-def atlas() -> Company:
-    return Company.objects.create(name="Atlas")
+def atlas(pm) -> Company:
+    return Company.objects.create(name="Atlas", owner=pm)
 
 
 @pytest.fixture

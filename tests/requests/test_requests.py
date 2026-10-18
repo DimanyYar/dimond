@@ -9,8 +9,8 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def atlas() -> Company:
-    return Company.objects.create(name="Atlas")
+def atlas(pm) -> Company:
+    return Company.objects.create(name="Atlas", owner=pm)
 
 
 @pytest.fixture
@@ -24,14 +24,9 @@ def anna(atlas) -> User:
 
 
 @pytest.fixture
-def northwind_client() -> User:
-    northwind = Company.objects.create(name="Northwind")
+def northwind_client(pm) -> User:
+    northwind = Company.objects.create(name="Northwind", owner=pm)
     return User.objects.create_user("lee@northwind.com", company=northwind)
-
-
-@pytest.fixture
-def pm() -> User:
-    return User.objects.create_user("dmitry@shakuro.com", role=Role.PM)
 
 
 @pytest.fixture
@@ -74,7 +69,7 @@ def test_colleague_sees_every_request_of_their_company(bug, anna):
     assert selectors.request_for(anna, bug.pk) == bug
 
 
-def test_pm_sees_requests_of_all_companies(bug, northwind_client, pm):
+def test_pm_sees_requests_of_all_their_clients(bug, northwind_client, pm):
     other = services.create_request(
         northwind_client,
         RequestType.FEATURE,

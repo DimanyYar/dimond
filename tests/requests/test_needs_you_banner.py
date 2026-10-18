@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 import pytest
 from django.urls import reverse
 
-from apps.accounts.models import Company, Role, User
+from apps.accounts.models import Company, User
 from apps.requests import selectors, services
 from apps.requests.models import ClientStatus, Request, RequestType, StatusEvent, WhenNeeded
 
@@ -13,18 +13,13 @@ URL = reverse("my_requests")
 
 
 @pytest.fixture
-def atlas() -> Company:
-    return Company.objects.create(name="Atlas")
+def atlas(pm) -> Company:
+    return Company.objects.create(name="Atlas", owner=pm)
 
 
 @pytest.fixture
 def anna(atlas) -> User:
     return User.objects.create_user("anna@atlas-crm.com", company=atlas, name="Anna")
-
-
-@pytest.fixture
-def pm() -> User:
-    return User.objects.create_user("dmitry@shakuro.com", role=Role.PM, name="Dmitry")
 
 
 def ask(pm: User, author: User, title: str, question: str, *, type=RequestType.BUG) -> Request:
@@ -97,7 +92,7 @@ def test_filters_do_not_hide_a_question_from_dimon(client, anna, pm):
 
 
 def test_banner_shows_only_the_client_company_requests(anna, pm):
-    northwind = Company.objects.create(name="Northwind")
+    northwind = Company.objects.create(name="Northwind", owner=pm)
     eve = User.objects.create_user("eve@northwind.com", company=northwind)
     ask(pm, eve, "Northwind bug", "Which page?")
 

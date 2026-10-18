@@ -14,8 +14,8 @@ URL = reverse("my_requests")
 
 
 @pytest.fixture
-def atlas() -> Company:
-    return Company.objects.create(name="Atlas")
+def atlas(pm) -> Company:
+    return Company.objects.create(name="Atlas", owner=pm)
 
 
 @pytest.fixture
@@ -64,9 +64,9 @@ def test_team_member_has_no_requests_page(client):
     assert client.get(URL).status_code == 403
 
 
-def test_client_sees_requests_from_everyone_at_their_company(client, anna, ruslan):
+def test_client_sees_requests_from_everyone_at_their_company(client, anna, ruslan, pm):
     make(ruslan, "Lead page is blank")
-    northwind = Company.objects.create(name="Northwind")
+    northwind = Company.objects.create(name="Northwind", owner=pm)
     make(User.objects.create_user("lee@northwind.com", company=northwind), "Northwind bug")
     client.force_login(anna)
 
@@ -231,12 +231,12 @@ def test_month_groups_count_received_and_closed(anna):
     ]
 
 
-def test_filter_sheet_says_how_many_requests_it_will_show(client, anna, ruslan):
+def test_filter_sheet_says_how_many_requests_it_will_show(client, anna, ruslan, pm):
     make(anna, "A bug")
     make(ruslan, "Another bug")
     make(anna, "An idea", type=RequestType.IDEA)
     make(anna, "Shipped bug", status=ClientStatus.DONE)
-    northwind = Company.objects.create(name="Northwind")
+    northwind = Company.objects.create(name="Northwind", owner=pm)
     make(User.objects.create_user("lee@northwind.com", company=northwind), "Northwind bug")
     client.force_login(anna)
     count_url = reverse("my_requests_count")
