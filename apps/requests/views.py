@@ -35,6 +35,7 @@ def my_requests(request: HttpRequest) -> HttpResponse:
     filters = MyRequestsFilter(request.GET)
     show, types, period = filters.requests_filter()
     view = View(filters.chosen("view", View.BOARD))
+    query = filters.chosen("q")
     page = selectors.my_requests_page(
         request.user,
         show=show,
@@ -42,9 +43,16 @@ def my_requests(request: HttpRequest) -> HttpResponse:
         period=period,
         with_board=view == View.BOARD,
         now=timezone.now(),
+        company=filters.chosen_company(),
+        query=query,
     )
     context = {
         "page": page,
+        "is_client": selectors.is_client(request.user),
+        "company": filters.chosen_company(),
+        # Cards name their client when the PM looks at every client at once.
+        "show_client": not selectors.is_client(request.user) and filters.chosen_company() is None,
+        "query": query,
         "show": show,
         "types_chosen": types,
         "period": period,
@@ -73,9 +81,15 @@ def my_requests_count(request: HttpRequest) -> HttpResponse:
     assert isinstance(request.user, User)  # login_required lets only signed-in people in
     if not selectors.has_my_requests_page(request.user):
         raise PermissionDenied
-    show, types, period = MyRequestsFilter(request.GET).requests_filter()
+    filters = MyRequestsFilter(request.GET)
+    show, types, period = filters.requests_filter()
     count = selectors.my_requests_count(
-        request.user, show=show, types=types, period=period, now=timezone.now()
+        request.user,
+        show=show,
+        types=types,
+        period=period,
+        now=timezone.now(),
+        company=filters.chosen_company(),
     )
     return render(request, "requests/show_requests_label.html", {"count": count})
 
@@ -141,8 +155,8 @@ def _render_card(
         # Sent files are dropped when the form comes back with errors; this asks for them again.
         "reattach": bool(form and form.errors and request.FILES),
         "withdraw_form": withdraw_form or WithdrawForm(reason_required=page.can_ask_to_withdraw),
-        # Picks the client's navigation; the PM's own pages come with the inbox (#12).
-        "is_client": selectors.has_my_requests_page(page.viewer),
+        # Picks the client's or the PM's navigation and words.
+        "is_client": selectors.is_client(page.viewer),
     }
     return render(request, "requests/request_detail.html", context, status=status)
 

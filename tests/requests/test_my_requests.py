@@ -50,8 +50,15 @@ def test_client_lands_on_my_requests_after_sign_in(client, anna):
     assert client.get("/").url == URL
 
 
-def test_pm_keeps_the_placeholder_home_until_the_inbox_exists(client):
+def test_pm_lands_on_the_requests_page_after_sign_in(client):
     client.force_login(User.objects.create_user("dmitry@shakuro.com", role=Role.PM))
+
+    assert client.get("/").url == URL
+    assert client.get(URL).status_code == 200
+
+
+def test_team_member_has_no_requests_page(client):
+    client.force_login(User.objects.create_user("olga@shakuro.com", role=Role.TEAM))
 
     assert client.get("/").status_code == 200
     assert client.get(URL).status_code == 403
@@ -188,7 +195,7 @@ def test_board_groups_statuses_into_columns_and_skips_empty_ones(anna):
 
     columns = selectors.board(selectors.requests_for(anna))
 
-    assert [(column.name, [r.title for r in items]) for column, items in columns] == [
+    assert [(g.column.name, [r.title for r in g.requests]) for g in columns] == [
         ("Needs you", ["Question"]),
         ("Queued", ["Scheduled", "Waiting"]),
     ]
@@ -239,7 +246,7 @@ def test_filter_sheet_says_how_many_requests_it_will_show(client, anna, ruslan):
     assert client.get(count_url, {"show": "all"}).content.decode().strip() == "Show 4 requests"
 
 
-def test_only_clients_can_ask_the_filter_count(client):
-    client.force_login(User.objects.create_user("dmitry@shakuro.com", role=Role.PM))
+def test_team_member_cannot_ask_the_filter_count(client):
+    client.force_login(User.objects.create_user("olga@shakuro.com", role=Role.TEAM))
 
     assert client.get(reverse("my_requests_count")).status_code == 403

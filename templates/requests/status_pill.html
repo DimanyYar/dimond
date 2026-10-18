@@ -1,0 +1,3 @@
+{% comment %}A request's status as a pill. The PM reads "Needs your input" from the other side:
+the request waits for the client.{% endcomment %}
+<span class="status status-{{ item.status }}">{% if item.status == "needs_input" and not is_client %}Waiting on client{% else %}{{ item.get_status_display }}{% endif %}</span>

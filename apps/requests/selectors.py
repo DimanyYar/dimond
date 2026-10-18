@@ -1,14 +1,28 @@
-from collections.abc import Collection, Iterable
+import re
+from collections import Counter
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import NamedTuple
 
 from django.db import models
-from django.db.models import Count, Exists, Max, OuterRef, Prefetch, Q, QuerySet, Subquery
+from django.db.models import (
+    Case,
+    Count,
+    Exists,
+    Max,
+    OuterRef,
+    Prefetch,
+    Q,
+    QuerySet,
+    Subquery,
+    Value,
+    When,
+)
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from apps.accounts.models import Role, User
+from apps.accounts.models import Company, Role, User
 from apps.files.models import Attachment
 
 from .models import (
@@ -17,6 +31,8 @@ from .models import (
     CLOSED_STATUSES,
     EDITABLE_STATUSES,
     IN_WORK_STATUSES,
+    NEEDS_YOU_COLUMN,
+    QUEUED_COLUMN,
     REQUEST_FIELDS,
     BoardColumn,
     ClientStatus,
@@ -72,8 +88,26 @@ def can_create_requests(user: User) -> bool:
 
 
 def has_my_requests_page(user: User) -> bool:
-    """ "My requests" is the clients' home; the PM works from the inbox instead."""
+    """The requests page is home for clients (their company's requests) and for the PM
+    (everyone's). The team only opens attachment links."""
+    return user.role in (Role.CLIENT, Role.PM)
+
+
+def is_client(user: User) -> bool:
+    """Clients and the PM share pages; this picks the client's words and navigation."""
     return user.role == Role.CLIENT
+
+
+class PmReason(models.TextChoices):
+    """Why a request waits for the PM's move (PRD: "Needs you" is whose move it is, not a
+    status). In the order the PM sees them: an ask to withdraw first."""
+
+    WITHDRAW = "withdraw", "Asks to withdraw"
+    REPLIED = "replied", "Client replied"
+    NEW = "new", "New"
+
+
+PM_REASON_ORDER = list(PmReason)
 
 
 def period_start(period: Period, now: datetime) -> datetime | None:
@@ -93,16 +127,40 @@ def period_start(period: Period, now: datetime) -> datetime | None:
     return None
 
 
-def _created_since(user: User, since: datetime | None) -> QuerySet[Request]:
+def _of_company(user: User, company: int | None) -> QuerySet[Request]:
+    """The PM's client chips narrow everything on the page to one company. A client is
+    always narrowed to their own by `requests_for`, so the chip changes nothing for them."""
     requests = requests_for(user)
+    return requests if company is None else requests.filter(company_id=company)
+
+
+def _created_since(user: User, since: datetime | None, company: int | None) -> QuerySet[Request]:
+    requests = _of_company(user, company)
     return requests if since is None else requests.filter(created_at__gte=since)
 
 
+KEY_PATTERN = re.compile(r"^\s*dmn-?(\d+)\s*$", re.IGNORECASE)
+
+
+def search(user: User, query: str) -> QuerySet[Request]:
+    """Requests by their DMN- key or words from the title, whatever their age or status:
+    someone searching for DMN-1031 wants it even if it closed months ago."""
+    key = KEY_PATTERN.match(query)
+    if key:
+        return requests_for(user).filter(pk=int(key.group(1)))
+    return requests_for(user).filter(title__icontains=query.strip())
+
+
 def my_requests(
-    user: User, *, show: Show, types: Collection[RequestType], since: datetime | None
+    user: User,
+    *,
+    show: Show,
+    types: Collection[RequestType],
+    since: datetime | None,
+    company: int | None = None,
 ) -> QuerySet[Request]:
-    """The requests on "My requests", newest first. Later counts as open: it may come back."""
-    requests = _created_since(user, since)
+    """The requests on the page, newest first. Later counts as open: it may come back."""
+    requests = _created_since(user, since, company)
     if show == Show.OPEN:
         requests = requests.exclude(status__in=CLOSED_STATUSES)
     elif show == Show.CLOSED:
@@ -131,15 +189,50 @@ def with_unread(requests: QuerySet[Request], user: User) -> QuerySet[Request]:
 
 
 def my_requests_count(
-    user: User, *, show: Show, types: Collection[RequestType], period: Period, now: datetime
+    user: User,
+    *,
+    show: Show,
+    types: Collection[RequestType],
+    period: Period,
+    now: datetime,
+    company: int | None = None,
 ) -> int:
     """How many requests a filter would show, so the phone filter sheet can say it upfront."""
-    return my_requests(user, show=show, types=types, since=period_start(period, now)).count()
+    since = period_start(period, now)
+    return my_requests(user, show=show, types=types, since=since, company=company).count()
 
 
-def period_summary(user: User, since: datetime | None) -> dict[str, int]:
+def with_pm_reason(requests: QuerySet[Request]) -> QuerySet[Request]:
+    """Adds `pm_reason`: why an open request waits for the PM, or None.
+
+    An open ask to withdraw comes first; then the client wrote last; then a request the PM
+    has not answered yet. Any message from anyone at the client's company counts, since
+    clients only ever talk to the PM.
+    """
+    last_author_role = Subquery(
+        Message.objects.filter(request=OuterRef("pk"))
+        .order_by("-created_at", "-pk")
+        .values("author__role")[:1]
+    )
+    pending_ask = WithdrawalRequest.objects.filter(request=OuterRef("pk"), confirmed__isnull=True)
+    pm_wrote = Message.objects.filter(request=OuterRef("pk"), author__role=Role.PM)
+    open_request = ~Q(status__in=CLOSED_STATUSES)
+    return requests.alias(last_author=last_author_role).annotate(
+        pm_reason=Case(
+            When(Exists(pending_ask), then=Value(PmReason.WITHDRAW)),
+            When(open_request & Q(last_author=Role.CLIENT), then=Value(PmReason.REPLIED)),
+            When(Q(status=ClientStatus.RECEIVED) & ~Exists(pm_wrote), then=Value(PmReason.NEW)),
+            default=None,
+            output_field=models.CharField(),
+        )
+    )
+
+
+def period_summary(
+    user: User, since: datetime | None, company: int | None = None
+) -> dict[str, int]:
     """Counts for the summary and the Open / Closed / All switch, ignoring the type filter."""
-    summary: dict[str, int] = _created_since(user, since).aggregate(
+    summary: dict[str, int] = _created_since(user, since, company).aggregate(
         received=Count("pk"),
         in_work=Count("pk", filter=Q(status__in=IN_WORK_STATUSES)),
         later=Count("pk", filter=Q(status=ClientStatus.LATER)),
@@ -151,13 +244,54 @@ def period_summary(user: User, since: datetime | None) -> dict[str, int]:
     return summary
 
 
-def board(requests: Iterable[Request]) -> list[tuple[BoardColumn, list[Request]]]:
-    """Requests sorted into board columns. Empty columns are left out to save width."""
+class BoardGroup(NamedTuple):
+    column: BoardColumn
+    requests: list[Request]
+    # Cards name their status where it is not obvious from the column.
+    show_status: bool
+
+
+def pm_reasons(requests: QuerySet[Request]) -> dict[int, PmReason]:
+    """Which of these requests wait for the PM, and why."""
+    rows = with_pm_reason(requests).filter(Q(pm_reason__isnull=False))
+    # The type checker cannot see a field that `with_pm_reason` adds with `annotate`.
+    pairs = rows.values_list("pk", "pm_reason")  # type: ignore[misc]
+    return {pk: PmReason(reason) for pk, reason in pairs}
+
+
+def _column_slug(request: Request, reasons: Mapping[int, PmReason] | None) -> str:
+    if reasons is not None and request.pk in reasons:
+        return NEEDS_YOU_COLUMN
+    # "Needs you" on the client's board is the PM's question; for the PM that request waits
+    # in line, labelled "Waiting on client".
+    if reasons is not None and request.status == ClientStatus.NEEDS_INPUT:
+        return QUEUED_COLUMN
+    return next(c.slug for c in BOARD_COLUMNS if request.status in c.statuses)
+
+
+def board(
+    requests: Iterable[Request], reasons: Mapping[int, PmReason] | None = None
+) -> list[BoardGroup]:
+    """Requests sorted into board columns. Empty columns are left out to save width.
+
+    Both roles get the same columns; only "Needs you" differs: the client's holds the PM's
+    questions, the PM's holds whatever waits for the PM, whatever its status. `reasons`
+    comes from `pm_reasons` and is given for the PM only.
+    """
     requests = list(requests)
-    columns = [
-        (column, [r for r in requests if r.status in column.statuses]) for column in BOARD_COLUMNS
-    ]
-    return [(column, items) for column, items in columns if items]
+    for_pm = reasons is not None
+    slugs = {r.pk: _column_slug(r, reasons) for r in requests}
+    groups = []
+    for column in BOARD_COLUMNS:
+        items = [r for r in requests if slugs[r.pk] == column.slug]
+        if reasons is not None and column.slug == NEEDS_YOU_COLUMN:
+            # Asks to withdraw first, as in the banner; newest first within each reason.
+            items.sort(key=lambda r: PM_REASON_ORDER.index(reasons[r.pk]))
+        if items:
+            # The PM's "Needs you" and Queued both hold several statuses.
+            mixed = for_pm and column.slug in (NEEDS_YOU_COLUMN, QUEUED_COLUMN)
+            groups.append(BoardGroup(column, items, column.mixes_statuses or mixed))
+    return groups
 
 
 class MonthGroup(NamedTuple):
@@ -216,14 +350,55 @@ def needs_you(user: User) -> NeedsYou:
     return NeedsYou(shown, total - len(shown))
 
 
+PM_NEEDS_SHOWN = 3
+
+
+@dataclass(frozen=True)
+class PmNeeds:
+    """The PM's "Needs you" banner: a few rows, asks to withdraw first, and how many more."""
+
+    shown: list[tuple[Request, PmReason]]
+    more: int
+
+
+def pm_needs(user: User, company: int | None) -> PmNeeds:
+    """What waits for the PM, oldest first within each reason. Ignores the period and type
+    filters: a client's reply matters whatever its request's age."""
+    requests = _of_company(user, company)
+    reasons = pm_reasons(requests)
+    waiting = [
+        (r, reasons[r.pk]) for r in requests.filter(pk__in=reasons).order_by("created_at", "pk")
+    ]
+    waiting.sort(key=lambda pair: PM_REASON_ORDER.index(pair[1]))
+    return PmNeeds(waiting[:PM_NEEDS_SHOWN], max(len(waiting) - PM_NEEDS_SHOWN, 0))
+
+
+class ClientChip(NamedTuple):
+    company: Company
+    needs_pm: int
+
+
+def client_chips(user: User) -> list[ClientChip]:
+    """The PM's client filter: every company with requests, and how many wait for the PM."""
+    waiting = Counter(
+        requests_for(user)
+        .filter(pk__in=pm_reasons(requests_for(user)))
+        .values_list("company_id", flat=True)
+    )
+    companies = Company.objects.filter(pk__in=requests_for(user).values("company")).order_by("name")
+    return [ClientChip(company, waiting[company.pk]) for company in companies]
+
+
 @dataclass(frozen=True)
 class MyRequestsPage:
     requests: list[Request]
-    board: list[tuple[BoardColumn, list[Request]]]
+    board: list[BoardGroup]
     months: list[MonthGroup]
     summary: dict[str, int]
     has_any_request: bool
-    needs_you: NeedsYou
+    needs_you: NeedsYou | None
+    pm_needs: PmNeeds | None
+    clients: list[ClientChip]
 
 
 def my_requests_page(
@@ -234,21 +409,34 @@ def my_requests_page(
     period: Period,
     with_board: bool,
     now: datetime,
+    company: int | None = None,
+    query: str = "",
 ) -> MyRequestsPage:
-    """Everything "My requests" shows, read in one place.
+    """Everything the requests page shows, read in one place.
 
     Not paginated: a client sends a handful of requests a week, so even "All time" stays
-    small. Revisit when a company passes a few hundred requests.
+    small. Revisit when the PM's all-clients view passes a few hundred open requests.
+    A search ignores the other filters: it looks for one request.
     """
     since = period_start(period, now)
-    shown = list(with_unread(my_requests(user, show=show, types=types, since=since), user))
+    for_pm = user.role == Role.PM
+    if query:
+        found = search(user, query)
+    else:
+        found = my_requests(user, show=show, types=types, since=since, company=company)
+    found = with_unread(found, user)
+    reasons = pm_reasons(found) if for_pm else None
+    # The template reads `pm_reason` off each card; the board sorts by `reasons`.
+    shown = list(with_pm_reason(found) if for_pm else found)
     return MyRequestsPage(
         requests=shown,
-        board=board(shown) if with_board else [],
+        board=board(shown, reasons) if with_board else [],
         months=[] if with_board else by_month(shown),
-        summary=period_summary(user, since),
+        summary=period_summary(user, since, company),
         has_any_request=requests_for(user).exists(),
-        needs_you=needs_you(user),
+        needs_you=None if for_pm else needs_you(user),
+        pm_needs=pm_needs(user, company) if for_pm else None,
+        clients=client_chips(user) if for_pm else [],
     )
 
 
@@ -525,6 +713,8 @@ class RequestPage:
     # draws a "new" line above it. `new_count` says how many there are.
     first_new: Message | None
     new_count: int
+    # Why the request waits for the PM; always None for clients.
+    pm_reason: PmReason | None
     edits: list[Edit]
     progress: Progress
     question: Message | None
@@ -550,6 +740,12 @@ def _new_messages(user: User, request: Request, entries: list[ThreadEntry]) -> l
     ]
 
 
+def _pm_reason_of(user: User, request: Request) -> PmReason | None:
+    if user.role != Role.PM:
+        return None
+    return pm_reasons(requests_for(user).filter(pk=request.pk)).get(request.pk)
+
+
 def request_page(user: User, pk: int) -> RequestPage:
     """Everything the request card shows. Raises Request.DoesNotExist like `request_for`."""
     read_at = timezone.now()
@@ -570,6 +766,7 @@ def request_page(user: User, pk: int) -> RequestPage:
         thread=entries,
         first_new=new[0] if new else None,
         new_count=len(new),
+        pm_reason=_pm_reason_of(user, request),
         edits=request_edits,
         progress=progress(request, since),
         question=_open_question(request),

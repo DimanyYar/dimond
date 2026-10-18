@@ -1502,14 +1502,78 @@ kbd {
   background: var(--accent);
 }
 
-.request-table .request-title .unread-badge {
+.request-title-extra {
   display: flex;
-  margin-top: 2px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
 }
 
-/* Keys, wishes and dates stay on one line; the table scrolls sideways on narrow screens. */
-.request-table td:not(.request-title) {
+/* Why a request waits for the PM. Text, not a frame: a dark frame already means hover and focus. */
+.reason-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
   white-space: nowrap;
+}
+
+.reason-withdraw { background: var(--ink); color: #ffffff; }
+.reason-replied { background: #ffd9c4; }
+.reason-new { background: var(--surface); border: 1px solid var(--hairline-strong); }
+
+.needs-you-row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+
+.chip-count {
+  margin-left: 4px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.client-filter {
+  flex-wrap: wrap;
+}
+
+/* Search and the board / list switch stay together on the right, and wrap together. */
+.filter-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.filter-tools .view-switch {
+  margin-left: 0;
+}
+
+.search .input {
+  width: 160px;
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+/* Keys, wishes and dates stay on one line; the table scrolls sideways on narrow screens.
+   A long client name wraps instead of pushing the dates off the table. */
+.request-table td:not(.request-title, .request-client) {
+  white-space: nowrap;
+}
+
+.request-table .request-client {
+  max-width: 140px;
 }
 
 /* Above the first message the person has not seen yet. */
@@ -1614,7 +1678,20 @@ kbd {
   }
 
   .filter-bar {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+  }
+
+  /* On a phone the search takes its own line under Open / Closed / All and Filter. */
+  .filter-bar .filter-tools {
+    order: 1;
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  .filter-tools .search,
+  .filter-tools .search .input {
+    flex: 1 1 auto;
+    width: 100%;
   }
 
   .filter-bar .segmented {
