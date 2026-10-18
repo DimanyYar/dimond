@@ -145,6 +145,16 @@ def test_client_removes_a_request_file_in_the_edit_form(client, screenshot, anna
     assert (private_folder / str(screenshot.id)).exists()
 
 
+def test_edit_form_shows_request_files_as_tiles_that_can_be_removed(client, screenshot, anna):
+    client.force_login(anna)
+
+    page = client.get(edit(screenshot.request)).content.decode()
+
+    assert 'class="tile-removable"' in page
+    assert f'name="remove" value="{screenshot.id}"' in page
+    assert "Removed on Save changes, not at once." in page
+
+
 def test_changing_only_the_files_counts_as_an_edit(client, screenshot, anna):
     client.force_login(anna)
 

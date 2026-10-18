@@ -1,9 +1,10 @@
 // The files picker: files chosen, dropped or pasted (Cmd+V) are kept in the form's file
-// input and listed, and each can be removed before sending. A video is first made ready for
+// input and shown as tiles (form-tile.js), and each can be removed before sending. A video is first made ready for
 // upload (compress-video.js) and joins the input only then. The server checks every file
 // again; the checks here only save a round trip.
 
 import { VideoProblem, readyVideo } from "./compress-video.js";
+import { formTile } from "./form-tile.js";
 import { watchRecorders } from "./record-media.js";
 
 const MAX_FILES = 5;
@@ -16,10 +17,6 @@ function named(file) {
   return new File([file], `screenshot-${time}.png`, { type: file.type });
 }
 
-function percent(done) {
-  return `Compressing… ${Math.round(done * 100)}%`;
-}
-
 export function watchFiles(form) {
   const box = form.querySelector("[data-attach]");
   if (box === null) return;
@@ -28,60 +25,50 @@ export function watchFiles(form) {
   const error = box.querySelector("[data-attach-error]");
   // Files already in the input: carried over from a form the server sent back with errors.
   // A video being compressed is listed with its progress and kept out of the input until done.
-  let files = [...input.files].map((file) => ({ file, progress: null, stop: null }));
+  let files = [...input.files].map((file) => ({ file, progress: null, stop: null, tile: null }));
   box.classList.add("is-enhanced");
   input.classList.add("visually-hidden");
 
-  function chip(entry) {
-    const item = document.createElement("li");
-    item.className = "file-chip";
-    const name = document.createElement("span");
-    name.className = "file-chip-name";
-    name.textContent = entry.file.name;
-    item.append(name);
-    if (entry.progress !== null) {
-      entry.label = document.createElement("span");
-      entry.label.className = "file-chip-progress";
-      entry.label.textContent = percent(entry.progress);
-      item.append(entry.label);
-    }
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "file-chip-remove";
-    remove.setAttribute("aria-label", `Remove ${entry.file.name}`);
-    remove.textContent = "×";
-    remove.addEventListener("click", () => {
+  function tileFor(entry) {
+    entry.tile ??= formTile(entry.file, () => {
       entry.stop?.abort();
+      entry.tile.forget();
       files = files.filter((kept) => kept !== entry);
       error.textContent = "";
       show();
       input.focus();
     });
-    item.append(remove);
-    return item;
+    return entry.tile.element;
   }
 
   function show() {
     const transfer = new DataTransfer();
     files.filter((entry) => entry.progress === null).forEach((entry) => transfer.items.add(entry.file));
     input.files = transfer.files;
-    list.replaceChildren(...files.map(chip));
+    list.replaceChildren(...files.map(tileFor));
   }
 
   async function compress(entry) {
     try {
-      entry.file = await readyVideo(entry.file, {
+      const ready = await readyVideo(entry.file, {
         signal: entry.stop.signal,
-        // Only the number changes: rebuilding the list would take focus off a × button.
+        // Only the bar moves: rebuilding the list would take focus off a × button.
         onProgress: (done) => {
           entry.progress = done;
-          entry.label.textContent = percent(done);
+          entry.tile.progress(done);
         },
       });
+      entry.file = ready;
       entry.progress = null;
+      entry.tile.replaceFile(ready);
+      entry.tile.progress(null);
+      // The frame of what gets uploaded; a browser that could not show the original (HEVC in
+      // Chrome) can show this one.
+      entry.tile.showFrame(ready);
     } catch (problem) {
       // Removed by the client while compressing: it is already gone from the list.
       if (entry.stop.signal.aborted) return;
+      entry.tile.forget();
       files = files.filter((kept) => kept !== entry);
       error.textContent =
         problem instanceof VideoProblem
@@ -105,11 +92,14 @@ export function watchFiles(form) {
         problems.push(`${file.name} is over 10 MB. Make it smaller or share a link instead.`);
         continue;
       }
-      const entry = { file: named(file), progress: null, stop: null };
+      const entry = { file: named(file), progress: null, stop: null, tile: null };
       files.push(entry);
       if (isVideo) {
         entry.progress = 0;
         entry.stop = new AbortController();
+        tileFor(entry);
+        entry.tile.progress(0);
+        entry.tile.showFrame(entry.file);
         compress(entry);
       }
     }
@@ -161,7 +151,10 @@ export function watchFiles(form) {
   form.addEventListener("attach-files", (event) => add(event.detail));
 
   form.addEventListener("reset", () => {
-    files.forEach((entry) => entry.stop?.abort());
+    files.forEach((entry) => {
+      entry.stop?.abort();
+      entry.tile?.forget();
+    });
     files = [];
     error.textContent = "";
     list.replaceChildren();

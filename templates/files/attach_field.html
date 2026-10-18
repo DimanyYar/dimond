@@ -43,7 +43,7 @@ where the browser can do it; without the script the browser's own file input sti
          accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/webm,audio/mpeg,audio/mp4,audio/x-m4a,audio/webm,audio/ogg,audio/wav,.m4a,application/pdf,text/plain,.txt,.log,.csv"
          aria-describedby="files-hint{% if field.errors %} files-error{% endif %}"
          {% if field.errors %}aria-invalid="true"{% endif %}>
-  <ul class="file-chips" data-attach-list aria-label="Chosen files"></ul>
+  <ul class="tiles tiles-form" data-attach-list aria-label="Chosen files"></ul>
   <span class="hint" id="files-hint">Images, video, audio, PDF or plain text: up to 5 files, 10 MB each. Video and recordings up to 2 minutes: we compress them in your browser. Word, Excel and archives can hide macros, so share a link to them instead.</span>
   {% if field.errors %}
     <div class="error-text" id="files-error">{% for error in field.errors %}<p>{{ error }}</p>{% endfor %}</div>
