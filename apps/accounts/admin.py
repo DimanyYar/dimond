@@ -76,3 +76,11 @@ class UserAdmin(admin.ModelAdmin):
     def revoke_access(self, request: HttpRequest, queryset: QuerySet[User]) -> None:
         revoked = services.revoke_access(queryset)
         self.message_user(request, f"Access revoked for {revoked}. Their requests stay.")
+        owners = queryset.filter(is_active=True, clients__isnull=False).distinct().count()
+        if owners:
+            self.message_user(
+                request,
+                f"Kept access for {owners} PM who still own clients. Give the clients to "
+                "another PM first.",
+                messages.WARNING,
+            )

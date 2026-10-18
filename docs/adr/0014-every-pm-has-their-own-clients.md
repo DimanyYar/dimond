@@ -11,7 +11,9 @@ reports) would add more such places.
 
 ## Decision
 
-A company belongs to one PM: `Company.owner`, required, limited to people with the PM role.
+A company belongs to one PM: `Company.owner`, required, limited to PMs with access. A PM who
+still owns clients cannot lose access or change role until the clients have a new owner;
+otherwise their clients would vanish from every PM's view.
 `requests_for` gives a PM only the requests of the companies they own; files, the requests
 page, chips, search and the card all read through it, and every PM action also checks the
 owner. The migration gives existing companies to the first PM (the superuser first) and stops

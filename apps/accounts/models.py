@@ -25,7 +25,7 @@ class Company(models.Model):
         "User",
         on_delete=models.PROTECT,
         related_name="clients",
-        limit_choices_to={"role": Role.PM},
+        limit_choices_to={"role": Role.PM, "is_active": True},
         help_text="The PM who works with this client. Other PMs never see it.",
     )
     email_domain = models.CharField(
@@ -44,8 +44,9 @@ class Company(models.Model):
         return self.name
 
     def clean(self) -> None:
-        if self.owner_id is not None and self.owner.role != Role.PM:
-            raise ValidationError({"owner": "Only a PM can own a client."})
+        # owner_id is still empty when the admin form left the field blank.
+        if self.owner_id is not None and not (self.owner.role == Role.PM and self.owner.is_active):
+            raise ValidationError({"owner": "Only a PM with access can own a client."})
 
 
 class Notify(models.TextChoices):
@@ -131,10 +132,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         # Runs before the uniqueness check: Anna@Atlas.com and anna@atlas.com are one person.
         self.email = self.email.strip().lower()
         # A client nobody owns would vanish from every PM's view (ADR 0014).
-        if self.pk is not None and self.role != Role.PM and self.clients.exists():
-            raise ValidationError(
-                {"role": "This PM still owns clients. Give them to another PM first."}
-            )
+        if (
+            self.pk is not None
+            and (self.role != Role.PM or not self.is_active)
+            and self.clients.exists()
+        ):
+            raise ValidationError("This PM still owns clients. Give them to another PM first.")
 
 
 class LinkKind(models.TextChoices):

@@ -4,6 +4,7 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 
+from apps.accounts import services as accounts_services
 from apps.accounts.models import Company, Role, User
 from apps.requests import selectors, services
 from apps.requests.models import ClientStatus, Message, Request, RequestType, WhenNeeded
@@ -91,11 +92,13 @@ def test_new_pm_starts_with_an_empty_portal(client, ivan, anna):
     assert not page.has_any_request
 
 
-def test_only_a_pm_can_own_a_client(anna):
-    company = Company(name="Northwind", owner=anna)
+def test_only_a_pm_with_access_can_own_a_client(anna, ivan):
+    ivan.is_active = False
+    ivan.save()
 
-    with pytest.raises(ValidationError, match="Only a PM can own a client"):
-        company.full_clean()
+    for owner in (anna, ivan):
+        with pytest.raises(ValidationError, match="Only a PM with access can own a client"):
+            Company(name="Northwind", owner=owner).full_clean()
 
 
 def test_pm_who_owns_clients_cannot_become_another_role(ivan, paul):
@@ -103,3 +106,20 @@ def test_pm_who_owns_clients_cannot_become_another_role(ivan, paul):
 
     with pytest.raises(ValidationError, match="Give them to another PM first"):
         ivan.full_clean()
+
+
+def test_pm_who_owns_clients_keeps_access_until_the_clients_move(ivan, paul):
+    ivan.is_active = False
+
+    with pytest.raises(ValidationError, match="Give them to another PM first"):
+        ivan.full_clean()
+
+
+def test_revoking_access_skips_a_pm_who_still_owns_clients(pm, ivan, paul):
+    revoked = accounts_services.revoke_access([ivan, paul])
+
+    ivan.refresh_from_db()
+    paul.refresh_from_db()
+    assert revoked == 1
+    assert ivan.is_active
+    assert not paul.is_active

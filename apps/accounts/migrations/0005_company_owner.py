@@ -46,7 +46,7 @@ class Migration(migrations.Migration):
             name="owner",
             field=models.ForeignKey(
                 help_text="The PM who works with this client. Other PMs never see it.",
-                limit_choices_to={"role": "pm"},
+                limit_choices_to={"is_active": True, "role": "pm"},
                 on_delete=django.db.models.deletion.PROTECT,
                 related_name="clients",
                 to="accounts.user",
