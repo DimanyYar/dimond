@@ -163,3 +163,16 @@ def client_for(user: User, pk: int) -> Company:
 def person_at_client(user: User, company_pk: int, person_pk: int) -> User:
     """A person at one of this PM's own clients. Raises User.DoesNotExist otherwise."""
     return client_for(user, company_pk).people.get(pk=person_pk)
+
+
+def client_for_name(user: User, name: str) -> Company | None:
+    """This PM's client with this name, whatever the letter case. Other PMs' clients never
+    count: a clash with them could not be fixed and would reveal them (ADR 0014)."""
+    return clients_for(user).filter(name__iexact=name.strip()).first()
+
+
+def next_client_color(user: User, colors: list[tuple[str, str]]) -> str:
+    """The first UI-kit colour none of this PM's clients wears yet, so a new client stands
+    out in the list; the first one again once all are taken."""
+    used = set(clients_for(user).values_list("color", flat=True))
+    return next((hex_ for hex_, _ in colors if hex_ not in used), colors[0][0])

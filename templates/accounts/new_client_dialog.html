@@ -1,0 +1,92 @@
+{% comment %}
+New client (mockup 5.0 · New client): a window over the Clients page. The address
+/clients/new/ opens it; Cancel, × and Esc go back to Clients. The server draws it open, and
+dialog.js makes it modal, so Tab stays inside. Without scripts it still works as a page.
+People are optional; addresses outside the domain come back with "Create anyway".
+{% endcomment %}
+{% load static %}
+<dialog class="dialog-backdrop" open data-modal data-close-url="{% url 'clients' %}" aria-labelledby="new-client-title">
+  <form class="dialog new-client" method="post" action="{% url 'new_client' %}">
+    {% csrf_token %}
+    <header class="dialog-head">
+      <div class="dialog-title">
+        <h2 id="new-client-title">New client</h2>
+        <p class="muted">A company and the people who’ll send requests</p>
+      </div>
+      <a class="icon-link" href="{% url 'clients' %}" aria-label="Close">×</a>
+    </header>
+
+    <div class="dialog-body">
+      {% if form.non_field_errors and not form.asks_to_confirm %}
+        <div class="banner banner-error" role="alert">{{ form.non_field_errors.0 }}</div>
+      {% endif %}
+
+      <section class="dialog-section" aria-labelledby="nc-company">
+        <h3 id="nc-company">Company</h3>
+        <div class="dialog-grid">
+          <div class="field">
+            <label for="nc-name">Name</label>
+            <input class="input" id="nc-name" name="name" maxlength="120" required autofocus
+                   value="{{ form.name.value|default_if_none:'' }}"
+                   {% if form.name.errors %}aria-invalid="true" aria-describedby="nc-name-error"{% endif %}>
+            {% if form.name.errors %}<span class="error-text" id="nc-name-error">{{ form.name.errors.0 }}</span>{% endif %}
+          </div>
+          <div class="field">
+            <label for="nc-domain">Email domain <span class="optional">optional</span></label>
+            <input class="input" id="nc-domain" name="email_domain" maxlength="120" placeholder="company.com"
+                   value="{{ form.email_domain.value|default_if_none:'' }}"
+                   aria-describedby="nc-domain-hint{% if form.email_domain.errors %} nc-domain-error{% endif %}"
+                   {% if form.email_domain.errors %}aria-invalid="true"{% endif %}>
+            <span class="hint" id="nc-domain-hint">Invites to other domains show a warning</span>
+            {% if form.email_domain.errors %}<span class="error-text" id="nc-domain-error">{{ form.email_domain.errors.0 }}</span>{% endif %}
+          </div>
+        </div>
+        <fieldset class="swatches">
+          <legend>Color</legend>
+          {% for hex, label in client_colors %}
+            <label class="swatch" style="--swatch: {{ hex }}">
+              <input type="radio" name="color" value="{{ hex }}"{% if form.color.value == hex %} checked{% endif %}>
+              <span class="visually-hidden">{{ label }}</span>
+            </label>
+          {% endfor %}
+          <span class="hint">Marks the client in the list and in the chips on Requests</span>
+        </fieldset>
+      </section>
+
+      <section class="dialog-section" aria-labelledby="nc-people">
+        <h3 id="nc-people">People <span class="optional">optional</span></h3>
+        <div class="field">
+          <label for="nc-emails">Work emails</label>
+          <span class="hint" id="nc-emails-hint">One per line, or separated by commas. You can invite people later too.</span>
+          <textarea class="input" id="nc-emails" name="emails" rows="3"
+                    aria-describedby="nc-emails-hint{% if form.emails.errors %} nc-emails-error{% endif %}"
+                    {% if form.emails.errors %}aria-invalid="true"{% endif %}>{{ form.emails.value|default_if_none:'' }}</textarea>
+          {% if form.emails.errors %}<span class="error-text" id="nc-emails-error">{{ form.emails.errors.0 }}</span>{% endif %}
+        </div>
+        {% if form.asks_to_confirm %}
+          <div class="note-warning" role="alert">
+            <strong>{{ form.outside|join:", " }}</strong>
+            {% if form.outside|length == 1 %}isn’t{% else %}aren’t{% endif %} on {{ form.cleaned_data.email_domain }}. They’ll see every request of this client. Fine for a contractor — just double-check the address.
+          </div>
+        {% endif %}
+        <fieldset class="invite-notify">
+          <legend>Email them about</legend>
+          <label class="choice-inline"><input type="radio" name="notify" value="own"{% if form.notify.value|default:"own" == "own" %} checked{% endif %}>Their own requests</label>
+          <label class="choice-inline"><input type="radio" name="notify" value="company"{% if form.notify.value == "company" %} checked{% endif %}>Everything at the company</label>
+        </fieldset>
+        <p class="hint">The Jira project comes later, with Jira tasks.</p>
+      </section>
+    </div>
+
+    <footer class="dialog-foot">
+      <span class="hint">Each person gets a personal sign-in link, valid for 7 days.</span>
+      <a class="btn" href="{% url 'clients' %}">Cancel</a>
+      {% if form.asks_to_confirm %}
+        <button class="btn btn-primary" type="submit" name="send_anyway" value="on">Create anyway</button>
+      {% else %}
+        <button class="btn btn-primary" type="submit">Create client</button>
+      {% endif %}
+    </footer>
+  </form>
+</dialog>
+<script type="module" src="{% static 'js/dialog.js' %}"></script>

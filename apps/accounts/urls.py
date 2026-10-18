@@ -8,6 +8,7 @@ urlpatterns = [
     path("sign-in/link/<str:token>/", views.sign_in_link, name="sign_in_link"),
     path("sign-out/", views.sign_out, name="sign_out"),
     path("clients/", views.clients, name="clients"),
+    path("clients/new/", views.new_client, name="new_client"),
     path("clients/<int:pk>/", views.clients, name="client"),
     path("clients/<int:pk>/invite/", views.invite_people, name="invite_people"),
     path(
