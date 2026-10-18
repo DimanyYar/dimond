@@ -32,7 +32,8 @@ def invite_sent(user: User, *, expires_in: timedelta) -> None:
 
 
 def statuses(company: Company) -> list[tuple[str, PersonStatus]]:
-    return [(row.person.email, row.status) for row in selectors.people_of(company)]
+    page = selectors.clients_page(company.owner, company.pk)
+    return [(row.person.email, row.status) for row in page.people]
 
 
 def test_pm_sees_only_their_own_clients(client, pm, atlas):
@@ -126,9 +127,20 @@ def test_company_page_shows_its_people_and_links_to_its_requests(client, pm, atl
 def test_pm_without_clients_is_told_how_to_add_one(client, pm):
     client.force_login(pm)
 
-    response = client.get(reverse("clients"))
+    html = client.get(reverse("clients")).content.decode()
 
-    assert "No clients yet" in response.content.decode()
+    assert "No clients yet" in html
+    assert "ask whoever runs dimon.d" in html
+    assert "/admin" not in html
+
+
+def test_pm_with_admin_access_gets_a_link_to_add_a_company(client):
+    dmitry = User.objects.create_superuser("dmitry@example.com", password="s3cret-pass")
+    client.force_login(dmitry)
+
+    html = client.get(reverse("clients")).content.decode()
+
+    assert reverse("admin:accounts_company_add") in html
 
 
 def test_pm_navigation_leads_to_clients(client, pm):

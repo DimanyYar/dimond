@@ -14,8 +14,12 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
   {% if not page.companies %}
     <section class="card empty-state">
       <h2>No clients yet</h2>
-      <p class="muted">Clients you own show up here. Until the New client button arrives, add a company in the admin with you as its owner.</p>
-      <a class="btn" href="{% url 'admin:accounts_company_add' %}">Add a company in the admin</a>
+      {% if user.is_staff %}
+        <p class="muted">Clients you own show up here. Until the New client button arrives, add a company in the admin with you as its owner.</p>
+        <a class="btn" href="{% url 'admin:accounts_company_add' %}">Add a company in the admin</a>
+      {% else %}
+        <p class="muted">Clients you own show up here. Until the New client button arrives, ask whoever runs dimon.d to add a company with you as its owner.</p>
+      {% endif %}
     </section>
   {% else %}
     <nav class="company-list" aria-label="Companies">
@@ -94,8 +98,12 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
           {% else %}
             <div class="people-empty">
               <p><strong>No one at {{ company.name }} yet</strong></p>
-              <p class="muted">Until inviting from this page arrives, add people in the admin and send them an invite there.</p>
-              <a class="btn" href="{% url 'admin:accounts_user_add' %}">Add a person in the admin</a>
+              {% if user.is_staff %}
+                <p class="muted">Until inviting from this page arrives, add people in the admin and send them an invite there.</p>
+                <a class="btn" href="{% url 'admin:accounts_user_add' %}">Add a person in the admin</a>
+              {% else %}
+                <p class="muted">Until inviting from this page arrives, ask whoever runs dimon.d to add and invite them.</p>
+              {% endif %}
             </div>
           {% endif %}
         </section>

@@ -92,8 +92,9 @@ def _person_row(person: User, last_invite: SignInLink | None, now: datetime) -> 
     return PersonRow(person, PersonStatus.LINK_EXPIRED, last_invite.expires_at)
 
 
-def people_of(company: Company) -> list[PersonRow]:
-    """Everyone at the company, with access first, people who lost it last."""
+def _people_of(company: Company) -> list[PersonRow]:
+    """Everyone at the company, with access first, people who lost it last. Private: the
+    company comes from `clients_page`, already limited to the PM's own clients."""
     now = timezone.now()
     people = list(company.people.order_by("name", "email"))
     last_invites: dict[int, SignInLink] = {}
@@ -129,6 +130,6 @@ def clients_page(user: User, pk: int | None) -> ClientsPage:
     return ClientsPage(
         companies=companies,
         chosen=chosen,
-        people=people_of(chosen) if chosen else [],
+        people=_people_of(chosen) if chosen else [],
         picked=pk is not None,
     )
