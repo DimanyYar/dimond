@@ -4946,3 +4946,13 @@ kbd {
     padding-left: 0;
   }
 }
+
+/* A part of the page swapped in place by swap-page.js; it adds no box of its own. */
+.region {
+  display: contents;
+}
+
+[data-region="results"][aria-busy="true"] {
+  opacity: 0.6;
+  transition: opacity 120ms 150ms;
+}

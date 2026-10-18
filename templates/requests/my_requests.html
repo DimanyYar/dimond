@@ -21,7 +21,7 @@
         <a class="btn btn-primary" href="{% url 'new_request' %}">Summon Dimon</a>
       </div>
     {% else %}
-      <nav class="type-filter client-filter" aria-label="Client">
+      <nav class="type-filter client-filter" aria-label="Client" data-region="clients">
         <a class="chip" href="{% querystring company=None %}"{% if not company %} aria-current="true"{% endif %}>All clients</a>
         {% for chip in page.clients %}
           <a class="chip" href="{% querystring company=chip.company.pk %}"{% if company == chip.company.pk %} aria-current="true"{% endif %}>{{ chip.company }}{% if chip.needs_pm %} <span class="chip-count">{{ chip.needs_pm }}</span>{% endif %}</a>
@@ -30,14 +30,16 @@
     {% endif %}
   </header>
 
-  {% if page.needs_you.shown %}
-    {% include "requests/needs_you_banner.html" with needs_you=page.needs_you %}
-  {% endif %}
-  {% if page.pm_needs.shown %}
-    {% include "requests/pm_needs_banner.html" with needs=page.pm_needs %}
-  {% endif %}
+  <div class="region" data-region="banners">
+    {% if page.needs_you.shown %}
+      {% include "requests/needs_you_banner.html" with needs_you=page.needs_you %}
+    {% endif %}
+    {% if page.pm_needs.shown %}
+      {% include "requests/pm_needs_banner.html" with needs=page.pm_needs %}
+    {% endif %}
+  </div>
 
-  <section class="card summary" aria-labelledby="summary-title">
+  <section class="card summary" aria-labelledby="summary-title" data-region="summary">
     <div class="summary-head">
       <h2 id="summary-title">{{ period.label }}</h2>
       <nav class="segmented" aria-label="Period">
@@ -56,14 +58,14 @@
   </section>
 
   <div class="filter-bar">
-    <nav class="segmented" aria-label="Show">
+    <nav class="segmented" aria-label="Show" data-region="show">
       {% for value, label in shows %}
         <a href="{% querystring show=value %}"{% if value == show %} aria-current="true"{% endif %}>
           {{ label }} {% if value == "open" %}{{ page.summary.open }}{% elif value == "closed" %}{{ page.summary.closed }}{% else %}{{ page.summary.received }}{% endif %}
         </a>
       {% endfor %}
     </nav>
-    <nav class="type-filter" aria-label="Type">
+    <nav class="type-filter" aria-label="Type" data-region="types">
       <a class="chip" href="{% querystring type=None %}"{% if not types_chosen %} aria-current="true"{% endif %}>All types</a>
       {% for chip in type_chips %}
         <a class="chip" href="{% querystring type=chip.toggled %}"{% if chip.on %} aria-current="true"{% endif %}>{{ chip.label }}</a>
@@ -76,7 +78,7 @@
         <input type="hidden" name="view" value="{{ view }}">
         {% if company %}<input type="hidden" name="company" value="{{ company }}">{% endif %}
       </form>
-      <nav class="view-switch" aria-label="View">
+      <nav class="view-switch" aria-label="View" data-region="views">
         <a href="{% querystring view='board' %}" aria-label="Board view" title="Board"{% if view == "board" %} aria-current="true"{% endif %}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/></svg>
         </a>
@@ -86,14 +88,14 @@
       </nav>
     </div>
     {# Phones: type and period move into a sheet, as in the mobile mockup. Popover needs no script. #}
-    <button class="btn filter-button" type="button" popovertarget="filters">
+    <button class="btn filter-button" type="button" popovertarget="filters" data-region="filter-button">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
       Filter{% if types_chosen %} · {{ types_chosen|length }}{% endif %}
     </button>
   </div>
 
   <div id="filters" class="sheet" popover role="dialog" aria-labelledby="filters-title">
-    <form method="get" class="stack" data-filter-sheet data-count-url="{% url 'my_requests_count' %}">
+    <form method="get" class="stack" data-filter-sheet data-count-url="{% url 'my_requests_count' %}" data-region="sheet">
       <input type="hidden" name="show" value="{{ show }}">
       <input type="hidden" name="view" value="{{ view }}">
       {% if company %}<input type="hidden" name="company" value="{{ company }}">{% endif %}
@@ -123,7 +125,7 @@
     </form>
   </div>
 
-  <div id="request-results">
+  <div id="request-results" data-region="results">
   {% if query and page.requests %}
     <p class="search-count muted" role="status">{{ page.requests|length }} found for “{{ query }}” · <a href="{% querystring q=None %}" data-clear-search>Clear</a></p>
   {% endif %}
@@ -194,4 +196,5 @@
   <script type="module" src="{% static 'js/my-requests.js' %}"></script>
   {% if is_client %}<script type="module" src="{% static 'js/voice-request.js' %}"></script>{% endif %}
   <script type="module" src="{% static 'js/live-search.js' %}"></script>
+  <script type="module" src="{% static 'js/filters.js' %}"></script>
 {% endblock %}
