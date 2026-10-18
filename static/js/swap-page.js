@@ -32,12 +32,24 @@ export async function showPage(url, { push = true } = {}) {
     location.assign(url);
     return false;
   }
+  const scrolled = window.scrollY;
   for (const region of document.querySelectorAll("[data-region]")) {
     const fresh = page.querySelector(`[data-region="${region.dataset.region}"]`);
     if (fresh) region.replaceChildren(...fresh.childNodes);
   }
+  holdScroll(results, scrolled);
   if (push) history.pushState(null, "", url);
   else history.replaceState(null, "", url);
   results?.removeAttribute("aria-busy");
   return true;
+}
+
+// A shorter list makes the page shorter than where the person scrolled to, and the browser
+// pulls everything up. Room under the list keeps the filters where they were on screen; each
+// swap measures again, so the room goes once the list is long enough.
+function holdScroll(results, scrolled) {
+  results.style.minHeight = "";
+  const missing = scrolled + window.innerHeight - document.documentElement.scrollHeight;
+  if (missing > 0) results.style.minHeight = `${results.offsetHeight + missing}px`;
+  window.scrollTo({ top: scrolled, behavior: "instant" });
 }
