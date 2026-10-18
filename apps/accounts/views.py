@@ -1,13 +1,16 @@
 import logging
 
+from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from . import selectors, services
-from .forms import EmailForm, WelcomeForm
+from .forms import EmailForm, InviteForm, WelcomeForm
 from .models import Company, Notify, SignInLink, User
 
 SENT_TO = "sign_in_sent_to"
@@ -88,15 +91,105 @@ def stale_form(request: HttpRequest, reason: str = "") -> HttpResponse:
     return render(request, "accounts/stale_form.html", status=403)
 
 
+def _pm(request: HttpRequest) -> User:
+    """The signed-in PM. Everyone else gets "not found": the Clients pages are not theirs."""
+    assert isinstance(request.user, User)  # login_required lets only signed-in people in
+    if not selectors.has_clients_page(request.user):
+        raise Http404
+    return request.user
+
+
+def _clients_screen(
+    request: HttpRequest, pm: User, pk: int | None, invite_form: InviteForm | None = None
+) -> HttpResponse:
+    try:
+        page = selectors.clients_page(pm, pk)
+    except Company.DoesNotExist:
+        raise Http404 from None
+    # ?invite opens the form and ?cancel=<person> the confirmation in that row: both work
+    # without scripts, and the address can be shared or reloaded.
+    if invite_form is None and "invite" in request.GET and page.chosen is not None:
+        invite_form = InviteForm(company=page.chosen)
+    cancel = request.GET.get("cancel", "")
+    return render(
+        request,
+        "accounts/clients.html",
+        {
+            "page": page,
+            "invite_form": invite_form,
+            "cancel_person": int(cancel) if cancel.isdigit() else None,
+        },
+    )
+
+
 @require_GET
 @login_required
 def clients(request: HttpRequest, pk: int | None = None) -> HttpResponse:
     """The PM's Clients screen: their companies and the people at the chosen one."""
-    assert isinstance(request.user, User)  # login_required lets only signed-in people in
-    if not selectors.has_clients_page(request.user):
-        raise Http404
+    return _clients_screen(request, _pm(request), pk)
+
+
+@require_POST
+@login_required
+def invite_people(request: HttpRequest, pk: int) -> HttpResponse:
+    pm = _pm(request)
     try:
-        page = selectors.clients_page(request.user, pk)
+        company = selectors.client_for(pm, pk)
     except Company.DoesNotExist:
         raise Http404 from None
-    return render(request, "accounts/clients.html", {"page": page})
+    form = InviteForm(request.POST, company=company)
+    if not form.is_valid():
+        return _clients_screen(request, pm, pk, invite_form=form)
+    try:
+        invited = services.invite_people(
+            pm, company, form.cleaned_data["emails"], Notify(form.cleaned_data["notify"])
+        )
+    except (IntegrityError, ValidationError):
+        # Someone added one of these addresses between the check and the save, e.g. the
+        # same form sent twice. Nothing was saved; the form says so like any taken address.
+        form.add_error("emails", "One of these addresses was just added. Check the list again.")
+        return _clients_screen(request, pm, pk, invite_form=form)
+    messages.success(
+        request,
+        f"Invites sent to {invited} {'person' if invited == 1 else 'people'}. "
+        "Each gets a personal link valid for 7 days.",
+    )
+    return redirect("client", pk)
+
+
+def _person(request: HttpRequest, pk: int, person_pk: int) -> tuple[User, User]:
+    pm = _pm(request)
+    try:
+        return pm, selectors.person_at_client(pm, pk, person_pk)
+    except (Company.DoesNotExist, User.DoesNotExist):
+        raise Http404 from None
+
+
+@require_POST
+@login_required
+def resend_invite(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse:
+    pm, person = _person(request, pk, person_pk)
+    try:
+        services.resend_invite(pm, person)
+    except services.NotAllowedError:
+        messages.error(
+            request,
+            f"No new invite for {person.email}: they signed in, lost access or the invite was "
+            "cancelled meanwhile.",
+        )
+    else:
+        messages.success(request, f"A new invite is on its way to {person.email}.")
+    return redirect("client", pk)
+
+
+@require_POST
+@login_required
+def cancel_invite(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse:
+    _, person = _person(request, pk, person_pk)
+    try:
+        services.cancel_invite(person)
+    except services.NotAllowedError:
+        messages.error(request, f"{person.email} has signed in meanwhile, so the invite stays.")
+    else:
+        messages.success(request, f"Invite to {person.email} cancelled. The link no longer works.")
+    return redirect("client", pk)

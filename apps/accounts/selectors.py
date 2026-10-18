@@ -74,6 +74,15 @@ class PersonRow:
     when: datetime | None
 
     @property
+    def awaits_invite(self) -> bool:
+        """Never signed in and still has access: the invite can go again or be called off."""
+        return self.status in (
+            PersonStatus.INVITED,
+            PersonStatus.LINK_EXPIRED,
+            PersonStatus.NOT_INVITED,
+        )
+
+    @property
     def initials(self) -> str:
         words = self.person.name.split()
         return "".join(word[0] for word in words[:2]).upper() or "@"
@@ -133,3 +142,24 @@ def clients_page(user: User, pk: int | None) -> ClientsPage:
         people=_people_of(chosen) if chosen else [],
         picked=pk is not None,
     )
+
+
+def email_has_account(email: str) -> bool:
+    """Whether anyone at all signs in with this address: one email is one person (ADR 0011).
+
+    Only the PM's invite form asks, and the answer is never which company: a PM is Shakuro
+    staff and must learn an address cannot be invited (ADR 0014). The sign-in page, open to
+    anyone, never reveals it (ADR 0003).
+    """
+    return User.objects.filter(email=email.strip().lower()).exists()
+
+
+def client_for(user: User, pk: int) -> Company:
+    """One of this PM's own clients. Raises Company.DoesNotExist for anyone else's, exactly as
+    for a missing one."""
+    return clients_for(user).get(pk=pk)
+
+
+def person_at_client(user: User, company_pk: int, person_pk: int) -> User:
+    """A person at one of this PM's own clients. Raises User.DoesNotExist otherwise."""
+    return client_for(user, company_pk).people.get(pk=person_pk)

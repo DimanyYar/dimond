@@ -9,4 +9,15 @@ urlpatterns = [
     path("sign-out/", views.sign_out, name="sign_out"),
     path("clients/", views.clients, name="clients"),
     path("clients/<int:pk>/", views.clients, name="client"),
+    path("clients/<int:pk>/invite/", views.invite_people, name="invite_people"),
+    path(
+        "clients/<int:pk>/people/<int:person_pk>/resend/",
+        views.resend_invite,
+        name="resend_invite",
+    ),
+    path(
+        "clients/<int:pk>/people/<int:person_pk>/cancel/",
+        views.cancel_invite,
+        name="cancel_invite",
+    ),
 ]
