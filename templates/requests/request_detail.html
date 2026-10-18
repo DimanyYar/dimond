@@ -238,5 +238,6 @@
 {% if page.viewable_files %}{% include "files/media_viewer.html" with files=page.viewable_files %}{% endif %}
 {% endwith %}
 {% if page.can_post %}<script type="module" src="{% static 'js/request-card.js' %}"></script>{% endif %}
+{% if page.first_new %}<script type="module" src="{% static 'js/new-line.js' %}"></script>{% endif %}
 {% if page.viewable_files %}<script type="module" src="{% static 'js/media-viewer.js' %}"></script>{% endif %}
 {% endblock %}

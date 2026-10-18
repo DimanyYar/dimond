@@ -3,11 +3,28 @@
 import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
+from django.utils import timezone
+
+
+def everyone_has_seen_everything(apps, schema_editor):
+    """Old threads are not news: without this, every message written before unread
+    tracking existed would show as new and the "new" line would sit at the top."""
+    Request = apps.get_model("requests", "Request")
+    RequestVisit = apps.get_model("requests", "RequestVisit")
+    User = apps.get_model("accounts", "User")
+    now = timezone.now()
+    pms = list(User.objects.filter(role="pm", is_active=True))
+    visits = []
+    for request in Request.objects.all():
+        clients = User.objects.filter(role="client", is_active=True, company_id=request.company_id)
+        visits += [RequestVisit(request=request, user=u, seen_at=now) for u in [*pms, *clients]]
+    RequestVisit.objects.bulk_create(visits)
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
+        ("accounts", "0004_invites"),
         ("requests", "0007_voice_requests"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
@@ -51,4 +68,5 @@ class Migration(migrations.Migration):
                 ],
             },
         ),
+        migrations.RunPython(everyone_has_seen_everything, migrations.RunPython.noop),
     ]

@@ -162,3 +162,19 @@ def test_board_card_names_its_status_only_where_the_column_mixes_them(client, an
     assert "status-received" in queued
     assert building.title in in_progress
     assert "status-in_progress" not in in_progress
+
+
+def test_threads_from_before_unread_tracking_are_not_new(anna, pm, bug):
+    """The migration marks every existing request as seen by everyone who may open it."""
+    from importlib import import_module
+
+    from django.apps import apps
+
+    say(pm, bug, "Written before tracking existed", minutes_ago=10)
+    bug.visits.all().delete()
+    migration = import_module("apps.requests.migrations.0008_request_visit")
+
+    migration.everyone_has_seen_everything(apps, None)
+
+    assert selectors.request_page(anna, bug.pk).new_count == 0
+    assert selectors.request_page(pm, bug.pk).new_count == 0
