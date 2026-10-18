@@ -1,0 +1,13 @@
+{% extends "layouts/sign_in.html" %}
+{% block title %}Nothing here · dimon.d{% endblock %}
+
+{% block content %}
+  <header class="stack auth-header">
+    <h1>Nothing here</h1>
+    <p class="muted">This link leads nowhere for you. It may be mistyped or out of date, or it points to something that isn’t shared with you.</p>
+  </header>
+
+  <a class="btn btn-primary" href="{% url 'home' %}">{% if user.is_authenticated %}Back to dimon.d{% else %}Sign in{% endif %}</a>
+
+  <p class="hint">Got this link from someone? Ask them to check it, or write to your PM.</p>
+{% endblock %}

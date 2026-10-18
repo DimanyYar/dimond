@@ -15,6 +15,8 @@ urlpatterns = [
     path(settings.ADMIN_URL, admin.site.urls),
 ]
 
+handler404 = "apps.core.views.not_found"
+
 if settings.DEBUG:
     # Replaces runserver's own static handler, which docker-compose turns off with --nostatic.
     urlpatterns.append(re_path(r"^static/(?P<path>.*)$", static_file))
