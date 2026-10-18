@@ -55,3 +55,10 @@ def favicon(request: HttpRequest) -> HttpResponse:
     """Browsers look for /favicon.ico on pages that do not name their icon, such as an image
     opened from a request; send them to dimond's icon instead of a 404."""
     return redirect(static("icons/favicon.ico"), permanent=True)
+
+
+def not_found(request: HttpRequest, exception: Exception | None = None) -> HttpResponse:
+    """The page anyone sees when an address leads nowhere for them: a missing request, or one
+    of another company or another PM's client. Both look the same, so a guessed address
+    reveals nothing. Django passes `exception` as handler404; the page never shows it."""
+    return render(request, "404.html", status=404)
