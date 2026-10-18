@@ -88,7 +88,10 @@ def test_another_pm_may_have_a_client_with_the_same_name(signed_in_pm):
     assert Company.objects.filter(name="Harbor Foods").count() == 2
 
 
-@pytest.mark.parametrize("domain", ["https://harborfoods.com", "harbor foods", "harborfoods"])
+@pytest.mark.parametrize(
+    "domain",
+    ["https://harborfoods.com", "harbor foods", "harborfoods", "-harbor.com", "harbor-.com"],
+)
 def test_a_domain_that_is_not_a_domain_is_refused(signed_in_pm, domain):
     response = create(signed_in_pm, email_domain=domain)
 

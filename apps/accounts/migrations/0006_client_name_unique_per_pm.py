@@ -2,6 +2,26 @@
 
 import django.db.models.functions.text
 from django.db import migrations, models
+from django.db.backends.base.schema import BaseDatabaseSchemaEditor
+from django.db.migrations.state import StateApps
+
+
+def number_clashing_names(apps: StateApps, schema_editor: BaseDatabaseSchemaEditor) -> None:
+    """Names were unique only as typed, so one PM may have "Atlas" and "atlas". The second and
+    later get " (2)", " (3)" so the new rule can apply; the PM renames them in the admin."""
+    Company = apps.get_model("accounts", "Company")
+    seen: set[tuple[int, str]] = set()
+    for company in Company.objects.order_by("owner_id", "created_at", "pk"):
+        key = (company.owner_id, company.name.lower())
+        if key not in seen:
+            seen.add(key)
+            continue
+        number = 2
+        while (company.owner_id, f"{company.name} ({number})".lower()) in seen:
+            number += 1
+        company.name = f"{company.name} ({number})"
+        company.save(update_fields=["name"])
+        seen.add((company.owner_id, company.name.lower()))
 
 
 class Migration(migrations.Migration):
@@ -16,6 +36,7 @@ class Migration(migrations.Migration):
             name="name",
             field=models.CharField(max_length=120),
         ),
+        migrations.RunPython(number_clashing_names, migrations.RunPython.noop),
         migrations.AddConstraint(
             model_name="company",
             constraint=models.UniqueConstraint(

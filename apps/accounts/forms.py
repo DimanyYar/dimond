@@ -115,7 +115,9 @@ CLIENT_COLORS = [
     ("#f2a6c7", "Pink"),
     ("#9c9fa5", "Gray"),
 ]
-DOMAIN = re.compile(r"^[a-z0-9-]+(\.[a-z0-9-]+)+$")
+# Each label: letters, digits and inner hyphens, up to 63 characters; at least two labels.
+DOMAIN_LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+DOMAIN = re.compile(rf"^{DOMAIN_LABEL}(?:\.{DOMAIN_LABEL})+$")
 
 
 class NewClientForm(forms.Form):

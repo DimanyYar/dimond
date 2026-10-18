@@ -4699,11 +4699,24 @@ kbd {
   position: fixed;
   inset: 0;
   z-index: 50;
+  /* A <dialog> covering the whole screen and dimming it itself: the browser's own box,
+     margins and ::backdrop are switched off. */
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  color: inherit;
   display: grid;
   place-items: center;
   padding: var(--space-5);
   background: rgba(17, 17, 17, 0.55);
   overflow-y: auto;
+}
+
+.dialog-backdrop::backdrop {
+  background: transparent;
 }
 
 .dialog {

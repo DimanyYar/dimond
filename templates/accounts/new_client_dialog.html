@@ -1,10 +1,12 @@
 {% comment %}
-New client (mockup 5.0 · New client): a window over the Clients page, without scripts. The
-address /clients/new/ opens it; Cancel and × go back to Clients. People are optional, and
-addresses outside the domain come back with "Send anyway", like Invite people.
+New client (mockup 5.0 · New client): a window over the Clients page. The address
+/clients/new/ opens it; Cancel, × and Esc go back to Clients. The server draws it open, and
+dialog.js makes it modal, so Tab stays inside. Without scripts it still works as a page.
+People are optional; addresses outside the domain come back with "Create anyway".
 {% endcomment %}
-<div class="dialog-backdrop">
-  <form class="dialog new-client" method="post" action="{% url 'new_client' %}" aria-labelledby="new-client-title" role="dialog" aria-modal="true">
+{% load static %}
+<dialog class="dialog-backdrop" open data-modal data-close-url="{% url 'clients' %}" aria-labelledby="new-client-title">
+  <form class="dialog new-client" method="post" action="{% url 'new_client' %}">
     {% csrf_token %}
     <header class="dialog-head">
       <div class="dialog-title">
@@ -86,4 +88,5 @@ addresses outside the domain come back with "Send anyway", like Invite people.
       {% endif %}
     </footer>
   </form>
-</div>
+</dialog>
+<script type="module" src="{% static 'js/dialog.js' %}"></script>

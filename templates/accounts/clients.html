@@ -3,10 +3,7 @@
 The PM's Clients screen (mockup 5.0 · Clients). Desktop: companies on the left, the chosen one
 on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a way back.
 {% endcomment %}
-{% block title %}{% if page.picked %}{{ page.chosen }} · {% endif %}Clients · dimon.d{% if new_client_form %}
-  {% include "accounts/new_client_dialog.html" with form=new_client_form %}
-{% endif %}
-{% endblock %}
+{% block title %}{% if page.picked %}{{ page.chosen }} · {% endif %}{% if new_client_form %}New client · {% endif %}Clients · dimon.d{% endblock %}
 
 {% block content %}
 <div class="clients{% if page.picked %} clients-picked{% endif %}">
