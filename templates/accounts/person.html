@@ -39,11 +39,12 @@ on the right; one column on a phone. ?revoke asks before revoking, without scrip
     <form class="card person-profile" method="post" action="{% url 'save_person' company.pk person.pk %}" aria-labelledby="profile-title">
       {% csrf_token %}
       <h2 id="profile-title">Profile</h2>
-      {% if form.errors %}<p class="banner banner-error" role="alert">Not saved: the name fits 120 characters, and one email option must be picked.</p>{% endif %}
+      {% if form.errors %}<p class="banner banner-error" role="alert">Not saved. Check the fields below.</p>{% endif %}
       <div class="person-profile-fields">
         <div class="field">
           <label for="person-name">Name</label>
-          <input class="input" id="person-name" name="name" maxlength="120" value="{{ form.name.value|default:'' }}" aria-describedby="person-name-hint">
+          <input class="input" id="person-name" name="name" maxlength="120" value="{{ form.name.value|default:'' }}" aria-describedby="person-name-hint{% if form.name.errors %} person-name-error{% endif %}"{% if form.name.errors %} aria-invalid="true"{% endif %}>
+          {% if form.name.errors %}<span class="error-text" id="person-name-error">{{ form.name.errors.0 }}</span>{% endif %}
           <span class="hint" id="person-name-hint">Shown on requests and replies</span>
         </div>
         <div class="field">
@@ -52,8 +53,9 @@ on the right; one column on a phone. ?revoke asks before revoking, without scrip
           <span class="hint">How they sign in. Changing it comes with accounts</span>
         </div>
       </div>
-      <fieldset class="choices">
+      <fieldset class="choices"{% if form.notify.errors %} aria-describedby="person-notify-error"{% endif %}>
         <legend>Email them about</legend>
+        {% if form.notify.errors %}<span class="error-text" id="person-notify-error">Pick one of these.</span>{% endif %}
         {% with notify=form.notify.value %}
           <label class="choice choice-with-hint"><input type="radio" name="notify" value="own"{% if notify == "own" %} checked{% endif %}><span><span class="choice-title">Their own requests</span><span class="hint">Requests they created or follow</span></span></label>
           <label class="choice choice-with-hint"><input type="radio" name="notify" value="company"{% if notify == "company" %} checked{% endif %}><span><span class="choice-title">Everything at {{ company.name }}</span><span class="hint">Every request from anyone at {{ company.name }}</span></span></label>

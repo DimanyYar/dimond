@@ -58,7 +58,17 @@ def test_a_wrong_choice_is_not_saved(signed_in_pm, mark):
     response = signed_in_pm.post(url("save_person", mark), {"name": "Mark", "notify": "all"})
 
     mark.refresh_from_db()
-    assert "Not saved" in response.content.decode()
+    html = response.content.decode()
+    assert "Not saved" in html
+    assert "Pick one of these." in html
+    assert mark.name == "Mark T."
+
+
+def test_a_too_long_name_is_explained_next_to_the_name(signed_in_pm, mark):
+    response = signed_in_pm.post(url("save_person", mark), {"name": "M" * 121, "notify": "own"})
+
+    mark.refresh_from_db()
+    assert "at most 120 characters" in response.content.decode()
     assert mark.name == "Mark T."
 
 
