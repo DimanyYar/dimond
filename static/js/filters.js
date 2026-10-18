@@ -21,8 +21,10 @@ document.addEventListener("click", async (event) => {
   const hadFocus = document.activeElement === link;
   link.closest("[popover]")?.hidePopover();
   const shown = await showPage(link.href);
-  // The clicked link was replaced; its successor takes the focus so the keyboard stays here.
-  if (shown && hadFocus) region.querySelectorAll("a[href]")[position]?.focus({ preventScroll: true });
+  // The clicked link was replaced and its focus fell back to the page; its successor takes it
+  // so the keyboard stays here. If the person moved on meanwhile, their focus stays put.
+  const focusLost = document.activeElement === document.body;
+  if (shown && hadFocus && focusLost) region.querySelectorAll("a[href]")[position]?.focus({ preventScroll: true });
 });
 
 const sheet = document.querySelector("[data-filter-sheet]");
