@@ -1699,6 +1699,11 @@ kbd {
     width: 100%;
   }
 
+  /* iOS zooms the page into any field under 16px when it gets focus. */
+  .filter-tools .search .input {
+    font-size: 16px;
+  }
+
   .filter-bar .segmented {
     flex: 1 1 auto;
   }

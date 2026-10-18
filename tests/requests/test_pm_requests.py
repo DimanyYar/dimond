@@ -219,3 +219,21 @@ def test_search_says_how_many_it_found(client, anna):
     html = client.get(URL, {"q": "timezone"}).content.decode()
 
     assert "1 found for “timezone”" in html
+
+
+def test_a_request_closed_while_an_ask_to_withdraw_waits_leaves_needs_you(pm, anna):
+    planned = make(anna, "Planned one", status=ClientStatus.PLANNED)
+    services.withdraw_request(anna, planned, "No longer needed")
+    # The Jira sync closes it before the PM decides.
+    Request.objects.filter(pk=planned.pk).update(status=ClientStatus.DONE)
+
+    assert reasons(pm) == {}
+
+
+def test_search_stays_within_the_chosen_client(pm, anna, paul, atlas):
+    make(anna, "Wrong timezone at Atlas")
+    make(paul, "Wrong timezone at Northwind")
+
+    found = page(pm, query="timezone", company=atlas.pk)
+
+    assert [r.title for r in found.requests] == ["Wrong timezone at Atlas"]

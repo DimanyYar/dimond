@@ -142,13 +142,15 @@ def _created_since(user: User, since: datetime | None, company: int | None) -> Q
 KEY_PATTERN = re.compile(r"^\s*dmn-?(\d+)\s*$", re.IGNORECASE)
 
 
-def search(user: User, query: str) -> QuerySet[Request]:
+def search(user: User, query: str, company: int | None = None) -> QuerySet[Request]:
     """Requests by their DMN- key or words from the title, whatever their age or status:
-    someone searching for DMN-1031 wants it even if it closed months ago."""
+    someone searching for DMN-1031 wants it even if it closed months ago. The PM's client
+    chip still applies, so results never mix clients while one is chosen."""
+    requests = _of_company(user, company)
     key = KEY_PATTERN.match(query)
     if key:
-        return requests_for(user).filter(pk=int(key.group(1)))
-    return requests_for(user).filter(title__icontains=query.strip())
+        return requests.filter(pk=int(key.group(1)))
+    return requests.filter(title__icontains=query.strip())
 
 
 def my_requests(
@@ -219,7 +221,8 @@ def with_pm_reason(requests: QuerySet[Request]) -> QuerySet[Request]:
     open_request = ~Q(status__in=CLOSED_STATUSES)
     return requests.alias(last_author=last_author_role).annotate(
         pm_reason=Case(
-            When(Exists(pending_ask), then=Value(PmReason.WITHDRAW)),
+            # A request the Jira sync closed while an ask was pending has nothing left to decide.
+            When(open_request & Exists(pending_ask), then=Value(PmReason.WITHDRAW)),
             When(open_request & Q(last_author=Role.CLIENT), then=Value(PmReason.REPLIED)),
             When(Q(status=ClientStatus.RECEIVED) & ~Exists(pm_wrote), then=Value(PmReason.NEW)),
             default=None,
@@ -421,7 +424,7 @@ def my_requests_page(
     since = period_start(period, now)
     for_pm = user.role == Role.PM
     if query:
-        found = search(user, query)
+        found = search(user, query, company)
     else:
         found = my_requests(user, show=show, types=types, since=since, company=company)
     found = with_unread(found, user)

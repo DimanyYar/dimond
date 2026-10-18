@@ -132,7 +132,7 @@
       <span class="brand-mark" aria-hidden="true">d.</span>
       {% if query %}
         <strong>Nothing found.</strong>
-        <p class="muted">No request has “{{ query }}” in its title or key. <a href="{% querystring q=None %}">Clear the search</a></p>
+        <p class="muted">No request has “{{ query }}” in its title or key. <a href="{% querystring q=None %}" data-clear-search>Clear the search</a></p>
       {% elif page.has_any_request %}
         <strong>Nothing here.</strong>
         <p class="muted">No requests match these filters.{% if is_client %} Dimon is idle — got something for him?{% endif %}</p>
