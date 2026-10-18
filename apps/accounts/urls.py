@@ -7,4 +7,6 @@ urlpatterns = [
     path("sign-in/sent/", views.sign_in_sent, name="sign_in_sent"),
     path("sign-in/link/<str:token>/", views.sign_in_link, name="sign_in_link"),
     path("sign-out/", views.sign_out, name="sign_out"),
+    path("clients/", views.clients, name="clients"),
+    path("clients/<int:pk>/", views.clients, name="client"),
 ]

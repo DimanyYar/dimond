@@ -1,0 +1,116 @@
+{% extends "layouts/pm.html" %}
+{% comment %}
+The PM's Clients screen (mockup 5.0 · Clients). Desktop: companies on the left, the chosen one
+on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a way back.
+{% endcomment %}
+{% block title %}{% if page.picked %}{{ page.chosen }} · {% endif %}Clients · dimon.d{% endblock %}
+
+{% block content %}
+<div class="clients{% if page.picked %} clients-picked{% endif %}">
+  <header class="page-header clients-header">
+    <h1>Clients</h1>
+  </header>
+
+  {% if not page.companies %}
+    <section class="card empty-state">
+      <h2>No clients yet</h2>
+      {% if user.is_staff %}
+        <p class="muted">Clients you own show up here. Until the New client button arrives, add a company in the admin with you as its owner.</p>
+        <a class="btn" href="{% url 'admin:accounts_company_add' %}">Add a company in the admin</a>
+      {% else %}
+        <p class="muted">Clients you own show up here. Until the New client button arrives, ask whoever runs dimon.d to add a company with you as its owner.</p>
+      {% endif %}
+    </section>
+  {% else %}
+    <nav class="company-list" aria-label="Companies">
+      {% for company in page.companies %}
+        <a class="company-item" href="{% url 'client' company.pk %}"{% if company == page.chosen %} aria-current="page"{% endif %}>
+          <span class="company-mark" style="background: {{ company.color }}; color: {{ company.text_on_color }}" aria-hidden="true">{{ company.name|first|upper }}</span>
+          <span class="company-item-text">
+            <span class="company-item-title">
+              <span class="company-item-name">{{ company.name }}</span>
+              {% if company.people_pending %}<span class="pending-badge">{{ company.people_pending }} pending</span>{% endif %}
+            </span>
+            <span class="company-item-meta">{% if company.people_signed_in or company.people_pending %}{{ company.people_signed_in }} with access{% else %}No one yet{% endif %} · {% if company.open_requests %}{{ company.open_requests }} open{% else %}no open requests{% endif %}</span>
+          </span>
+          <svg class="company-item-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        </a>
+      {% endfor %}
+    </nav>
+
+    {% with company=page.chosen %}
+      <section class="company-detail" aria-labelledby="company-name">
+        <a class="back-link" href="{% url 'clients' %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+          Clients
+        </a>
+
+        <header class="card company-head">
+          <span class="company-mark company-mark-large" style="background: {{ company.color }}; color: {{ company.text_on_color }}" aria-hidden="true">{{ company.name|first|upper }}</span>
+          <div class="company-head-text">
+            <h2 id="company-name">{{ company.name }}</h2>
+            <p class="muted">Client since {{ company.created_at|date:"M Y" }}{% if company.email_domain %} · {{ company.email_domain }}{% endif %}</p>
+          </div>
+          <a class="btn" href="{% url 'my_requests' %}?company={{ company.pk }}">{% if company.open_requests %}Open requests · {{ company.open_requests }}{% else %}Requests{% endif %}</a>
+        </header>
+
+        <section class="card people" aria-labelledby="people-title">
+          <div class="people-head">
+            <h3 id="people-title">People {% if page.people %}<span class="muted">· {{ company.people_signed_in }} with access{% if company.people_pending %}, {{ company.people_pending }} pending{% endif %}</span>{% endif %}</h3>
+            <span class="people-role">Role: Client · sees and sends {{ company.name }} requests</span>
+          </div>
+          {% if page.people %}
+            <table class="people-table">
+              <thead>
+                <tr><th scope="col">Person</th><th scope="col">Emails about</th><th scope="col">Status</th></tr>
+              </thead>
+              <tbody>
+                {% for row in page.people %}
+                  <tr class="person-{{ row.status }}">
+                    <td>
+                      <span class="person">
+                        <span class="person-avatar" aria-hidden="true">{{ row.initials }}</span>
+                        <span class="person-text">
+                          <span class="person-name">{{ row.person.name|default:"Not signed in yet" }}</span>
+                          <span class="person-email">{{ row.person.email }}</span>
+                        </span>
+                      </span>
+                    </td>
+                    <td class="person-notify">
+                      {% if row.status == "no_access" %}—{% elif row.person.notify == "company" %}Everything at {{ company.name }}{% elif row.person.notify == "none" %}Nothing{% else %}Own requests{% endif %}
+                    </td>
+                    <td>
+                      <span class="person-status">
+                        <span class="status status-person-{{ row.status }}">{{ row.status.label }}</span>
+                        <span class="person-when">
+                          {% if row.status == "active" %}Signed in {{ row.when|date:"M j" }}
+                          {% elif row.status == "invited" %}{% if row.when %}Link works until {{ row.when|date:"M j" }}{% else %}Invite on its way{% endif %}
+                          {% elif row.status == "link_expired" %}Expired {{ row.when|date:"M j" }}
+                          {% elif row.status == "not_invited" %}Added, no invite sent
+                          {% else %}Access revoked{% endif %}
+                        </span>
+                      </span>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="people-empty">
+              <p><strong>No one at {{ company.name }} yet</strong></p>
+              {% if user.is_staff %}
+                <p class="muted">Until inviting from this page arrives, add people in the admin and send them an invite there.</p>
+                <a class="btn" href="{% url 'admin:accounts_user_add' %}">Add a person in the admin</a>
+              {% else %}
+                <p class="muted">Until inviting from this page arrives, ask whoever runs dimon.d to add and invite them.</p>
+              {% endif %}
+            </div>
+          {% endif %}
+        </section>
+
+        <p class="hint">Everyone here sees all {{ company.name }} requests. Revoking access never deletes requests: they belong to the company, not the person.</p>
+      </section>
+    {% endwith %}
+  {% endif %}
+</div>
+{% endblock %}

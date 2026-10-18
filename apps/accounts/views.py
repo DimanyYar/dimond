@@ -1,13 +1,14 @@
 import logging
 
 from django.contrib.auth import login, logout
-from django.http import HttpRequest, HttpResponse
+from django.contrib.auth.decorators import login_required
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from . import selectors, services
 from .forms import EmailForm, WelcomeForm
-from .models import Notify, SignInLink
+from .models import Company, Notify, SignInLink, User
 
 SENT_TO = "sign_in_sent_to"
 
@@ -85,3 +86,17 @@ def stale_form(request: HttpRequest, reason: str = "") -> HttpResponse:
     """
     logger.warning("Form rejected as stale: %s", reason)
     return render(request, "accounts/stale_form.html", status=403)
+
+
+@require_GET
+@login_required
+def clients(request: HttpRequest, pk: int | None = None) -> HttpResponse:
+    """The PM's Clients screen: their companies and the people at the chosen one."""
+    assert isinstance(request.user, User)  # login_required lets only signed-in people in
+    if not selectors.has_clients_page(request.user):
+        raise Http404
+    try:
+        page = selectors.clients_page(request.user, pk)
+    except Company.DoesNotExist:
+        raise Http404 from None
+    return render(request, "accounts/clients.html", {"page": page})

@@ -43,6 +43,12 @@ class Company(models.Model):
     def __str__(self) -> str:
         return self.name
 
+    @property
+    def text_on_color(self) -> str:
+        """Ink or white for the initial on the company colour, whichever reads better."""
+        red, green, blue = (int(self.color[i : i + 2], 16) for i in (1, 3, 5))
+        return "#ffffff" if 0.299 * red + 0.587 * green + 0.114 * blue < 140 else "#111111"
+
     def clean(self) -> None:
         # owner_id is still empty when the admin form left the field blank.
         if self.owner_id is not None and not (self.owner.role == Role.PM and self.owner.is_active):
