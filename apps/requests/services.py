@@ -24,9 +24,13 @@ from .models import (
 from .selectors import (
     can_ask_for_input,
     can_ask_to_withdraw,
+    can_bring_back,
     can_create_requests,
     can_decide_withdrawal,
+    can_decline,
     can_edit_request,
+    can_mark_handled,
+    can_move_to_later,
     can_post_message,
     can_withdraw_now,
 )
@@ -252,3 +256,43 @@ def mark_seen(user: User, request: Request, read_at: datetime) -> None:
     Takes a request the caller has already read through `requests_for`.
     """
     RequestVisit.objects.update_or_create(request=request, user=user, defaults={"seen_at": read_at})
+
+
+@transaction.atomic
+def move_to_later(pm: User, request: Request) -> Request:
+    """Accepted, but not planned: the client sees it in Later, and it leaves Needs you."""
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    if not can_move_to_later(pm, request):
+        raise NotAllowedError
+    return _set_status(request, ClientStatus.LATER, pm)
+
+
+@transaction.atomic
+def bring_back(pm: User, request: Request) -> Request:
+    """Takes a request out of Later, back to Received, where the PM plans it."""
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    if not can_bring_back(pm, request):
+        raise NotAllowedError
+    return _set_status(request, ClientStatus.RECEIVED, pm)
+
+
+@transaction.atomic
+def decline_request(pm: User, request: Request, reason: str) -> Request:
+    """Closes the request as Declined. The reason goes into the thread as the PM's message,
+    so the client reads why and can answer. A Jira task, if any, stays as it is (ADR 0010).
+    """
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    if not can_decline(pm, request):
+        raise NotAllowedError
+    if not reason.strip():
+        raise ValueError("A reason is required to decline a request.")
+    Message.objects.create(request=request, author=pm, text=reason.strip())
+    return _set_status(request, ClientStatus.DECLINED, pm)
+
+
+def mark_handled(pm: User, request: Request) -> None:
+    """ "No reply needed": the client's latest message leaves the PM's Needs you without an
+    answer. The next client message brings the request back."""
+    if not can_mark_handled(pm, request):
+        raise NotAllowedError
+    Request.objects.filter(pk=request.pk).update(pm_handled_at=timezone.now())

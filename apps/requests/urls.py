@@ -15,4 +15,6 @@ urlpatterns = [
         views.request_withdrawal_decision,
         name="request_withdrawal_decision",
     ),
+    path("requests/<int:pk>/triage/", views.request_triage, name="request_triage"),
+    path("requests/<int:pk>/decline/", views.request_decline, name="request_decline"),
 ]

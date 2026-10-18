@@ -267,3 +267,19 @@ class WithdrawForm(forms.Form):
 
 class WithdrawalDecisionForm(forms.Form):
     decision = forms.ChoiceField(choices=[("confirm", "Withdraw it"), ("keep", "Keep it going")])
+
+
+class TriageForm(forms.Form):
+    """The PM's one-click actions on the card."""
+
+    action = forms.ChoiceField(
+        choices=[("later", "Move to Later"), ("back", "Bring back"), ("handled", "No reply needed")]
+    )
+
+
+class DeclineForm(forms.Form):
+    reason = forms.CharField(
+        max_length=5000,
+        widget=forms.Textarea,
+        error_messages={"required": "Tell the client why: they read it in the thread."},
+    )
