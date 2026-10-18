@@ -101,7 +101,14 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
                       </span>
                     </td>
                     {% spaceless %}<td class="person-access">
-                      {% if row.awaits_invite %}
+                      {% if row.status == "active" %}
+                        <a class="text-danger" href="{% url 'client' company.pk %}?revoke={{ row.person.pk }}#person-{{ row.person.pk }}" aria-label="Revoke access for {{ row.person.name|default:row.person.email }}">Revoke</a>
+                      {% elif row.status == "no_access" %}
+                        <form method="post" action="{% url 'restore_person' company.pk row.person.pk %}">
+                          {% csrf_token %}
+                          <button class="btn btn-small" type="submit">Re-invite</button>
+                        </form>
+                      {% elif row.awaits_invite %}
                         <form method="post" action="{% url 'resend_invite' company.pk row.person.pk %}">
                           {% csrf_token %}
                           <button class="btn btn-small" type="submit">{% if row.status == "not_invited" %}Send invite{% else %}Resend{% endif %}</button>
@@ -110,6 +117,20 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
                       {% endif %}
                     </td>{% endspaceless %}
                   </tr>
+                  {% if row.status == "active" and revoke_person == row.person.pk %}
+                    <tr class="confirm-row">
+                      <td colspan="4">
+                        <div class="confirm" role="alert">
+                          <p><strong>Revoke access for {{ row.person.name|default:row.person.email }}?</strong> They’re signed out on every device right away and stop getting emails. Their requests and replies stay with {{ company.name }}.</p>
+                          <a class="btn btn-small" href="{% url 'client' company.pk %}#person-{{ row.person.pk }}">Keep access</a>
+                          <form method="post" action="{% url 'revoke_person' company.pk row.person.pk %}">
+                            {% csrf_token %}
+                            <button class="btn btn-small btn-danger" type="submit">Revoke access</button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  {% endif %}
                   {% if row.awaits_invite and cancel_person == row.person.pk %}
                     <tr class="confirm-row">
                       <td colspan="4">
