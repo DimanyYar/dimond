@@ -37,3 +37,31 @@ def test_names_that_differ_only_in_letter_case_get_a_number(old_apps):
 
     names = new_apps.get_model("accounts", "Company").objects.order_by("pk")
     assert [c.name for c in names] == ["Atlas", "atlas (2)", "ATLAS (3)", "aTlas"]
+
+
+def test_a_number_already_in_use_is_skipped(old_apps):
+    dmitry = old_apps.get_model("accounts", "User").objects.create(
+        email="dmitry@shakuro.com", role="pm"
+    )
+    Company = old_apps.get_model("accounts", "Company")
+    for name in ("Atlas", "atlas", "atlas (2)"):
+        Company.objects.create(name=name, owner=dmitry)
+
+    new_apps = migrate(AFTER)
+
+    names = new_apps.get_model("accounts", "Company").objects.order_by("pk")
+    assert [c.name for c in names] == ["Atlas", "atlas (3)", "atlas (2)"]
+
+
+def test_a_long_name_stays_within_the_limit(old_apps):
+    dmitry = old_apps.get_model("accounts", "User").objects.create(
+        email="dmitry@shakuro.com", role="pm"
+    )
+    Company = old_apps.get_model("accounts", "Company")
+    Company.objects.create(name="A" * 120, owner=dmitry)
+    Company.objects.create(name="a" * 120, owner=dmitry)
+
+    new_apps = migrate(AFTER)
+
+    renamed = new_apps.get_model("accounts", "Company").objects.order_by("pk").last()
+    assert renamed.name == "a" * 116 + " (2)"

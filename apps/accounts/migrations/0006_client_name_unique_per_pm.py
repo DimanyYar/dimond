@@ -10,18 +10,27 @@ def number_clashing_names(apps: StateApps, schema_editor: BaseDatabaseSchemaEdit
     """Names were unique only as typed, so one PM may have "Atlas" and "atlas". The second and
     later get " (2)", " (3)" so the new rule can apply; the PM renames them in the admin."""
     Company = apps.get_model("accounts", "Company")
-    seen: set[tuple[int, str]] = set()
-    for company in Company.objects.order_by("owner_id", "created_at", "pk"):
+    max_length = Company._meta.get_field("name").max_length
+    companies = list(Company.objects.order_by("owner_id", "created_at", "pk"))
+    # Every name in use counts as taken, so "atlas" never becomes an existing "atlas (2)".
+    taken = {(company.owner_id, company.name.lower()) for company in companies}
+    kept: set[tuple[int, str]] = set()
+    for company in companies:
         key = (company.owner_id, company.name.lower())
-        if key not in seen:
-            seen.add(key)
+        if key not in kept:
+            kept.add(key)
             continue
         number = 2
-        while (company.owner_id, f"{company.name} ({number})".lower()) in seen:
+        while (company.owner_id, numbered(company.name, number, max_length).lower()) in taken:
             number += 1
-        company.name = f"{company.name} ({number})"
+        company.name = numbered(company.name, number, max_length)
         company.save(update_fields=["name"])
-        seen.add((company.owner_id, company.name.lower()))
+        taken.add((company.owner_id, company.name.lower()))
+
+
+def numbered(name: str, number: int, max_length: int) -> str:
+    suffix = f" ({number})"
+    return name[: max_length - len(suffix)] + suffix
 
 
 class Migration(migrations.Migration):
