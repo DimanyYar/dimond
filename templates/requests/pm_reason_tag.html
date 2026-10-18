@@ -1,0 +1,2 @@
+{% comment %}Why a request waits for the PM: "Asks to withdraw", "Client replied" or "New".{% endcomment %}
+<span class="reason-tag reason-{{ reason }}">{% if reason == "withdraw" %}Asks to withdraw{% elif reason == "replied" %}Client replied{% else %}New{% endif %}</span>

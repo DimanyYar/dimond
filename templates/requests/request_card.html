@@ -1,17 +1,22 @@
 {% comment %}One request on the board or in the phone list. The whole card opens the request.
 `show_status`: the card names its status where its column holds several, and always on a phone.
-The top line never wraps: the key keeps its place and a long type is cut, so nothing slides.{% endcomment %}
-<article class="request-card{% if item.status == 'needs_input' %} needs-you{% endif %}{% if item.unread %} has-new{% endif %}">
+The top line never wraps: the key keeps its place and the text beside it is cut, so nothing
+slides. `show_client` (the PM looking at all clients) puts the client's name there and the type
+at the bottom.{% endcomment %}
+<article class="request-card{% if is_client and item.status == 'needs_input' or item.pm_reason %} needs-you{% endif %}{% if item.unread %} has-new{% endif %}">
   <div class="request-card-head">
-    <span class="request-card-context">{{ item.get_type_display }}</span>
+    <span class="request-card-context">{% if show_client %}{{ item.company }}{% else %}{{ item.get_type_display }}{% endif %}</span>
     <span class="request-card-key">{{ item.key }}</span>
   </div>
   <h3><a class="card-link" href="{{ item.get_absolute_url }}" title="{{ item.title }}">{{ item.title }}</a></h3>
-  {% if show_status %}
-    <div class="request-card-chips"><span class="status status-{{ item.status }}">{{ item.get_status_display }}</span></div>
+  {% if show_status or item.pm_reason %}
+    <div class="request-card-chips">
+      {% if item.pm_reason %}{% include "requests/pm_reason_tag.html" with reason=item.pm_reason %}{% endif %}
+      {% if show_status %}{% include "requests/status_pill.html" %}{% endif %}
+    </div>
   {% endif %}
   <div class="request-card-meta">
-    <span class="request-card-want{% if item.when_needed == 'hotfix' %} hotfix{% endif %}"><span class="visually-hidden">Asked for: </span>{{ item.get_when_needed_display }}</span>
+    <span class="request-card-want">{% if show_client %}{{ item.get_type_display }} · {% endif %}<span class="visually-hidden">Asked for: </span><span{% if item.when_needed == 'hotfix' %} class="hotfix"{% endif %}>{{ item.get_when_needed_display }}</span></span>
     {% if item.unread %}
       {% include "requests/unread_badge.html" with count=item.unread %}
     {% else %}

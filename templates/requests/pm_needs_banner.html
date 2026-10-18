@@ -1,0 +1,24 @@
+{% comment %}
+The PM's "Needs you": what waits for the PM's move, asks to withdraw first. A few rows and a count of
+the rest, which sit in the Needs you column.
+{% endcomment %}
+<section class="banner needs-you-list" aria-labelledby="pm-needs-title">
+  <span class="banner-mark" aria-hidden="true">!</span>
+  <div class="needs-you-body">
+    <h2 id="pm-needs-title">{% with total=needs.shown|length|add:needs.more %}{{ total }} request{{ total|pluralize }} need{{ total|pluralize:"s," }} you{% endwith %}</h2>
+    <ul>
+      {% for item, reason in needs.shown %}
+        <li>
+          <a class="needs-you-row" href="{{ item.get_absolute_url }}">
+            <span class="needs-you-row-text">
+              <span class="needs-you-row-head">{% include "requests/pm_reason_tag.html" %} <span class="muted">{{ item.company }}</span></span>
+              <strong>{{ item.key }} · {{ item.title }}</strong>
+            </span>
+            <span class="btn {% if reason == 'withdraw' %}btn-primary{% endif %}" aria-hidden="true">{% if reason == "withdraw" %}Decide{% else %}Open{% endif %}</span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+    {% if needs.more %}<p class="needs-you-more">+{{ needs.more }} more in the Needs you column</p>{% endif %}
+  </div>
+</section>

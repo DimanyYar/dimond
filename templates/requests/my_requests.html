@@ -1,6 +1,6 @@
-{% extends "layouts/client.html" %}
+{% extends is_client|yesno:"layouts/client.html,layouts/pm.html" %}
 {% load static %}
-{% block title %}Your requests · dimon.d{% endblock %}
+{% block title %}{% if is_client %}Your requests{% else %}Requests{% endif %} · dimon.d{% endblock %}
 
 {% block content %}
   {% for message in messages %}
@@ -13,16 +13,28 @@
   <header class="requests-header">
     <div class="page-header">
       <p class="muted">Hi, {{ user.name|default:user.email }}</p>
-      <h1>Your requests</h1>
+      <h1>{% if is_client %}Your requests{% else %}Requests{% endif %}</h1>
     </div>
-    <div class="requests-actions">
-      {% include "requests/voice_open_button.html" with link=True %}
-      <a class="btn btn-primary" href="{% url 'new_request' %}">Summon Dimon</a>
-    </div>
+    {% if is_client %}
+      <div class="requests-actions">
+        {% include "requests/voice_open_button.html" with link=True %}
+        <a class="btn btn-primary" href="{% url 'new_request' %}">Summon Dimon</a>
+      </div>
+    {% else %}
+      <nav class="type-filter client-filter" aria-label="Client">
+        <a class="chip" href="{% querystring company=None %}"{% if not company %} aria-current="true"{% endif %}>All clients</a>
+        {% for chip in page.clients %}
+          <a class="chip" href="{% querystring company=chip.company.pk %}"{% if company == chip.company.pk %} aria-current="true"{% endif %}>{{ chip.company }}{% if chip.needs_pm %} <span class="chip-count">{{ chip.needs_pm }}</span>{% endif %}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
   </header>
 
   {% if page.needs_you.shown %}
     {% include "requests/needs_you_banner.html" with needs_you=page.needs_you %}
+  {% endif %}
+  {% if page.pm_needs.shown %}
+    {% include "requests/pm_needs_banner.html" with needs=page.pm_needs %}
   {% endif %}
 
   <section class="card summary" aria-labelledby="summary-title">
@@ -57,14 +69,22 @@
         <a class="chip" href="{% querystring type=chip.toggled %}"{% if chip.on %} aria-current="true"{% endif %}>{{ chip.label }}</a>
       {% endfor %}
     </nav>
-    <nav class="view-switch" aria-label="View">
-      <a href="{% querystring view='board' %}" aria-label="Board view" title="Board"{% if view == "board" %} aria-current="true"{% endif %}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/></svg>
-      </a>
-      <a href="{% querystring view='list' %}" aria-label="List view" title="List"{% if view == "list" %} aria-current="true"{% endif %}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
-      </a>
-    </nav>
+    <div class="filter-tools">
+      <form class="search" method="get" role="search" data-live-search>
+        <label class="visually-hidden" for="request-search">Search by title or DMN- key</label>
+        <input class="input" type="search" id="request-search" name="q" value="{{ query }}" placeholder="Title or DMN-…">
+        <input type="hidden" name="view" value="{{ view }}">
+        {% if company %}<input type="hidden" name="company" value="{{ company }}">{% endif %}
+      </form>
+      <nav class="view-switch" aria-label="View">
+        <a href="{% querystring view='board' %}" aria-label="Board view" title="Board"{% if view == "board" %} aria-current="true"{% endif %}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/></svg>
+        </a>
+        <a href="{% querystring view='list' %}" aria-label="List view" title="List"{% if view == "list" %} aria-current="true"{% endif %}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
+        </a>
+      </nav>
+    </div>
     {# Phones: type and period move into a sheet, as in the mobile mockup. Popover needs no script. #}
     <button class="btn filter-button" type="button" popovertarget="filters">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
@@ -76,6 +96,7 @@
     <form method="get" class="stack" data-filter-sheet data-count-url="{% url 'my_requests_count' %}">
       <input type="hidden" name="show" value="{{ show }}">
       <input type="hidden" name="view" value="{{ view }}">
+      {% if company %}<input type="hidden" name="company" value="{{ company }}">{% endif %}
       <div class="sheet-head">
         <h2 id="filters-title">Filters</h2>
         <a href="{% querystring type=None period=None %}">Reset</a>
@@ -102,12 +123,22 @@
     </form>
   </div>
 
+  <div id="request-results">
+  {% if query and page.requests %}
+    <p class="search-count muted" role="status">{{ page.requests|length }} found for “{{ query }}” · <a href="{% querystring q=None %}" data-clear-search>Clear</a></p>
+  {% endif %}
   {% if not page.requests %}
     <div class="empty-state">
       <span class="brand-mark" aria-hidden="true">d.</span>
-      {% if page.has_any_request %}
+      {% if query %}
+        <strong>Nothing found.</strong>
+        <p class="muted">No request has “{{ query }}” in its title or key. <a href="{% querystring q=None %}" data-clear-search>Clear the search</a></p>
+      {% elif page.has_any_request %}
         <strong>Nothing here.</strong>
-        <p class="muted">No requests match these filters. Dimon is idle — got something for him?</p>
+        <p class="muted">No requests match these filters.{% if is_client %} Dimon is idle — got something for him?{% endif %}</p>
+      {% elif not is_client %}
+        <strong>No requests yet.</strong>
+        <p class="muted">Clients’ requests land here as soon as they send them.</p>
       {% else %}
         <strong>No requests yet.</strong>
         <p class="muted">Send the first one and follow it here, from Received to Done.</p>
@@ -122,11 +153,11 @@
     </section>
   {% if view == "board" %}
     <section class="board" aria-label="Requests by status">
-      {% for column, items in page.board %}
-        <div class="board-column" data-column="{{ column.slug }}">
-          <h2><span class="dot" aria-hidden="true"></span>{{ column.name }} <span class="muted">{{ items|length }}</span></h2>
-          {% for item in items %}
-            {% include "requests/request_card.html" with show_status=column.mixes_statuses %}
+      {% for group in page.board %}
+        <div class="board-column" data-column="{{ group.column.slug }}">
+          <h2><span class="dot" aria-hidden="true"></span>{{ group.column.name }} <span class="muted">{{ group.requests|length }}</span></h2>
+          {% for item in group.requests %}
+            {% include "requests/request_card.html" with show_status=group.show_status %}
           {% endfor %}
         </div>
       {% endfor %}
@@ -135,20 +166,21 @@
     <div class="request-table-wrap">
       <table class="request-table">
         <thead>
-          <tr><th scope="col">ID</th><th scope="col">Request</th><th scope="col">Type</th><th scope="col">Wanted</th><th scope="col">Status</th><th scope="col">Created</th></tr>
+          <tr><th scope="col">ID</th>{% if show_client %}<th scope="col">Client</th>{% endif %}<th scope="col">Request</th><th scope="col">Type</th><th scope="col">Wanted</th><th scope="col">Status</th><th scope="col">Created</th></tr>
         </thead>
         {% for group in page.months %}
           <tbody>
             <tr class="month-row">
-              <th scope="colgroup" colspan="6">{{ group.month|date:"F Y" }} <span class="muted">{{ group.requests|length }} received · {{ group.closed }} closed</span></th>
+              <th scope="colgroup" colspan="{% if show_client %}7{% else %}6{% endif %}">{{ group.month|date:"F Y" }} <span class="muted">{{ group.requests|length }} received · {{ group.closed }} closed</span></th>
             </tr>
             {% for item in group.requests %}
-              <tr{% if item.status == "needs_input" %} class="needs-you"{% endif %}>
+              <tr{% if is_client and item.status == "needs_input" or item.pm_reason %} class="needs-you"{% endif %}>
                 <td class="muted">{{ item.key }}</td>
-                <td class="request-title{% if item.unread %} has-new{% endif %}"><a href="{{ item.get_absolute_url }}">{{ item.title }}</a>{% if item.unread %}{% include "requests/unread_badge.html" with count=item.unread %}{% endif %}</td>
+                {% if show_client %}<td class="request-client">{{ item.company }}</td>{% endif %}
+                <td class="request-title{% if item.unread %} has-new{% endif %}"><a href="{{ item.get_absolute_url }}">{{ item.title }}</a>{% if item.pm_reason or item.unread %}<span class="request-title-extra">{% if item.pm_reason %}{% include "requests/pm_reason_tag.html" with reason=item.pm_reason %}{% endif %}{% if item.unread %}{% include "requests/unread_badge.html" with count=item.unread %}{% endif %}</span>{% endif %}</td>
                 <td>{{ item.get_type_display }}</td>
                 <td{% if item.when_needed == "hotfix" %} class="hotfix"{% endif %}>{{ item.get_when_needed_display }}</td>
-                <td><span class="status status-{{ item.status }}">{{ item.get_status_display }}</span></td>
+                <td>{% include "requests/status_pill.html" %}</td>
                 <td class="muted"><time datetime="{{ item.created_at|date:'c' }}">{{ item.created_at|date:"M j" }}</time></td>
               </tr>
             {% endfor %}
@@ -158,6 +190,8 @@
     </div>
   {% endif %}
   {% endif %}
+  </div>
   <script type="module" src="{% static 'js/my-requests.js' %}"></script>
-  <script type="module" src="{% static 'js/voice-request.js' %}"></script>
+  {% if is_client %}<script type="module" src="{% static 'js/voice-request.js' %}"></script>{% endif %}
+  <script type="module" src="{% static 'js/live-search.js' %}"></script>
 {% endblock %}

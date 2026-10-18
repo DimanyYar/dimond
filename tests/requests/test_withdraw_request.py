@@ -97,7 +97,7 @@ def test_withdrawn_request_is_closed_and_on_the_done_column(client, bug, anna):
 
     assert "This request is closed." in card
     assert "Withdrawn by the client." in card
-    assert [col.slug for col, items in board if bug in items] == ["done"]
+    assert [g.column.slug for g in board if bug in g.requests] == ["done"]
 
 
 @pytest.mark.parametrize(

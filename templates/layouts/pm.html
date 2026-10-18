@@ -1,0 +1,19 @@
+{% extends "layouts/app.html" %}
+{% comment %}
+The PM's shell: the same frame as the client's, with the PM's navigation. More sections (clients,
+reports, logs) join the list as they land. Pages fill `content`.
+{% endcomment %}
+{% block nav %}
+  <a href="{% url 'my_requests' %}"{% if request.resolver_match.url_name == "my_requests" %} aria-current="page"{% endif %}>Requests</a>
+{% endblock %}
+{% block sidebar_footer %}
+  <span>{{ user.name|default:user.email }} · PM</span>
+  {% include "accounts/sign_out_button.html" %}
+{% endblock %}
+{% block topbar_meta %}PM {% include "accounts/sign_out_button.html" %}{% endblock %}
+{% block tabs %}
+  <a href="{% url 'my_requests' %}"{% if request.resolver_match.url_name == "my_requests" %} aria-current="page"{% endif %}>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+    Requests
+  </a>
+{% endblock %}

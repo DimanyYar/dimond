@@ -32,8 +32,8 @@ def styleguide(request: HttpRequest) -> HttpResponse:
 @require_GET
 @login_required
 def home(request: HttpRequest) -> HttpResponse:
-    """Where a signed-in person lands: clients go to their requests, the PM gets the inbox
-    once it exists."""
+    """Where a signed-in person lands: clients and the PM go to the requests page; the team,
+    who only open attachment links, get a short note."""
     assert isinstance(request.user, User)  # login_required lets only signed-in people in
     if has_my_requests_page(request.user):
         return redirect("my_requests")

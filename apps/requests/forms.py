@@ -211,6 +211,9 @@ class MyRequestsFilter(forms.Form):
     type = forms.MultipleChoiceField(choices=FORM_TYPES, required=False)
     period = forms.ChoiceField(choices=Period.choices, required=False)
     view = forms.ChoiceField(choices=View.choices, required=False)
+    # The PM's client chip; ignored for clients, who only ever see their own company.
+    company = forms.IntegerField(required=False, min_value=1)
+    q = forms.CharField(required=False, max_length=200, strip=True)
 
     def chosen(self, name: str, default: str = "") -> str:
         self.is_valid()
@@ -221,6 +224,11 @@ class MyRequestsFilter(forms.Form):
         """Which requests to show: everything here but the board / list switch."""
         show = Show(self.chosen("show", Show.OPEN))
         return show, self.chosen_types(), Period(self.chosen("period", Period.THREE_MONTHS))
+
+    def chosen_company(self) -> int | None:
+        self.is_valid()
+        company: int | None = self.cleaned_data.get("company")
+        return company
 
     def chosen_types(self) -> list[RequestType]:
         """Several types at once (PRD mockups: the type chips are a multi-select)."""
