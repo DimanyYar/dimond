@@ -184,3 +184,32 @@ def test_pm_cannot_touch_people_of_another_pms_client(signed_in_pm):
     assert (cancel.status_code, resend.status_code) == (404, 404)
     assert User.objects.filter(pk=sam.pk).exists()
     assert not sam.sign_in_links.exists()
+
+
+def test_only_separators_are_not_a_list_of_people(signed_in_pm, atlas):
+    response = invite(signed_in_pm, atlas, " , ;\n,")
+
+    assert "Add an email." in response.content.decode()
+    assert not User.objects.filter(company=atlas).exists()
+
+
+def test_an_address_added_meanwhile_is_a_form_error_not_a_crash(signed_in_pm, atlas, monkeypatch):
+    # The form's check passes, then someone else saves the same address before this save.
+    monkeypatch.setattr("apps.accounts.forms.selectors.email_has_account", lambda email: False)
+    User.objects.create_user("sam@atlas-crm.com", company=atlas)
+
+    response = invite(signed_in_pm, atlas, "kate@atlas-crm.com, sam@atlas-crm.com")
+
+    assert response.status_code == 200
+    assert "was just added" in response.content.decode()
+    assert not User.objects.filter(email="kate@atlas-crm.com").exists()
+
+
+def test_an_invite_already_used_to_sign_in_cannot_be_cancelled(atlas, pm):
+    sam = User.objects.create_user("sam@atlas-crm.com", company=atlas)
+    SignInLink.objects.create(user=sam, kind=LinkKind.INVITE, used_at=timezone.now())
+
+    with pytest.raises(services.NotAllowedError):
+        services.cancel_invite(sam)
+
+    assert User.objects.filter(pk=sam.pk).exists()

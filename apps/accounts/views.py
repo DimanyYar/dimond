@@ -3,6 +3,8 @@ import logging
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
@@ -138,9 +140,15 @@ def invite_people(request: HttpRequest, pk: int) -> HttpResponse:
     form = InviteForm(request.POST, company=company)
     if not form.is_valid():
         return _clients_screen(request, pm, pk, invite_form=form)
-    invited = services.invite_people(
-        pm, company, form.cleaned_data["emails"], Notify(form.cleaned_data["notify"])
-    )
+    try:
+        invited = services.invite_people(
+            pm, company, form.cleaned_data["emails"], Notify(form.cleaned_data["notify"])
+        )
+    except (IntegrityError, ValidationError):
+        # Someone added one of these addresses between the check and the save, e.g. the
+        # same form sent twice. Nothing was saved; the form says so like any taken address.
+        form.add_error("emails", "One of these addresses was just added. Check the list again.")
+        return _clients_screen(request, pm, pk, invite_form=form)
     messages.success(
         request,
         f"Invites sent to {invited} {'person' if invited == 1 else 'people'}. "

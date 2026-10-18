@@ -140,8 +140,10 @@ def _send_one(link_id: int) -> bool:
 
 
 def _spend(token: str, kind: LinkKind) -> User:
+    # The person's row is locked too: cancelling an invite waits for a sign-in in progress
+    # and then sees the spent link (cancel_invite).
     link = (
-        SignInLink.objects.select_for_update()
+        SignInLink.objects.select_for_update(of=("self", "user"))
         .select_related("user")
         .filter(token_hash=hash_token(token), kind=kind)
         .first()
@@ -214,9 +216,18 @@ def resend_invite(pm: User, person: User) -> None:
     invite([person], invited_by=pm)
 
 
+@transaction.atomic
 def cancel_invite(person: User) -> None:
     """Call off an invite: the person never signed in, so nothing of theirs exists and they
-    are removed altogether (decided 2026-10-18). Their links go with them."""
-    if not _waiting_for_invite(person):
+    are removed altogether (decided 2026-10-18). Their links go with them.
+
+    Locked against a sign-in at the same moment: someone who has already spent a link is
+    signing in, so the invite stays.
+    """
+    person = User.objects.select_for_update().get(pk=person.pk)
+    if (
+        not _waiting_for_invite(person)
+        or person.sign_in_links.filter(used_at__isnull=False).exists()
+    ):
         raise NotAllowedError
     person.delete()

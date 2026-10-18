@@ -145,7 +145,12 @@ def clients_page(user: User, pk: int | None) -> ClientsPage:
 
 
 def email_has_account(email: str) -> bool:
-    """Whether anyone at all signs in with this address: one email is one person (ADR 0011)."""
+    """Whether anyone at all signs in with this address: one email is one person (ADR 0011).
+
+    Only the PM's invite form asks, and the answer is never which company: a PM is Shakuro
+    staff and must learn an address cannot be invited (ADR 0014). The sign-in page, open to
+    anyone, never reveals it (ADR 0003).
+    """
     return User.objects.filter(email=email.strip().lower()).exists()
 
 

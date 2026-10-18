@@ -25,5 +25,8 @@ the superuser's tool.
 + A second PM signs in to an empty portal and sees only the clients they add; a guessed
 request id answers 404, as for clients of another company.
 + New PM features scope by owner from the start instead of being fixed later.
+− A PM inviting an address learns that it already has an account somewhere, never where: one
+email is one person (ADR 0011), so the invite has to be refused. PMs are Shakuro staff; the
+sign-in page, open to anyone, still reveals nothing.
 − Handing clients to a colleague for a holiday means changing the owner in the admin for now;
 shared or temporary access is a later decision.

@@ -55,6 +55,8 @@ class InviteForm(forms.Form):
                 e.lower() for e in EMAIL_SEPARATORS.split(self.cleaned_data["emails"]) if e
             )
         )
+        if not emails:
+            raise ValidationError("Add an email.")
         if len(emails) > MAX_INVITES_AT_ONCE:
             raise ValidationError(f"Up to {MAX_INVITES_AT_ONCE} people at once.")
         wrong = [email for email in emails if not _is_email(email)]
