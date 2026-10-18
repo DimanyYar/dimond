@@ -51,6 +51,12 @@ def sign_in_with_link(person: User, user_agent: str) -> Client:
     return browser
 
 
+def email_a_link(person: User) -> None:
+    # A signed-in browser cannot ask on the sign-in page; the link comes from elsewhere.
+    services.request_sign_in_link(person.email)
+    services.send_queued_links()
+
+
 def person_page(client: Client, person: User):
     return client.get(reverse("person", args=[person.company_id, person.pk]))
 
@@ -62,6 +68,30 @@ def test_pm_sees_each_browser_the_person_signed_in_from(signed_in_pm, mark):
     devices = person_page(signed_in_pm, mark).context["page"].devices
 
     assert [d.name for d in devices] == ["Safari on iPhone", "Chrome on macOS"]
+
+
+def test_opening_a_new_link_in_a_signed_in_browser_counts_as_one_device(signed_in_pm, mark):
+    laptop = sign_in_with_link(mark, MAC_CHROME)
+    email_a_link(mark)
+
+    response = laptop.post(link_path_from_email())
+
+    assert response.status_code == 302
+    devices = person_page(signed_in_pm, mark).context["page"].devices
+    assert [d.name for d in devices] == ["Chrome on macOS"]
+
+
+def test_a_link_for_someone_else_signs_the_browser_in_as_them(signed_in_pm, mark, atlas):
+    laptop = sign_in_with_link(mark, MAC_CHROME)
+    sam = User.objects.create_user("sam@atlas-crm.com", company=atlas, last_login=timezone.now())
+    email_a_link(sam)
+
+    response = laptop.post(link_path_from_email())
+
+    assert response.status_code == 302
+    assert [d.name for d in person_page(signed_in_pm, sam).context["page"].devices] == [
+        "Chrome on macOS"
+    ]
 
 
 def test_signing_out_on_a_device_removes_it_from_the_list(signed_in_pm, mark):

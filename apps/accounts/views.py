@@ -64,8 +64,11 @@ def sign_in_link(request: HttpRequest, token: str) -> HttpResponse:
 
 def _sign_in(request: HttpRequest, user: User) -> None:
     login(request, user)
+    # login() keeps the session of a browser already signed in as this person and empties it
+    # for someone else: a new key either way gives the new device row its own session.
+    request.session.cycle_key()
     session_key = request.session.session_key
-    assert session_key is not None  # login() has just saved the session
+    assert session_key is not None  # cycle_key() has just saved the session
     services.record_sign_in(user, session_key, request.headers.get("User-Agent", ""))
 
 
