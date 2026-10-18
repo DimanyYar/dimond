@@ -48,7 +48,13 @@ function settled(media, event) {
 
 // A frame half a second in: the very first one is often black. Resolves to null where the
 // browser cannot show this video (iPhone's HEVC in Chrome); the tile then shows a play button.
-async function videoFrame(file) {
+// The form waits for the frame before sending, so a video that never loads must not hold it.
+function videoFrame(file) {
+  const tooLong = new Promise((resolve) => setTimeout(resolve, 5000, null));
+  return Promise.race([frameOf(file), tooLong]);
+}
+
+async function frameOf(file) {
   const video = document.createElement("video");
   video.muted = true;
   video.playsInline = true;

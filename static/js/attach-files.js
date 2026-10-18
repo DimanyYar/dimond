@@ -26,7 +26,7 @@ export function watchFiles(form) {
   const error = box.querySelector("[data-attach-error]");
   // Files already in the input: carried over from a form the server sent back with errors.
   // A video being compressed is listed with its progress and kept out of the input until done.
-  let files = [...input.files].map((file) => ({ file, progress: null, stop: null, tile: null }));
+  let files = [...input.files].map((file) => ({ file, progress: null, framesPending: 0, stop: null, tile: null }));
   box.classList.add("is-enhanced");
   input.classList.add("visually-hidden");
 
@@ -50,15 +50,29 @@ export function watchFiles(form) {
     sendFrames();
   }
 
-  // Each ready video's frame goes with the form under the video's name plus ".jpg", so the
-  // server knows whose frame it is (apps/files/forms.py).
+  // Each ready video's frame goes with the form named after the video's place among the files
+  // sent ("2.jpg" for the third), so the server knows whose frame it is (apps/files/forms.py).
   function sendFrames() {
     const transfer = new DataTransfer();
-    for (const entry of files) {
-      const frame = entry.progress === null ? entry.tile.frame() : null;
-      if (frame !== null) transfer.items.add(new File([frame], `${entry.file.name}.jpg`, { type: "image/jpeg" }));
-    }
+    files
+      .filter((entry) => entry.progress === null)
+      .forEach((entry, place) => {
+        const frame = entry.tile.frame();
+        if (frame !== null) transfer.items.add(new File([frame], `${place}.jpg`, { type: "image/jpeg" }));
+      });
     posters.files = transfer.files;
+  }
+
+  // Sending before a frame arrives would send the video without it, or with the frame of the
+  // file before compressing.
+  function takeFrame(entry, video) {
+    entry.framesPending += 1;
+    entry.tile
+      .showFrame(video)
+      .then(sendFrames)
+      .finally(() => {
+        entry.framesPending -= 1;
+      });
   }
 
   async function compress(entry) {
@@ -77,7 +91,7 @@ export function watchFiles(form) {
       entry.tile.progress(null);
       // The frame of what gets uploaded; a browser that could not show the original (HEVC in
       // Chrome) can show this one.
-      entry.tile.showFrame(ready).then(sendFrames);
+      takeFrame(entry, ready);
     } catch (problem) {
       // Removed by the client while compressing: it is already gone from the list.
       if (entry.stop.signal.aborted) return;
@@ -105,14 +119,14 @@ export function watchFiles(form) {
         problems.push(`${file.name} is over 10 MB. Make it smaller or share a link instead.`);
         continue;
       }
-      const entry = { file: named(file), progress: null, stop: null, tile: null };
+      const entry = { file: named(file), progress: null, framesPending: 0, stop: null, tile: null };
       files.push(entry);
       if (isVideo) {
         entry.progress = 0;
         entry.stop = new AbortController();
         tileFor(entry);
         entry.tile.progress(0);
-        entry.tile.showFrame(entry.file).then(sendFrames);
+        takeFrame(entry, entry.file);
         compress(entry);
       }
     }
@@ -132,7 +146,8 @@ export function watchFiles(form) {
   // before the form's own submit handler, so it can stop that one too.
   form.addEventListener("submit", (event) => {
     const recording = recorders.isRecording();
-    if (!recording && !files.some((entry) => entry.progress !== null)) return;
+    const busy = files.some((entry) => entry.progress !== null || entry.framesPending > 0);
+    if (!recording && !busy) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     error.textContent = recording ? "Stop the recording first, then send." : "Wait until the video is ready, then send.";

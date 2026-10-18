@@ -14,9 +14,9 @@ from .conftest import M4A, MP4, PNG, upload
 pytestmark = pytest.mark.django_db
 
 
-def picture(format: str, size=(1600, 900), pages: int = 1) -> bytes:
+def picture(format: str, size=(1600, 900), pages: int = 1, colour: str = "white") -> bytes:
     out = BytesIO()
-    first, *rest = [Image.new("RGB", size, colour) for colour in ("white", "red", "blue")[:pages]]
+    first, *rest = [Image.new("RGB", size, fill) for fill in (colour, "red", "blue")[:pages]]
     first.save(out, format, save_all=pages > 1, append_images=rest)
     return out.getvalue()
 
@@ -56,7 +56,7 @@ def test_pdf_preview_is_its_first_page_and_counts_pages(anna):
     assert (spec.preview_status, spec.pages) == (PreviewStatus.READY, 3)
 
 
-def video_with_frame(client, anna, frame: bytes, frame_name: str = "bug.mp4.jpg"):
+def video_with_frame(client, anna, frame: bytes, frame_name: str = "0.jpg"):
     client.force_login(anna)
     client.post(
         "/requests/new/",
@@ -91,8 +91,8 @@ def test_video_preview_is_the_frame_the_browser_took(client, anna, private_folde
 @pytest.mark.parametrize(
     ("frame", "frame_name"),
     [
-        (picture("PNG"), "bug.mp4.jpg"),  # not a JPEG
-        (picture("JPEG"), "other.mp4.jpg"),  # a frame of another video
+        (picture("PNG"), "0.jpg"),  # not a JPEG
+        (picture("JPEG"), "1.jpg"),  # a frame of a second video that was not sent
     ],
     ids=["not-a-jpeg", "another-video"],
 )
@@ -101,6 +101,34 @@ def test_video_without_its_own_jpeg_frame_keeps_the_play_button(client, anna, fr
 
     assert video.preview_status == PreviewStatus.NONE
     assert not video.preview
+    card = client.get(video.request.get_absolute_url()).content.decode()
+    assert 'class="tile-play"' in card
+
+
+def test_two_videos_with_one_name_each_get_their_own_frame(client, anna):
+    client.force_login(anna)
+    red, blue = (picture("JPEG", size=(640, 360), colour=colour) for colour in ("red", "blue"))
+    client.post(
+        "/requests/new/",
+        {
+            "type": "idea",
+            "title": "Lead form sends twice",
+            "why": "Managers call twice",
+            "when_needed": "not_sure",
+            "attachments": [upload("clip.mp4", MP4), upload("clip.mp4", MP4)],
+            "attachments_posters": [upload("0.jpg", red), upload("1.jpg", blue)],
+        },
+    )
+
+    make_pending_previews()
+
+    reddish = []
+    for video in Attachment.objects.all():
+        with video.preview.open("rb") as stored, Image.open(stored) as preview:
+            red, _, blue = preview.convert("RGB").getpixel((0, 0))
+            reddish.append(red > blue)
+    # One preview is the red frame and the other the blue one, not the same frame twice.
+    assert sorted(reddish) == [False, True]
 
 
 def test_broken_frame_leaves_the_video_without_preview(client, anna, private_folder):

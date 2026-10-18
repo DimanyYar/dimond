@@ -13,7 +13,8 @@ from .uploads import MAX_FILES, CheckedFile, check_poster, check_upload
 
 class MultipleFileInput(forms.ClearableFileInput):
     """The files, and next to them the frames the browser took from the videos among them: sent
-    as "<field>_posters", each named after its video plus ".jpg"."""
+    as "<field>_posters", each named after its video's place among the files ("2.jpg" for the
+    third), since two videos can share a name."""
 
     allow_multiple_selected = True
 
@@ -40,13 +41,13 @@ class AttachmentsField(forms.FileField):
         if len(uploads) > MAX_FILES:
             raise ValidationError(f"Attach up to {MAX_FILES} files at a time.")
         checked, errors = [], []
-        for upload in uploads:
+        for place, upload in enumerate(uploads):
             try:
                 file = check_upload(upload)
             except ValidationError as error:
                 errors.append(error)
                 continue
-            poster = posters.get(f"{upload.name}.jpg")
+            poster = posters.get(f"{place}.jpg")
             if file.content_type.startswith("video/") and poster is not None:
                 file = file._replace(poster=check_poster(poster))
             checked.append(file)

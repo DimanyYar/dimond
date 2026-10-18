@@ -83,21 +83,23 @@ def make_preview(attachment: Attachment) -> None:
     source = attachment.preview if is_video else attachment.file
     with source.open("rb") as stored:
         content = stored.read()
+    # A video's frame is deleted only once the database no longer points at it, so a failure
+    # in between leaves the attachment pending with its frame, ready for the next try.
+    frame = attachment.preview.name if is_video else ""
     try:
         preview = previews.draw(content, "image/jpeg" if is_video else attachment.content_type)
     except previews.CANNOT_READ:
         log.warning("No preview for attachment %s", attachment.id, exc_info=True)
-        if is_video:
-            attachment.preview.delete(save=False)
+        attachment.preview = ""
         attachment.preview_status = PreviewStatus.NONE
         attachment.save(update_fields=["preview", "preview_status"])
-        return
-    if is_video:
-        attachment.preview.delete(save=False)
-    attachment.preview.save("preview.webp", ContentFile(preview.webp), save=False)
-    attachment.pages = preview.pages
-    attachment.preview_status = PreviewStatus.READY
-    attachment.save(update_fields=["preview", "preview_status", "pages"])
+    else:
+        attachment.preview.save("preview.webp", ContentFile(preview.webp), save=False)
+        attachment.pages = preview.pages
+        attachment.preview_status = PreviewStatus.READY
+        attachment.save(update_fields=["preview", "preview_status", "pages"])
+    if frame:
+        attachment.preview.storage.delete(frame)
 
 
 def make_pending_previews(limit: int = 20) -> int:
