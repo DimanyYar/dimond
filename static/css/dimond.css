@@ -4226,3 +4226,381 @@ kbd {
 .composer:has(input[name="kind"][value="note"]:checked) .reply-only {
   display: none;
 }
+
+/* PM · Clients: companies on the left, the chosen one on the right (mockup 5.0 · Clients).
+   Phones show one at a time: the list on /clients/, a company on /clients/<id>/. */
+.tabbar:not(:has(.tab-new)) {
+  grid-template-columns: 1fr 1fr;
+  justify-items: center;
+}
+
+.clients {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  grid-template-areas:
+    "header header"
+    "list detail";
+  gap: var(--space-5) 20px;
+  align-items: start;
+}
+
+.clients-header {
+  grid-area: header;
+}
+
+.clients > .empty-state {
+  grid-column: 1 / -1;
+}
+
+.company-list {
+  grid-area: list;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.company-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-m);
+  text-decoration: none;
+}
+
+.company-item:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.company-item[aria-current="page"] {
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
+}
+
+.company-mark {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.company-mark-large {
+  flex-basis: 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-m);
+  font-size: 20px;
+}
+
+.company-item-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.company-item-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.company-item-name {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.company-item-meta {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pending-badge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.company-item-chevron,
+.back-link {
+  display: none;
+}
+
+.company-detail {
+  grid-area: detail;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.company-detail > .hint {
+  margin: 0;
+}
+
+.company-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.company-head-text {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.company-head-text p {
+  margin: 2px 0 0;
+  font-size: 14px;
+}
+
+.people {
+  padding: 0;
+  overflow: hidden;
+}
+
+.people-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.people-head h3 {
+  flex: 1 1 auto;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.people-head h3 .muted {
+  font-weight: 400;
+}
+
+.people-role {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.people-table {
+  width: 100%;
+  /* Fixed columns: a long email is cut with an ellipsis instead of squeezing the others. */
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: left;
+}
+
+.people-table th,
+.people-table td {
+  padding: var(--space-3) 18px;
+  border-top: 1px solid var(--hairline-soft);
+  vertical-align: middle;
+}
+
+.people-table thead th {
+  padding-block: 10px;
+  border-top: 0;
+  background: #faf8f5;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.people-table th:first-child {
+  width: 46%;
+}
+
+.people-table th:nth-child(2) {
+  width: 24%;
+}
+
+.person-when {
+  white-space: nowrap;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.person-avatar {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.person-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.person-name {
+  font-weight: 500;
+}
+
+.person-email {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.person-notify {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.person-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.person-when {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Not signed in yet: a dashed avatar and a muted name, like an empty seat. */
+.person-invited .person-avatar,
+.person-link_expired .person-avatar,
+.person-not_invited .person-avatar {
+  background: var(--surface);
+  border: 1px dashed #9c9fa5;
+}
+
+.person-invited .person-name,
+.person-link_expired .person-name,
+.person-not_invited .person-name {
+  color: var(--muted);
+}
+
+.person-no_access td {
+  opacity: 0.6;
+}
+
+.status-person-active { background: var(--success-soft); color: var(--success-text); }
+.status-person-invited { background: var(--surface-2); }
+.status-person-link_expired { background: var(--accent-soft); color: #8a3200; }
+.status-person-not_invited { background: var(--surface); border: 1px dashed var(--hairline-strong); }
+.status-person-no_access { background: var(--canvas); color: var(--muted); }
+
+.people-empty {
+  padding: var(--space-5) 18px var(--space-6);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.people-empty p {
+  margin: 0;
+}
+
+@media (max-width: 899px) {
+  .clients {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "header" "list" "detail";
+  }
+
+  /* One screen at a time: the list, or the company the PM opened. */
+  .clients:not(.clients-picked) .company-detail,
+  .clients-picked .company-list,
+  .clients-picked .clients-header,
+  .person-no_access .person-notify {
+    display: none;
+  }
+
+  .clients-picked {
+    grid-template-areas: "detail";
+  }
+
+  .company-item {
+    background: var(--surface);
+    padding: 14px;
+  }
+
+  .company-item[aria-current="page"] {
+    border: 1px solid var(--hairline);
+  }
+
+  .company-item-chevron {
+    display: block;
+    flex: 0 0 16px;
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    align-self: flex-start;
+    min-height: var(--tap);
+    font-size: 15px;
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  .company-head .btn {
+    flex: 1 1 100%;
+  }
+
+  /* People become cards: name and email on top, notifications and status under them. */
+  .people-table thead {
+    display: none;
+  }
+
+  .people-table,
+  .people-table tbody,
+  .people-table tr,
+  .people-table td {
+    display: block;
+  }
+
+  .people-table tr {
+    padding: var(--space-3) var(--space-4);
+    border-top: 1px solid var(--hairline-soft);
+  }
+
+  .people-table td {
+    padding: 0;
+    border: 0;
+  }
+
+  .people-table td + td {
+    margin-top: var(--space-2);
+    padding-left: 42px;
+  }
+}

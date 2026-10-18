@@ -1,10 +1,11 @@
 {% extends "layouts/app.html" %}
 {% comment %}
-The PM's shell: the same frame as the client's, with the PM's navigation. More sections (clients,
-reports, logs) join the list as they land. Pages fill `content`.
+The PM's shell: the same frame as the client's, with the PM's navigation. More sections
+(reports, logs) join the list as they land. Pages fill `content`.
 {% endcomment %}
 {% block nav %}
   <a href="{% url 'my_requests' %}"{% if request.resolver_match.url_name == "my_requests" %} aria-current="page"{% endif %}>Requests</a>
+  <a href="{% url 'clients' %}"{% if request.resolver_match.url_name == "clients" or request.resolver_match.url_name == "client" %} aria-current="page"{% endif %}>Clients</a>
 {% endblock %}
 {% block sidebar_footer %}
   <span>{{ user.name|default:user.email }} · PM</span>
@@ -15,5 +16,9 @@ reports, logs) join the list as they land. Pages fill `content`.
   <a href="{% url 'my_requests' %}"{% if request.resolver_match.url_name == "my_requests" %} aria-current="page"{% endif %}>
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
     Requests
+  </a>
+  <a href="{% url 'clients' %}"{% if request.resolver_match.url_name == "clients" or request.resolver_match.url_name == "client" %} aria-current="page"{% endif %}>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c1-3.5 3.3-5 6-5s5 1.5 6 5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18 15c1.6.6 2.6 2.2 3 5"/></svg>
+    Clients
   </a>
 {% endblock %}
