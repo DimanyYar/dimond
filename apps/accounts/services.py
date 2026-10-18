@@ -259,3 +259,22 @@ def cancel_invite(person: User) -> None:
     ):
         raise NotAllowedError
     person.delete()
+
+
+@transaction.atomic
+def create_client(
+    pm: User,
+    *,
+    name: str,
+    email_domain: str,
+    color: str,
+    emails: Iterable[str],
+    notify: Notify,
+) -> Company:
+    """A new client owned by this PM, with invites for the first people if any (PRD: Clients
+    screen). The Jira project comes with Jira tasks (#15)."""
+    company = Company(name=name, owner=pm, email_domain=email_domain, color=color)
+    company.full_clean()
+    company.save()
+    invite_people(pm, company, emails, notify)
+    return company

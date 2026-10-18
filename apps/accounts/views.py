@@ -10,7 +10,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from . import selectors, services
-from .forms import EmailForm, InviteForm, WelcomeForm
+from .forms import CLIENT_COLORS, EmailForm, InviteForm, NewClientForm, WelcomeForm
 from .models import Company, Notify, SignInLink, User
 
 SENT_TO = "sign_in_sent_to"
@@ -100,7 +100,11 @@ def _pm(request: HttpRequest) -> User:
 
 
 def _clients_screen(
-    request: HttpRequest, pm: User, pk: int | None, invite_form: InviteForm | None = None
+    request: HttpRequest,
+    pm: User,
+    pk: int | None,
+    invite_form: InviteForm | None = None,
+    new_client_form: NewClientForm | None = None,
 ) -> HttpResponse:
     try:
         page = selectors.clients_page(pm, pk)
@@ -120,6 +124,8 @@ def _clients_screen(
             "invite_form": invite_form,
             "cancel_person": int(cancel) if cancel.isdigit() else None,
             "revoke_person": int(revoke) if revoke.isdigit() else None,
+            "new_client_form": new_client_form,
+            "client_colors": CLIENT_COLORS,
         },
     )
 
@@ -226,3 +232,38 @@ def restore_person(request: HttpRequest, pk: int, person_pk: int) -> HttpRespons
             f"Access is back for {person.name or person.email}: a new invite is on its way.",
         )
     return redirect("client", pk)
+
+
+@require_http_methods(["GET", "POST"])
+@login_required
+def new_client(request: HttpRequest) -> HttpResponse:
+    """The New client window over the Clients page: the company and its first invites."""
+    pm = _pm(request)
+    form = NewClientForm(request.POST or None, owner=pm)
+    if not form.is_valid():
+        return _clients_screen(request, pm, None, new_client_form=form)
+    data = form.cleaned_data
+    try:
+        company = services.create_client(
+            pm,
+            name=data["name"],
+            email_domain=data["email_domain"],
+            color=data["color"],
+            emails=data["emails"],
+            notify=Notify(data["notify"]),
+        )
+    except (IntegrityError, ValidationError):
+        # The same name or an address was saved meanwhile, e.g. the form sent twice.
+        form.add_error(None, "Something here was just saved elsewhere. Check and send again.")
+        return _clients_screen(request, pm, None, new_client_form=form)
+    invited = len(data["emails"])
+    messages.success(
+        request,
+        f"{company.name} is added."
+        + (
+            f" Invites sent to {invited} {'person' if invited == 1 else 'people'}."
+            if invited
+            else ""
+        ),
+    )
+    return redirect("client", company.pk)

@@ -3,23 +3,23 @@
 The PM's Clients screen (mockup 5.0 · Clients). Desktop: companies on the left, the chosen one
 on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a way back.
 {% endcomment %}
-{% block title %}{% if page.picked %}{{ page.chosen }} · {% endif %}Clients · dimon.d{% endblock %}
+{% block title %}{% if page.picked %}{{ page.chosen }} · {% endif %}Clients · dimon.d{% if new_client_form %}
+  {% include "accounts/new_client_dialog.html" with form=new_client_form %}
+{% endif %}
+{% endblock %}
 
 {% block content %}
 <div class="clients{% if page.picked %} clients-picked{% endif %}">
-  <header class="page-header clients-header">
+  <header class="clients-header">
     <h1>Clients</h1>
+    <a class="btn btn-primary" href="{% url 'new_client' %}">+ New client</a>
   </header>
 
   {% if not page.companies %}
     <section class="card empty-state">
       <h2>No clients yet</h2>
-      {% if user.is_staff %}
-        <p class="muted">Clients you own show up here. Until the New client button arrives, add a company in the admin with you as its owner.</p>
-        <a class="btn" href="{% url 'admin:accounts_company_add' %}">Add a company in the admin</a>
-      {% else %}
-        <p class="muted">Clients you own show up here. Until the New client button arrives, ask whoever runs dimon.d to add a company with you as its owner.</p>
-      {% endif %}
+      <p class="muted">Add your first client: a company and the people who’ll send requests.</p>
+      <a class="btn btn-primary" href="{% url 'new_client' %}">+ New client</a>
     </section>
   {% else %}
     <nav class="company-list" aria-label="Companies">
@@ -162,4 +162,7 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
     {% endwith %}
   {% endif %}
 </div>
+{% if new_client_form %}
+  {% include "accounts/new_client_dialog.html" with form=new_client_form %}
+{% endif %}
 {% endblock %}

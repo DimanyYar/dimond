@@ -124,25 +124,6 @@ def test_company_page_shows_its_people_and_links_to_its_requests(client, pm, atl
     assert f"/requests/?company={atlas.pk}" in html
 
 
-def test_pm_without_clients_is_told_how_to_add_one(client, pm):
-    client.force_login(pm)
-
-    html = client.get(reverse("clients")).content.decode()
-
-    assert "No clients yet" in html
-    assert "ask whoever runs dimon.d" in html
-    assert "/admin" not in html
-
-
-def test_pm_with_admin_access_gets_a_link_to_add_a_company(client):
-    dmitry = User.objects.create_superuser("dmitry@example.com", password="s3cret-pass")
-    client.force_login(dmitry)
-
-    html = client.get(reverse("clients")).content.decode()
-
-    assert reverse("admin:accounts_company_add") in html
-
-
 def test_pm_navigation_leads_to_clients(client, pm):
     client.force_login(pm)
 

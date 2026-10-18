@@ -20,7 +20,7 @@ class Company(models.Model):
     its requests (PRD: every PM has their own clients).
     """
 
-    name = models.CharField(max_length=120, unique=True)
+    name = models.CharField(max_length=120)
     owner = models.ForeignKey(
         "User",
         on_delete=models.PROTECT,
@@ -39,6 +39,16 @@ class Company(models.Model):
     class Meta:
         ordering = ["name"]
         verbose_name_plural = "companies"
+        constraints = [
+            # Unique per PM, not across PMs: another PM's clients are invisible, so a clash
+            # with them could not be fixed and would reveal that they exist (ADR 0014).
+            models.UniqueConstraint(
+                Lower("name"),
+                "owner",
+                name="one_client_name_per_pm",
+                violation_error_message="You already have a client with this name.",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name
