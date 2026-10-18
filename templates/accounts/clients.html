@@ -45,6 +45,10 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
           Clients
         </a>
 
+        {% for message in messages %}
+          <div class="banner{% if message.level_tag == 'error' %} banner-error{% endif %}" role="status">{{ message }}</div>
+        {% endfor %}
+
         <header class="card company-head">
           <span class="company-mark company-mark-large" style="background: {{ company.color }}; color: {{ company.text_on_color }}" aria-hidden="true">{{ company.name|first|upper }}</span>
           <div class="company-head-text">
@@ -52,7 +56,12 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
             <p class="muted">Client since {{ company.created_at|date:"M Y" }}{% if company.email_domain %} · {{ company.email_domain }}{% endif %}</p>
           </div>
           <a class="btn" href="{% url 'my_requests' %}?company={{ company.pk }}">{% if company.open_requests %}Open requests · {{ company.open_requests }}{% else %}Requests{% endif %}</a>
+          {% if not invite_form %}<a class="btn btn-dark" href="{% url 'client' company.pk %}?invite#invite">Invite people</a>{% endif %}
         </header>
+
+        {% if invite_form %}
+          {% include "accounts/invite_form.html" with form=invite_form %}
+        {% endif %}
 
         <section class="card people" aria-labelledby="people-title">
           <div class="people-head">
@@ -62,11 +71,11 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
           {% if page.people %}
             <table class="people-table">
               <thead>
-                <tr><th scope="col">Person</th><th scope="col">Emails about</th><th scope="col">Status</th></tr>
+                <tr><th scope="col">Person</th><th scope="col">Emails about</th><th scope="col">Status</th><th scope="col" class="person-access-head">Access</th></tr>
               </thead>
               <tbody>
                 {% for row in page.people %}
-                  <tr class="person-{{ row.status }}">
+                  <tr class="person-{{ row.status }}" id="person-{{ row.person.pk }}">
                     <td>
                       <span class="person">
                         <span class="person-avatar" aria-hidden="true">{{ row.initials }}</span>
@@ -91,19 +100,38 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
                         </span>
                       </span>
                     </td>
+                    {% spaceless %}<td class="person-access">
+                      {% if row.awaits_invite %}
+                        <form method="post" action="{% url 'resend_invite' company.pk row.person.pk %}">
+                          {% csrf_token %}
+                          <button class="btn btn-small" type="submit">{% if row.status == "not_invited" %}Send invite{% else %}Resend{% endif %}</button>
+                        </form>
+                        <a class="text-danger" href="{% url 'client' company.pk %}?cancel={{ row.person.pk }}#person-{{ row.person.pk }}" aria-label="Cancel the invite to {{ row.person.email }}">Cancel</a>
+                      {% endif %}
+                    </td>{% endspaceless %}
                   </tr>
+                  {% if row.awaits_invite and cancel_person == row.person.pk %}
+                    <tr class="confirm-row">
+                      <td colspan="4">
+                        <div class="confirm" role="alert">
+                          <p><strong>Cancel the invite to {{ row.person.email }}?</strong> The link stops working and the address is removed from {{ company.name }}.</p>
+                          <a class="btn btn-small" href="{% url 'client' company.pk %}#person-{{ row.person.pk }}">Keep invite</a>
+                          <form method="post" action="{% url 'cancel_invite' company.pk row.person.pk %}">
+                            {% csrf_token %}
+                            <button class="btn btn-small btn-danger" type="submit">Cancel invite</button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  {% endif %}
                 {% endfor %}
               </tbody>
             </table>
           {% else %}
             <div class="people-empty">
               <p><strong>No one at {{ company.name }} yet</strong></p>
-              {% if user.is_staff %}
-                <p class="muted">Until inviting from this page arrives, add people in the admin and send them an invite there.</p>
-                <a class="btn" href="{% url 'admin:accounts_user_add' %}">Add a person in the admin</a>
-              {% else %}
-                <p class="muted">Until inviting from this page arrives, ask whoever runs dimon.d to add and invite them.</p>
-              {% endif %}
+              <p class="muted">Invite the first person — they’ll see every {{ company.name }} request.</p>
+              {% if not invite_form %}<a class="btn btn-dark" href="{% url 'client' company.pk %}?invite#invite">Invite people</a>{% endif %}
             </div>
           {% endif %}
         </section>

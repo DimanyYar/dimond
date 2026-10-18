@@ -13,7 +13,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import LinkKind, Notify, SignInLink, User
+from .models import Company, LinkKind, Notify, Role, SignInLink, User
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,10 @@ EMAIL = {
     LinkKind.SIGN_IN: ("Your dimon.d sign-in link", "accounts/email/sign_in_link.txt"),
     LinkKind.INVITE: ("You're invited to dimon.d", "accounts/email/invite.txt"),
 }
+
+
+class NotAllowedError(Exception):
+    """This action does not fit this person's state, e.g. inviting someone who already signed in."""
 
 
 class SignInLinkRejectedError(Exception):
@@ -186,3 +190,33 @@ def revoke_access(people: Iterable[User]) -> int:
     return User.objects.filter(pk__in=ids, is_active=True, clients__isnull=True).update(
         is_active=False
     )
+
+
+@transaction.atomic
+def invite_people(pm: User, company: Company, emails: Iterable[str], notify: Notify) -> int:
+    """Add these people to the company and queue an invite for each (PRD: Clients screen).
+    They type their name on the welcome screen. Returns how many were invited."""
+    people = [
+        User.objects.create_user(email, role=Role.CLIENT, company=company, notify=notify)
+        for email in emails
+    ]
+    return invite(people, invited_by=pm)
+
+
+def _waiting_for_invite(person: User) -> bool:
+    return person.is_active and person.last_login is None
+
+
+def resend_invite(pm: User, person: User) -> None:
+    """A fresh 7-day link for someone who has not signed in yet."""
+    if not _waiting_for_invite(person):
+        raise NotAllowedError
+    invite([person], invited_by=pm)
+
+
+def cancel_invite(person: User) -> None:
+    """Call off an invite: the person never signed in, so nothing of theirs exists and they
+    are removed altogether (decided 2026-10-18). Their links go with them."""
+    if not _waiting_for_invite(person):
+        raise NotAllowedError
+    person.delete()

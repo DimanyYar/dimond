@@ -1,0 +1,48 @@
+{% comment %}
+Invite people to a client (mockup 5.0 · Clients, "inviting"). Addresses outside the company's
+domain come back with a warning and a "Send anyway" button: allowed, but checked first.
+{% endcomment %}
+<form class="card invite-form" id="invite" method="post" action="{% url 'invite_people' company.pk %}" aria-labelledby="invite-title">
+  {% csrf_token %}
+  <div class="invite-form-head">
+    <h3 id="invite-title">Invite to {{ company.name }}</h3>
+    <a class="icon-link" href="{% url 'client' company.pk %}" aria-label="Close">×</a>
+  </div>
+
+  <div class="field">
+    <label for="invite-emails">Work emails</label>
+    <span class="hint" id="invite-emails-hint">One per line, or separated by commas. Paste several at once.</span>
+    <textarea class="input" id="invite-emails" name="emails" rows="3" required
+              placeholder="name@{{ company.email_domain|default:'company.com' }}"
+              aria-describedby="invite-emails-hint{% if form.emails.errors %} invite-emails-error{% endif %}"
+              {% if form.emails.errors %}aria-invalid="true"{% endif %}>{% if form.is_bound %}{{ form.data.emails }}{% endif %}</textarea>
+    {% if form.emails.errors %}<span class="error-text" id="invite-emails-error">{{ form.emails.errors.0 }}</span>{% endif %}
+  </div>
+
+  {% if form.asks_to_confirm %}
+    <div class="note-warning" role="alert">
+      <strong>{{ form.outside|join:", " }}</strong>
+      {% if form.outside|length == 1 %}isn’t{% else %}aren’t{% endif %} on {{ company.email_domain }}. They’ll see every {{ company.name }} request. Fine for a contractor — just double-check the address.
+    </div>
+  {% endif %}
+
+  <fieldset class="invite-notify">
+    <legend>Email them about</legend>
+    {% for value, label in form.fields.notify.choices %}
+      <label class="choice-inline">
+        <input type="radio" name="notify" value="{{ value }}"{% if form.notify.value|default:"own" == value %} checked{% endif %}>
+        {% if value == "company" %}Everything at {{ company.name }}{% else %}{{ label }}{% endif %}
+      </label>
+    {% endfor %}
+  </fieldset>
+
+  <div class="invite-form-foot">
+    <span class="hint">Each person gets a personal sign-in link, valid for 7 days. They add their name on first sign-in.</span>
+    <a class="btn" href="{% url 'client' company.pk %}">Cancel</a>
+    {% if form.asks_to_confirm %}
+      <button class="btn btn-primary" type="submit" name="send_anyway" value="on">Send anyway</button>
+    {% else %}
+      <button class="btn btn-primary" type="submit">Send invites</button>
+    {% endif %}
+  </div>
+</form>
