@@ -22,6 +22,13 @@ class WelcomeForm(forms.Form):
     )
 
 
+class PersonForm(forms.Form):
+    """The Profile block on the person page: what the PM may change for someone."""
+
+    name = forms.CharField(max_length=120, required=False, strip=True)
+    notify = forms.ChoiceField(choices=Notify.choices)
+
+
 # A team's worth at once; a bigger list is more likely a paste mistake than a plan.
 MAX_INVITES_AT_ONCE = 20
 EMAIL_SEPARATORS = re.compile(r"[\s,;]+")

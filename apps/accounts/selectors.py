@@ -5,7 +5,7 @@ from django.db import models
 from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
 
-from apps.requests.models import CLOSED_STATUSES
+from apps.requests.models import CLOSED_STATUSES, Message, Request
 
 from .models import Company, LinkKind, Role, SignInLink, User
 from .services import hash_token
@@ -104,16 +104,19 @@ def _person_row(person: User, last_invite: SignInLink | None, now: datetime) -> 
 def _people_of(company: Company) -> list[PersonRow]:
     """Everyone at the company, with access first, people who lost it last. Private: the
     company comes from `clients_page`, already limited to the PM's own clients."""
+    rows = _rows(list(company.people.order_by("name", "email")))
+    rows.sort(key=lambda row: PERSON_STATUS_ORDER.index(row.status))
+    return rows
+
+
+def _rows(people: list[User]) -> list[PersonRow]:
     now = timezone.now()
-    people = list(company.people.order_by("name", "email"))
     last_invites: dict[int, SignInLink] = {}
     for link in SignInLink.objects.filter(user__in=people, kind=LinkKind.INVITE).order_by(
         "created_at"
     ):
         last_invites[link.user_id] = link
-    rows = [_person_row(person, last_invites.get(person.pk), now) for person in people]
-    rows.sort(key=lambda row: PERSON_STATUS_ORDER.index(row.status))
-    return rows
+    return [_person_row(person, last_invites.get(person.pk), now) for person in people]
 
 
 @dataclass(frozen=True)
@@ -176,3 +179,35 @@ def next_client_color(user: User, colors: list[tuple[str, str]]) -> str:
     out in the list; the first one again once all are taken."""
     used = set(clients_for(user).values_list("color", flat=True))
     return next((hex_ for hex_, _ in colors if hex_ not in used), colors[0][0])
+
+
+@dataclass(frozen=True)
+class PersonPage:
+    company: Company
+    row: PersonRow
+    invited_by: User | None
+    requests_created: int
+    replies: int
+    last_request: Request | None
+
+
+def person_page(user: User, company_pk: int, person_pk: int) -> PersonPage:
+    """A person at one of this PM's own clients, with what they did in dimond. Raises
+    Company.DoesNotExist or User.DoesNotExist for anyone else, exactly as for a missing one."""
+    company = client_for(user, company_pk)
+    person = company.people.get(pk=person_pk)
+    first_invite = (
+        SignInLink.objects.filter(user=person, kind=LinkKind.INVITE, invited_by__isnull=False)
+        .select_related("invited_by")
+        .order_by("created_at")
+        .first()
+    )
+    requests = Request.objects.filter(author=person)
+    return PersonPage(
+        company=company,
+        row=_rows([person])[0],
+        invited_by=first_invite.invited_by if first_invite else None,
+        requests_created=requests.count(),
+        replies=Message.objects.filter(author=person).count(),
+        last_request=requests.order_by("-created_at").first(),
+    )
