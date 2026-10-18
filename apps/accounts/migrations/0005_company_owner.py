@@ -10,10 +10,15 @@ def give_companies_to_the_first_pm(apps: StateApps, schema_editor: BaseDatabaseS
     User = apps.get_model("accounts", "User")
     if not Company.objects.exists():
         return
-    pm = User.objects.filter(role="pm").order_by("-is_superuser", "date_joined", "pk").first()
+    # A PM whose access was revoked could not see the companies they were given.
+    pm = (
+        User.objects.filter(role="pm", is_active=True)
+        .order_by("-is_superuser", "date_joined", "pk")
+        .first()
+    )
     if pm is None:
         raise RuntimeError(
-            "Companies exist but there is no PM to own them. "
+            "Companies exist but there is no active PM to own them. "
             "Create one with `manage.py createsuperuser`, then migrate again."
         )
     Company.objects.update(owner=pm)

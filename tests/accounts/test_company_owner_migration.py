@@ -40,7 +40,22 @@ def test_existing_companies_go_to_the_superuser_pm(old_apps):
     assert atlas.owner_id == dmitry.pk
 
 
-def test_companies_without_any_pm_stop_the_migration_with_a_hint(old_apps):
+def test_companies_go_to_an_active_pm_not_a_revoked_superuser(old_apps):
+    User = old_apps.get_model("accounts", "User")
+    User.objects.create(email="old@shakuro.com", role="pm", is_superuser=True, is_active=False)
+    dmitry = User.objects.create(email="dmitry@shakuro.com", role="pm")
+    old_apps.get_model("accounts", "Company").objects.create(name="Atlas")
+
+    new_apps = migrate(AFTER)
+
+    atlas = new_apps.get_model("accounts", "Company").objects.get(name="Atlas")
+    assert atlas.owner_id == dmitry.pk
+
+
+def test_companies_without_an_active_pm_stop_the_migration_with_a_hint(old_apps):
+    old_apps.get_model("accounts", "User").objects.create(
+        email="old@shakuro.com", role="pm", is_active=False
+    )
     old_apps.get_model("accounts", "Company").objects.create(name="Atlas")
 
     with pytest.raises(RuntimeError, match="createsuperuser"):

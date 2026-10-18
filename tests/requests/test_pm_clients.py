@@ -96,3 +96,10 @@ def test_only_a_pm_can_own_a_client(anna):
 
     with pytest.raises(ValidationError, match="Only a PM can own a client"):
         company.full_clean()
+
+
+def test_pm_who_owns_clients_cannot_become_another_role(ivan, paul):
+    ivan.role = Role.TEAM
+
+    with pytest.raises(ValidationError, match="Give them to another PM first"):
+        ivan.full_clean()

@@ -130,6 +130,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     def clean(self) -> None:
         # Runs before the uniqueness check: Anna@Atlas.com and anna@atlas.com are one person.
         self.email = self.email.strip().lower()
+        # A client nobody owns would vanish from every PM's view (ADR 0014).
+        if self.pk is not None and self.role != Role.PM and self.clients.exists():
+            raise ValidationError(
+                {"role": "This PM still owns clients. Give them to another PM first."}
+            )
 
 
 class LinkKind(models.TextChoices):
