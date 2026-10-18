@@ -1,5 +1,5 @@
 {% comment %}One file as a tile with its preview (mockup: Attachment previews). Needs `file`. The picture depends on the
-file: an image or a PDF's first page once the worker has made it, a text file's first lines, a play button for video,
+file: an image, a PDF's first page or a video's frame once the worker has made it, a text file's first lines, a play button for video,
 bars for sound; otherwise the file's extension. `beside_name` when the name is a link next to it already: the tile is
 then only a picture, skipped by the keyboard and screen readers.{% endcomment %}
 <a class="tile" {% include "files/open_attrs.html" %} title="{{ file.name }}"{% if beside_name %} aria-hidden="true" tabindex="-1"{% endif %}>
@@ -7,6 +7,7 @@ then only a picture, skipped by the keyboard and screen readers.{% endcomment %}
     {% if file.preview_url %}
       <img src="{{ file.preview_url }}" alt="" loading="lazy">
       {% if file.kind == "pdf" %}<span class="tile-badge tile-badge-pdf">PDF</span>{% endif %}
+      {% if file.kind == "video" %}<span class="tile-play" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" fill="currentColor"/></svg></span>{% endif %}
     {% elif file.excerpt %}
       <span class="tile-excerpt" aria-hidden="true">{{ file.excerpt }}</span>
       <span class="tile-badge">{{ file.extension }}</span>

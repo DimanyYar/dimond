@@ -39,16 +39,38 @@ function element(tag, className, text) {
   return made;
 }
 
-function settled(media, event) {
+// Waits for the media's `event`; gives up on an error or when `signal` aborts, and leaves no
+// listener behind either way.
+function settled(media, event, signal) {
   return new Promise((resolve, reject) => {
-    media.addEventListener(event, resolve, { once: true });
-    media.addEventListener("error", () => reject(media.error), { once: true });
+    const stop = () => {
+      media.removeEventListener(event, onEvent);
+      media.removeEventListener("error", onError);
+      signal.removeEventListener("abort", onAbort);
+    };
+    const onEvent = () => {
+      stop();
+      resolve();
+    };
+    const onError = () => {
+      stop();
+      reject(media.error);
+    };
+    const onAbort = () => {
+      stop();
+      reject(signal.reason);
+    };
+    media.addEventListener(event, onEvent);
+    media.addEventListener("error", onError);
+    signal.addEventListener("abort", onAbort);
   });
 }
 
 // A frame half a second in: the very first one is often black. Resolves to null where the
 // browser cannot show this video (iPhone's HEVC in Chrome); the tile then shows a play button.
+// The form waits for the frame before sending, so a video that never loads gives up in 5 s.
 async function videoFrame(file) {
+  const signal = AbortSignal.timeout(5000);
   const video = document.createElement("video");
   video.muted = true;
   video.playsInline = true;
@@ -56,10 +78,10 @@ async function videoFrame(file) {
   const url = URL.createObjectURL(file);
   try {
     video.src = url;
-    await settled(video, "loadeddata");
+    await settled(video, "loadeddata", signal);
     if (video.videoWidth === 0) return null;
     video.currentTime = Math.min(0.5, video.duration / 2);
-    await settled(video, "seeked");
+    await settled(video, "seeked", signal);
     const scale = Math.min(1, 320 / video.videoWidth, 240 / video.videoHeight);
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(video.videoWidth * scale);
@@ -70,6 +92,9 @@ async function videoFrame(file) {
     return null;
   } finally {
     URL.revokeObjectURL(url);
+    // Stops the browser loading a video it gave up on.
+    video.removeAttribute("src");
+    video.load();
   }
 }
 
@@ -90,8 +115,8 @@ async function firstLines(file) {
 }
 
 // The tile for one chosen file. `onRemove` runs when × is pressed. Returns the element, a way
-// to show compressing progress (a number from 0 to 1, or null when done) and `forget`, which
-// lets go of the picture's temporary address once the tile is gone.
+// to show compressing progress (a number from 0 to 1, or null when done), a video's frame and
+// `forget`, which lets go of the picture's temporary address once the tile is gone.
 export function formTile(file, onRemove) {
   const kind = kindOf(file);
   const tile = element("li", "tile");
@@ -145,6 +170,7 @@ export function formTile(file, onRemove) {
 
   let framesAsked = 0;
   let frameShown = 0;
+  let latestFrame = null;
 
   let bar = null;
   let percent = null;
@@ -182,7 +208,13 @@ export function formTile(file, onRemove) {
       const frame = await videoFrame(video);
       if (frame === null || asked < frameShown) return;
       frameShown = asked;
+      latestFrame = frame;
       showPicture(frame);
+    },
+    // The frame on a video's tile, sent with the form so the card shows it too; null before
+    // there is one.
+    frame() {
+      return latestFrame;
     },
     forget() {
       forgotten = true;

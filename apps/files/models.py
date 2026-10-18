@@ -1,4 +1,5 @@
 import uuid
+from pathlib import Path
 
 from django.db import models
 from django.urls import reverse
@@ -14,7 +15,8 @@ def _stored_name(attachment: "Attachment", filename: str) -> str:
 
 
 def _preview_name(attachment: "Attachment", filename: str) -> str:
-    return f"previews/{attachment.id}.webp"
+    # ".jpg" for a video's frame waiting for the worker, ".webp" for the preview it makes.
+    return f"previews/{attachment.id}{Path(filename).suffix}"
 
 
 class PreviewStatus(models.TextChoices):

@@ -4,19 +4,19 @@ import pytest
 from PIL import Image
 
 from apps.accounts.models import Company, User
-from apps.files.models import PreviewStatus
+from apps.files.models import Attachment, PreviewStatus
 from apps.files.services import make_pending_previews
-from apps.files.uploads import check_upload
+from apps.files.uploads import MAX_POSTER_SIZE, check_upload
 from apps.requests.services import create_request
 
-from .conftest import M4A, PNG, upload
+from .conftest import M4A, MP4, PNG, upload
 
 pytestmark = pytest.mark.django_db
 
 
-def picture(format: str, size=(1600, 900), pages: int = 1) -> bytes:
+def picture(format: str, size=(1600, 900), pages: int = 1, colour: str = "white") -> bytes:
     out = BytesIO()
-    first, *rest = [Image.new("RGB", size, colour) for colour in ("white", "red", "blue")[:pages]]
+    first, *rest = [Image.new("RGB", size, fill) for fill in (colour, "red", "blue")[:pages]]
     first.save(out, format, save_all=pages > 1, append_images=rest)
     return out.getvalue()
 
@@ -54,6 +54,96 @@ def test_pdf_preview_is_its_first_page_and_counts_pages(anna):
 
     spec.refresh_from_db()
     assert (spec.preview_status, spec.pages) == (PreviewStatus.READY, 3)
+
+
+def video_with_frame(client, anna, frame: bytes, frame_name: str = "0.jpg"):
+    client.force_login(anna)
+    client.post(
+        "/requests/new/",
+        {
+            "type": "idea",
+            "title": "Lead form sends twice",
+            "why": "Managers call twice",
+            "when_needed": "not_sure",
+            "attachments": [upload("bug.mp4", MP4)],
+            "attachments_posters": [upload(frame_name, frame)],
+        },
+    )
+    return Attachment.objects.get()
+
+
+def test_video_preview_is_the_frame_the_browser_took(client, anna, private_folder):
+    video = video_with_frame(client, anna, picture("JPEG", size=(1280, 720)))
+    assert video.preview_status == PreviewStatus.PENDING
+    # Waiting for the worker, the frame is not shown: only the worker's WebP is.
+    assert client.get(f"/files/{video.id}/preview/").status_code == 404
+
+    make_pending_previews()
+
+    video.refresh_from_db()
+    assert video.preview_status == PreviewStatus.READY
+    with video.preview.open("rb") as stored, Image.open(stored) as preview:
+        assert (preview.format, preview.size) == ("WEBP", (320, 180))
+    # The frame as sent is gone once the preview is made.
+    assert [path.name for path in (private_folder / "previews").iterdir()] == [f"{video.id}.webp"]
+
+
+@pytest.mark.parametrize(
+    ("frame", "frame_name"),
+    [
+        (picture("PNG"), "0.jpg"),  # not a JPEG
+        (picture("JPEG"), "1.jpg"),  # a frame of a second video that was not sent
+        (picture("JPEG") + b"\x00" * MAX_POSTER_SIZE, "0.jpg"),  # far bigger than a frame
+    ],
+    ids=["not-a-jpeg", "another-video", "too-big"],
+)
+def test_video_without_its_own_jpeg_frame_keeps_the_play_button(client, anna, frame, frame_name):
+    video = video_with_frame(client, anna, frame, frame_name)
+
+    assert video.preview_status == PreviewStatus.NONE
+    assert not video.preview
+    card = client.get(video.request.get_absolute_url()).content.decode()
+    assert 'class="tile-play"' in card
+
+
+def test_two_videos_with_one_name_each_get_their_own_frame(client, anna):
+    client.force_login(anna)
+    red, blue = (picture("JPEG", size=(640, 360), colour=colour) for colour in ("red", "blue"))
+    # Same name, different files: the second is a few bytes longer, which tells them apart.
+    first, second = MP4, MP4 + b"\x00" * 16
+    client.post(
+        "/requests/new/",
+        {
+            "type": "idea",
+            "title": "Lead form sends twice",
+            "why": "Managers call twice",
+            "when_needed": "not_sure",
+            "attachments": [upload("clip.mp4", first), upload("clip.mp4", second)],
+            "attachments_posters": [upload("0.jpg", red), upload("1.jpg", blue)],
+        },
+    )
+
+    make_pending_previews()
+
+    def is_red(video):
+        with video.preview.open("rb") as stored, Image.open(stored) as preview:
+            red, _, blue = preview.convert("RGB").getpixel((0, 0))
+            return red > blue
+
+    assert is_red(Attachment.objects.get(size=len(first)))
+    assert not is_red(Attachment.objects.get(size=len(second)))
+
+
+def test_broken_frame_leaves_the_video_without_preview(client, anna, private_folder):
+    video = video_with_frame(client, anna, b"\xff\xd8\xff" + b"\x00" * 64)
+
+    make_pending_previews()
+
+    video.refresh_from_db()
+    assert video.preview_status == PreviewStatus.NONE
+    assert not (private_folder / "previews").exists() or not any(
+        (private_folder / "previews").iterdir()
+    )
 
 
 def test_broken_picture_keeps_a_tile_without_preview_and_still_opens(client, anna):

@@ -20,8 +20,10 @@ cannot read images or PDFs by itself.
   image or PDF, so a broken or hostile file can only slow or crash the worker. A file that
   cannot be read gets no preview; its tile shows the extension and the file still opens.
 - A text file's first lines are kept at upload (no library needed); video and sound tiles are
-  drawn without a picture. A frame from a video comes from the browser at upload, without FFmpeg
-  on the server (next PR).
+  drawn without a picture. A video's frame comes from the browser: the form sends it as a small
+  JPEG next to the video, and the worker turns it into the preview like any image, so there is no
+  FFmpeg on the server. A video sent without a frame (the browser could not show it) keeps a
+  play button.
 
 ## Consequences
 
