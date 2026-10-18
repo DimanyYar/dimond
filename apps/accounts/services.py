@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from datetime import timedelta
 
 from django.conf import settings
+from django.contrib.sessions.models import Session
 from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, QuerySet
@@ -13,7 +14,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Company, LinkKind, Notify, Role, SignInLink, User
+from .models import Company, Device, LinkKind, Notify, Role, SignInLink, User
 
 logger = logging.getLogger(__name__)
 
@@ -224,14 +225,45 @@ def revoke_access(people: Iterable[User]) -> int:
     )
     for person in revoking:
         person.is_active = False
-        # Every session carries a fingerprint of the password, and Django checks it on each
-        # page. A new unusable password changes it, so no device signed in so far gets back
-        # in, even after access returns.
-        person.set_unusable_password()
-        person.save(update_fields=["is_active", "password"])
+        person.save(update_fields=["is_active"])
+    _end_sessions(revoking)
     # A link from before must not work again if access comes back.
     SignInLink.objects.filter(user__in=revoking, used_at__isnull=True).delete()
     return len(revoking)
+
+
+def _end_sessions(people: list[User]) -> None:
+    """Sign these people out on every device. The caller holds their row locks."""
+    for person in people:
+        # Every session carries a fingerprint of the password, and Django checks it on each
+        # page. A new unusable password changes it, so no device signed in so far gets back
+        # in, even sessions from before devices were recorded (ADR 0015).
+        person.set_unusable_password()
+        person.save(update_fields=["password"])
+    devices = Device.objects.filter(user__in=people)
+    # Dead already; removed so the person page does not list them.
+    Session.objects.filter(session_key__in=devices.values("session_key")).delete()
+    devices.delete()
+
+
+@transaction.atomic
+def sign_out_everywhere(person: User) -> None:
+    """The PM's "Sign out all devices": every session ends, access stays. The person signs
+    in again with an email link (PRD: person page)."""
+    _end_sessions(list(User.objects.select_for_update().filter(pk=person.pk)))
+
+
+def record_sign_in(user: User, session_key: str, user_agent: str) -> None:
+    """Remember the browser behind a new session, for the person page (ADR 0016)."""
+    # Sessions that ended (sign-out, expiry) leave rows behind; a sign-in tidies them up.
+    alive = Session.objects.filter(expire_date__gt=timezone.now()).values("session_key")
+    user.devices.exclude(session_key__in=alive).delete()
+    Device.objects.create(user=user, session_key=session_key, user_agent=user_agent[:300])
+
+
+def forget_device(session_key: str) -> None:
+    """The person signed out on this device."""
+    Device.objects.filter(session_key=session_key).delete()
 
 
 @transaction.atomic

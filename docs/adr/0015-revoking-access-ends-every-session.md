@@ -23,8 +23,7 @@ each device.
 
 + No new table: one field change covers every device, old sessions included.
 + "Revoke" means the same in the Clients page and the Django admin action.
-− The session rows stay until they expire; they are dead, just not removed. A list of
-devices with "sign out all devices" (roadmap 13e) will add a table that knows whose session
-is whose.
+− The session rows stay until they expire; they are dead, just not removed. Since ADR 0016
+the rows of recorded devices are removed too.
 − Revoking a superuser also removes their admin password; they need `changepassword` to use
 the admin again. PMs who own clients cannot be revoked at all (ADR 0014).

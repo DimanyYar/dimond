@@ -182,3 +182,48 @@ class SignInLink(models.Model):
 
     def __str__(self) -> str:
         return f"{self.get_kind_display()} for {self.user}"
+
+
+# Checked in order: Edge and Opera also say "Chrome", Chrome also says "Safari", and an
+# iPhone also says "Mac OS X".
+BROWSERS = (
+    ("Edg/", "Edge"),
+    ("OPR/", "Opera"),
+    ("Firefox/", "Firefox"),
+    ("FxiOS/", "Firefox"),
+    ("CriOS/", "Chrome"),
+    ("Chrome/", "Chrome"),
+    ("Safari/", "Safari"),
+)
+SYSTEMS = (
+    ("iPhone", "iPhone", "iOS"),
+    ("iPad", "iPad", "iOS"),
+    ("Android", "Android", "AND"),
+    ("Mac OS X", "macOS", "MAC"),
+    ("Windows", "Windows", "WIN"),
+    ("Linux", "Linux", "LNX"),
+)
+
+
+class Device(models.Model):
+    """A browser someone signed in from, so the PM can see where they are signed in and sign
+    them out everywhere (PRD: person page, ADR 0016). One per session."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="devices")
+    session_key = models.CharField(max_length=40, unique=True)
+    user_agent = models.CharField(max_length=300, blank=True)
+    signed_in_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.name} for {self.user}"
+
+    @property
+    def name(self) -> str:
+        """ "Chrome on macOS": enough to tell a laptop from a phone, not a fingerprint."""
+        browser = next((name for mark, name in BROWSERS if mark in self.user_agent), "Browser")
+        system = next((name for mark, name, _ in SYSTEMS if mark in self.user_agent), None)
+        return f"{browser} on {system}" if system else browser
+
+    @property
+    def system_mark(self) -> str:
+        return next((mark for key, _, mark in SYSTEMS if key in self.user_agent), "WEB")

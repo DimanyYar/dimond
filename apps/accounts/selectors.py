@@ -1,13 +1,14 @@
 from dataclasses import dataclass
 from datetime import datetime
 
+from django.contrib.sessions.models import Session
 from django.db import models
 from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
 
 from apps.requests.models import CLOSED_STATUSES, Message, Request
 
-from .models import Company, LinkKind, Role, SignInLink, User
+from .models import Company, Device, LinkKind, Role, SignInLink, User
 from .services import hash_token
 
 
@@ -189,6 +190,7 @@ class PersonPage:
     requests_created: int
     replies: int
     last_request: Request | None
+    devices: list[Device]
 
 
 def person_page(user: User, company_pk: int, person_pk: int) -> PersonPage:
@@ -210,4 +212,12 @@ def person_page(user: User, company_pk: int, person_pk: int) -> PersonPage:
         requests_created=requests.count(),
         replies=Message.objects.filter(author=person).count(),
         last_request=requests.order_by("-created_at").first(),
+        devices=_signed_in_on(person),
     )
+
+
+def _signed_in_on(person: User) -> list[Device]:
+    """Devices whose session still works, newest first. A signed-out or expired session may
+    leave its row until the person's next sign-in tidies up."""
+    alive = Session.objects.filter(expire_date__gt=timezone.now()).values("session_key")
+    return list(person.devices.filter(session_key__in=alive).order_by("-signed_in_at", "-pk"))
