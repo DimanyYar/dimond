@@ -1421,6 +1421,7 @@ kbd {
 .request-card h3 {
   font-size: 15px;
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 /* On the board a long title stops after four lines; the card shows it whole. */
@@ -1432,19 +1433,102 @@ kbd {
   line-clamp: 4;
 }
 
+/* Head and foot never wrap: the key and the date keep their places, the text beside them
+   is cut. A pill that wrapped onto its own line used to make the card look broken. */
+.request-card-head,
 .request-card-meta {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
+  align-items: baseline;
   gap: var(--space-2);
+  min-width: 0;
   font-size: 12px;
   color: var(--muted);
+}
+
+.request-card-context,
+.request-card-want {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.request-card-context {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.request-card-key,
+.request-card-meta time {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.request-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .request-card-meta .hotfix {
   font-weight: 600;
   color: var(--accent-text);
+}
+
+.request-card.has-new h3,
+.request-table .request-title.has-new a {
+  font-weight: 600;
+}
+
+/* "2 new": messages from others since the person last opened the request. */
+.unread-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.unread-dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.request-table .request-title .unread-badge {
+  display: flex;
+  margin-top: 2px;
+}
+
+/* Keys, wishes and dates stay on one line; the table scrolls sideways on narrow screens. */
+.request-table td:not(.request-title) {
+  white-space: nowrap;
+}
+
+/* Above the first message the person has not seen yet. */
+.new-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.new-line::before,
+.new-line::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--accent);
 }
 
 /* The list view is a table: one row per request, grouped by month. */

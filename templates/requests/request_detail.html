@@ -86,6 +86,7 @@
     {% for entry in page.thread %}
       {% if entry.message %}
         {% with m=entry.message %}
+        {% if m == page.first_new %}<p class="new-line" id="new" role="separator">{{ page.new_count }} new since you last opened it</p>{% endif %}
         <article id="message-{{ m.pk }}" class="message {% if m.author.role == 'pm' %}message-pm{% else %}message-client{% endif %}">
           <div class="message-head">
             <span class="avatar" aria-hidden="true">{{ m.author|stringformat:"s"|first|upper }}</span>

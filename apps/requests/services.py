@@ -15,6 +15,7 @@ from .models import (
     Request,
     RequestRevision,
     RequestType,
+    RequestVisit,
     StatusEvent,
     WhenNeeded,
     WithdrawalRequest,
@@ -241,3 +242,13 @@ def decide_withdrawal(pm: User, request: Request, *, confirm: bool) -> Request:
     if confirm:
         return _set_status(request, ClientStatus.WITHDRAWN, pm)
     return request
+
+
+def mark_seen(user: User, request: Request) -> None:
+    """The person has just opened the request: its messages are no longer new to them.
+
+    Takes a request the caller has already read through `requests_for`.
+    """
+    RequestVisit.objects.update_or_create(
+        request=request, user=user, defaults={"seen_at": timezone.now()}
+    )

@@ -176,6 +176,8 @@ def request_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """The request card with its thread; posting the form adds a message."""
     page = _card_page(request, pk)
     if request.method == "GET":
+        # The page was read first, so it still knows what was new before this visit.
+        services.mark_seen(page.viewer, page.request)
         return _render_card(request, page)
     form = MessageForm(request.POST, request.FILES)
     if not form.is_valid():
