@@ -9,6 +9,7 @@ export function pageGeneration() {
   return latest;
 }
 
+// Returns whether this swap reached the page; an older one overtaken by a newer click did not.
 export async function showPage(url, { push = true } = {}) {
   // Quick clicks or typing send several requests; only the answer to the newest one may win.
   const asked = ++latest;
@@ -23,13 +24,13 @@ export async function showPage(url, { push = true } = {}) {
     // Offline or a server error: an ordinary page load shows what really happened, unless
     // a newer click already moved on.
     if (asked === latest) location.assign(url);
-    return;
+    return false;
   }
-  if (asked !== latest) return;
+  if (asked !== latest) return false;
   // A signed-out session answers with the sign-in page: load it for real.
   if (!page.querySelector('[data-region="results"]')) {
     location.assign(url);
-    return;
+    return false;
   }
   for (const region of document.querySelectorAll("[data-region]")) {
     const fresh = page.querySelector(`[data-region="${region.dataset.region}"]`);
@@ -38,4 +39,5 @@ export async function showPage(url, { push = true } = {}) {
   if (push) history.pushState(null, "", url);
   else history.replaceState(null, "", url);
   results?.removeAttribute("aria-busy");
+  return true;
 }

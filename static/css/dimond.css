@@ -4955,6 +4955,7 @@ kbd {
 [data-region="results"][aria-busy="true"] {
   opacity: 0.6;
   transition: opacity 120ms 150ms;
+}
 
 /* Person page (mockup 5.0 · Person) */
 

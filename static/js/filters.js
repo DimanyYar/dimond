@@ -20,9 +20,9 @@ document.addEventListener("click", async (event) => {
   const position = [...region.querySelectorAll("a[href]")].indexOf(link);
   const hadFocus = document.activeElement === link;
   link.closest("[popover]")?.hidePopover();
-  await showPage(link.href);
+  const shown = await showPage(link.href);
   // The clicked link was replaced; its successor takes the focus so the keyboard stays here.
-  if (hadFocus) region.querySelectorAll("a[href]")[position]?.focus({ preventScroll: true });
+  if (shown && hadFocus) region.querySelectorAll("a[href]")[position]?.focus({ preventScroll: true });
 });
 
 const sheet = document.querySelector("[data-filter-sheet]");
