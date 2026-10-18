@@ -37,6 +37,13 @@ def test_pm_opens_a_file_of_their_client(client, screenshot, pm):
     assert opened(client, screenshot).status_code == 200
 
 
+def test_pm_cannot_open_a_file_of_another_pms_client(client, screenshot):
+    ivan = User.objects.create_user("ivan@shakuro.com", name="Ivan", role=Role.PM)
+    client.force_login(ivan)
+
+    assert opened(client, screenshot).status_code == 404
+
+
 def test_team_cannot_open_files_until_requests_are_linked_to_jira(client, screenshot):
     developer = User.objects.create_user("olga@shakuro.com", name="Olga", role=Role.TEAM)
     client.force_login(developer)
