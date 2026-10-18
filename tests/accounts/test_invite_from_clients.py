@@ -213,3 +213,13 @@ def test_an_invite_already_used_to_sign_in_cannot_be_cancelled(atlas, pm):
         services.cancel_invite(sam)
 
     assert User.objects.filter(pk=sam.pk).exists()
+
+
+def test_resend_after_the_invite_was_cancelled_meanwhile_is_refused(atlas, pm):
+    sam = User.objects.create_user("sam@atlas-crm.com", company=atlas)
+    User.objects.filter(pk=sam.pk).delete()
+
+    with pytest.raises(services.NotAllowedError):
+        services.resend_invite(pm, sam)
+
+    assert not SignInLink.objects.exists()

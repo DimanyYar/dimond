@@ -209,11 +209,14 @@ def _waiting_for_invite(person: User) -> bool:
     return person.is_active and person.last_login is None
 
 
+@transaction.atomic
 def resend_invite(pm: User, person: User) -> None:
-    """A fresh 7-day link for someone who has not signed in yet."""
-    if not _waiting_for_invite(person):
+    """A fresh 7-day link for someone who has not signed in yet. Locked like cancel_invite,
+    so a cancel at the same moment either waits or wins and this one refuses."""
+    current = User.objects.select_for_update().filter(pk=person.pk).first()
+    if current is None or not _waiting_for_invite(current):
         raise NotAllowedError
-    invite([person], invited_by=pm)
+    invite([current], invited_by=pm)
 
 
 @transaction.atomic

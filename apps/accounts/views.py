@@ -172,7 +172,11 @@ def resend_invite(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse
     try:
         services.resend_invite(pm, person)
     except services.NotAllowedError:
-        messages.error(request, f"{person.email} has signed in or lost access meanwhile.")
+        messages.error(
+            request,
+            f"No new invite for {person.email}: they signed in, lost access or the invite was "
+            "cancelled meanwhile.",
+        )
     else:
         messages.success(request, f"A new invite is on its way to {person.email}.")
     return redirect("client", pk)
