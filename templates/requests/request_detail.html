@@ -201,9 +201,11 @@
     {% if page.all_files %}
       <section class="card files-card" aria-labelledby="files-title">
         <h2 id="files-title">All attachments <span class="muted">{{ page.all_files|length }}</span></h2>
-        <ul class="files-list">
+        {# The first five files are shown; the rest open with "Show all", so a long thread does not stretch the side column. Works without JS. #}
+        {% with first=5 total=page.all_files|length %}
+        <ul class="files-list" id="all-files">
           {% for file in page.all_files %}
-            <li class="files-row">
+            <li class="files-row{% if forloop.counter > first %} files-row-more{% endif %}">
               <span class="files-row-picture">{% include "files/file_tile.html" with beside_name=True %}</span>
               <span class="files-row-text">
                 <a class="file-name" {% include "files/open_attrs.html" %}>{{ file.name }}</a>
@@ -212,6 +214,16 @@
             </li>
           {% endfor %}
         </ul>
+        {% if total > first %}
+          <details class="files-more">
+            <summary aria-controls="all-files">
+              <span class="files-more-closed">Show all {{ total }}</span>
+              <span class="files-more-open">Show fewer</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            </summary>
+          </details>
+        {% endif %}
+        {% endwith %}
       </section>
     {% endif %}
     <dl class="facts">
