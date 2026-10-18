@@ -3355,6 +3355,24 @@ kbd {
   }
 }
 
+.voice-language {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.voice-language legend {
+  float: left;
+  margin-right: var(--space-1);
+  font-size: 14px;
+  color: var(--muted);
+}
+
 /* The draft while the client talks: words the browser may still change are grey. */
 .voice-transcript {
   min-height: 110px;
@@ -3513,6 +3531,7 @@ kbd {
   .voice[data-stage="ready"] .voice-heading p,
   .voice[data-stage="recording"] .voice-heading p,
   .voice[data-stage="ready"] .voice-hint,
+  .voice[data-stage="ready"] .voice-language legend,
   .voice[data-stage="recording"] .muted {
     color: var(--muted-on-panel);
   }
@@ -3520,6 +3539,19 @@ kbd {
   .voice[data-stage="ready"] .voice-close,
   .voice[data-stage="recording"] .voice-close {
     border-color: var(--panel-raised);
+  }
+
+  /* On the dark screen the picked language is the light chip. */
+  .voice-language .chip-choice {
+    border-color: var(--panel-raised);
+    background: transparent;
+    color: var(--surface);
+  }
+
+  .voice-language .chip-choice:has(input:checked) {
+    border-color: var(--surface);
+    background: var(--surface);
+    color: var(--ink);
   }
 
   .voice[data-stage="ready"] .voice-tips,

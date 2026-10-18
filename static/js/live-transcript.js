@@ -15,15 +15,38 @@ function joined(...parts) {
   return parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 }
 
-// Starts listening. `onText(said, guessing)` gets the words so far: those the browser is sure of
-// and those it may still change. `onFail` runs once if recognition cannot go on. `stop()`
-// resolves to the final text; `abort()` drops it.
-export function liveTranscript({ onText, onFail }) {
+// The languages a client can pick for the draft. Recognition cannot tell the language by
+// itself: told Russian, it hears English words as Russian ones.
+export const LANGUAGES = ["en-US", "ru-RU"];
+const LANGUAGE_KEY = "dimond.voice-language";
+
+// The language picked last time on this browser, or the one closest to the browser's own.
+export function chosenLanguage() {
+  try {
+    const saved = localStorage.getItem(LANGUAGE_KEY);
+    if (LANGUAGES.includes(saved)) return saved;
+  } catch {
+    // Storage can be off (private window): the browser's language is a fine guess.
+  }
+  return navigator.language.toLowerCase().startsWith("ru") ? "ru-RU" : "en-US";
+}
+
+export function rememberLanguage(language) {
+  try {
+    localStorage.setItem(LANGUAGE_KEY, language);
+  } catch {
+    // Not remembered: the client picks it again next time.
+  }
+}
+
+// Starts listening in `language`. `onText(said, guessing)` gets the words so far: those the
+// browser is sure of and those it may still change. `onFail` runs once if recognition cannot go
+// on. `stop()` resolves to the final text; `abort()` drops it.
+export function liveTranscript({ language, onText, onFail }) {
   const recognition = new Recognition();
   recognition.continuous = true;
   recognition.interimResults = true;
-  // The client talks in the language their browser is set to, not in the site's English.
-  recognition.lang = navigator.language;
+  recognition.lang = language;
 
   // Chrome ends a session after a long pause even when told to go on, and starts a new list of
   // results; `earlier` keeps what the finished sessions heard.

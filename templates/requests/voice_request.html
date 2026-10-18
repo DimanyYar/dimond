@@ -18,6 +18,12 @@ with a title, the text draft where the browser can write one, and, if picked, a 
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
     </button>
     <span class="voice-hint">Tap to start · up to 2 minutes</span>
+    {# Speech recognition has to be told the language; it starts as the browser's own. #}
+    <fieldset class="voice-language" data-voice-language hidden>
+      <legend>Text draft in</legend>
+      <label class="chip chip-choice"><input type="radio" name="voice-language" value="en-US"> English</label>
+      <label class="chip chip-choice"><input type="radio" name="voice-language" value="ru-RU" lang="ru"> Русский</label>
+    </fieldset>
     <div class="voice-tips">
       <strong>Good to mention</strong>
       <span>What happened or what you need · where in the CRM (a lead, a page) · why it matters · how urgent it is</span>

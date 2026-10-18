@@ -8,7 +8,7 @@
 
 import { clock } from "./clock.js";
 import { MAX_DURATION, finishedRecording } from "./compress-video.js";
-import { canTranscribe, firstSentence, liveTranscript } from "./live-transcript.js";
+import { canTranscribe, chosenLanguage, firstSentence, liveTranscript, rememberLanguage } from "./live-transcript.js";
 import { mediaPlayer } from "./media-player.js";
 
 const LEVEL_BARS = 48;
@@ -42,6 +42,10 @@ function setUp() {
   const player = mediaPlayer(dialog.querySelector("[data-voice-player]"));
   const live = dialog.querySelector("[data-voice-transcript]");
   const heard = dialog.querySelector("[data-voice-heard]");
+  const languages = dialog.querySelector("[data-voice-language]");
+  languages.hidden = !canTranscribe;
+  languages.querySelector(`input[value="${chosenLanguage()}"]`).checked = true;
+  languages.addEventListener("change", (event) => rememberLanguage(event.target.value));
 
   let recorder = null;
   let stream = null;
@@ -61,6 +65,7 @@ function setUp() {
     guess.textContent = "";
     live.hidden = false;
     transcript = liveTranscript({
+      language: languages.querySelector("input:checked").value,
       onText: (sure, guessing) => {
         said.textContent = sure;
         guess.textContent = guessing ? ` ${guessing}` : "";
