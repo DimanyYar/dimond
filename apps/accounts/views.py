@@ -10,7 +10,14 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from . import selectors, services
-from .forms import CLIENT_COLORS, EmailForm, InviteForm, NewClientForm, WelcomeForm
+from .forms import (
+    CLIENT_COLORS,
+    EmailForm,
+    InviteForm,
+    NewClientForm,
+    PersonForm,
+    WelcomeForm,
+)
 from .models import Company, Notify, SignInLink, User
 
 SENT_TO = "sign_in_sent_to"
@@ -173,6 +180,13 @@ def _person(request: HttpRequest, pk: int, person_pk: int) -> tuple[User, User]:
         raise Http404 from None
 
 
+def _back(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse:
+    """Back where the PM acted: the person page sends back=person, the Clients list nothing."""
+    if request.POST.get("back") == "person":
+        return redirect("person", pk, person_pk)
+    return redirect("client", pk)
+
+
 @require_POST
 @login_required
 def resend_invite(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse:
@@ -187,7 +201,7 @@ def resend_invite(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse
         )
     else:
         messages.success(request, f"A new invite is on its way to {person.email}.")
-    return redirect("client", pk)
+    return _back(request, pk, person_pk)
 
 
 @require_POST
@@ -215,7 +229,7 @@ def revoke_person(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse
         )
     else:
         messages.error(request, f"{person.email} had already lost access.")
-    return redirect("client", pk)
+    return _back(request, pk, person_pk)
 
 
 @require_POST
@@ -231,7 +245,7 @@ def restore_person(request: HttpRequest, pk: int, person_pk: int) -> HttpRespons
             request,
             f"Access is back for {person.name or person.email}: a new invite is on its way.",
         )
-    return redirect("client", pk)
+    return _back(request, pk, person_pk)
 
 
 @require_http_methods(["GET", "POST"])
@@ -267,3 +281,58 @@ def new_client(request: HttpRequest) -> HttpResponse:
         ),
     )
     return redirect("client", company.pk)
+
+
+def _person_screen(
+    request: HttpRequest, pm: User, pk: int, person_pk: int, form: PersonForm | None = None
+) -> HttpResponse:
+    try:
+        page = selectors.person_page(pm, pk, person_pk)
+    except (Company.DoesNotExist, User.DoesNotExist):
+        raise Http404 from None
+    person = page.row.person
+    if form is None:
+        form = PersonForm(initial={"name": person.name, "notify": person.notify})
+    return render(
+        request,
+        "accounts/person.html",
+        {"page": page, "form": form, "revoking": "revoke" in request.GET},
+    )
+
+
+@require_GET
+@login_required
+def person(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse:
+    """One person at the PM's client: profile, activity and access (PRD: person page)."""
+    return _person_screen(request, _pm(request), pk, person_pk)
+
+
+@require_POST
+@login_required
+def save_person(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse:
+    pm, person = _person(request, pk, person_pk)
+    form = PersonForm(request.POST)
+    if not form.is_valid():
+        return _person_screen(request, pm, pk, person_pk, form)
+    services.update_person(
+        person, name=form.cleaned_data["name"], notify=Notify(form.cleaned_data["notify"])
+    )
+    messages.success(request, "Saved.")
+    return redirect("person", pk, person_pk)
+
+
+@require_POST
+@login_required
+def send_sign_in_link(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse:
+    _, person = _person(request, pk, person_pk)
+    try:
+        services.send_sign_in_link(person)
+    except services.NotAllowedError:
+        messages.error(
+            request,
+            f"No link for {person.email} now: they lost access, never signed in, or already "
+            "got several links in the last 15 minutes.",
+        )
+    else:
+        messages.success(request, f"A sign-in link is on its way to {person.email}.")
+    return redirect("person", pk, person_pk)

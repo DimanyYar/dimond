@@ -11,6 +11,17 @@ urlpatterns = [
     path("clients/new/", views.new_client, name="new_client"),
     path("clients/<int:pk>/", views.clients, name="client"),
     path("clients/<int:pk>/invite/", views.invite_people, name="invite_people"),
+    path("clients/<int:pk>/people/<int:person_pk>/", views.person, name="person"),
+    path(
+        "clients/<int:pk>/people/<int:person_pk>/save/",
+        views.save_person,
+        name="save_person",
+    ),
+    path(
+        "clients/<int:pk>/people/<int:person_pk>/sign-in-link/",
+        views.send_sign_in_link,
+        name="send_sign_in_link",
+    ),
     path(
         "clients/<int:pk>/people/<int:person_pk>/resend/",
         views.resend_invite,

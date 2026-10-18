@@ -1,0 +1,127 @@
+{% extends "layouts/pm.html" %}
+{% comment %}
+One person at the PM's client (mockup 5.0 · Person): profile on the left, activity and access
+on the right; one column on a phone. ?revoke asks before revoking, without scripts.
+{% endcomment %}
+{% block title %}{{ page.row.person }} · {{ page.company }} · dimon.d{% endblock %}
+
+{% block content %}
+{% with person=page.row.person company=page.company row=page.row %}
+<div class="person-page">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="{% url 'clients' %}">Clients</a><span aria-hidden="true">/</span>
+    <a href="{% url 'client' company.pk %}">{{ company.name }}</a><span aria-hidden="true">/</span>
+    <span aria-current="page">{{ person.name|default:person.email }}</span>
+  </nav>
+
+  {% for message in messages %}
+    <div class="banner{% if message.level_tag == 'error' %} banner-error{% endif %}" role="status">{{ message }}</div>
+  {% endfor %}
+
+  <header class="person-page-head">
+    <span class="person-avatar person-avatar-large" aria-hidden="true">{{ row.initials }}</span>
+    <div class="person-page-title">
+      <h1>{{ person.name|default:person.email }}</h1>
+      <p class="muted">
+        <span class="status status-person-{{ row.status }}">{{ row.status.label }}</span>
+        Client · {{ company.name }} · added {{ person.date_joined|date:"M j, Y" }}{% if page.invited_by %} · invited by {{ page.invited_by }}{% endif %}
+      </p>
+    </div>
+    {% if row.status == "active" %}
+      <form method="post" action="{% url 'send_sign_in_link' company.pk person.pk %}">
+        {% csrf_token %}
+        <button class="btn" type="submit">Send a sign-in link</button>
+      </form>
+    {% endif %}
+  </header>
+
+  <div class="person-page-columns">
+    <form class="card person-profile" method="post" action="{% url 'save_person' company.pk person.pk %}" aria-labelledby="profile-title">
+      {% csrf_token %}
+      <h2 id="profile-title">Profile</h2>
+      {% if form.errors %}<p class="banner banner-error" role="alert">Not saved. Check the fields below.</p>{% endif %}
+      <div class="person-profile-fields">
+        <div class="field">
+          <label for="person-name">Name</label>
+          <input class="input" id="person-name" name="name" maxlength="120" value="{{ form.name.value|default:'' }}" aria-describedby="person-name-hint{% if form.name.errors %} person-name-error{% endif %}"{% if form.name.errors %} aria-invalid="true"{% endif %}>
+          {% if form.name.errors %}<span class="error-text" id="person-name-error">{{ form.name.errors.0 }}</span>{% endif %}
+          <span class="hint" id="person-name-hint">Shown on requests and replies</span>
+        </div>
+        <div class="field">
+          <span class="field-label">Email</span>
+          <span class="read-only-value">{{ person.email }}</span>
+          <span class="hint">How they sign in. Changing it comes with accounts</span>
+        </div>
+      </div>
+      <fieldset class="choices"{% if form.notify.errors %} aria-describedby="person-notify-error"{% endif %}>
+        <legend>Email them about</legend>
+        {% if form.notify.errors %}<span class="error-text" id="person-notify-error">Pick one of these.</span>{% endif %}
+        {% with notify=form.notify.value %}
+          <label class="choice choice-with-hint"><input type="radio" name="notify" value="own"{% if notify == "own" %} checked{% endif %}><span><span class="choice-title">Their own requests</span><span class="hint">Requests they created or follow</span></span></label>
+          <label class="choice choice-with-hint"><input type="radio" name="notify" value="company"{% if notify == "company" %} checked{% endif %}><span><span class="choice-title">Everything at {{ company.name }}</span><span class="hint">Every request from anyone at {{ company.name }}</span></span></label>
+          <label class="choice choice-with-hint"><input type="radio" name="notify" value="none"{% if notify == "none" %} checked{% endif %}><span><span class="choice-title">Nothing</span><span class="hint">They check the portal themselves. Sign-in links still arrive</span></span></label>
+        {% endwith %}
+      </fieldset>
+      <div class="person-profile-actions">
+        <button class="btn btn-dark" type="submit">Save</button>
+      </div>
+    </form>
+
+    <div class="person-side">
+      <section class="card person-activity" aria-labelledby="activity-title">
+        <h2 id="activity-title">Activity</h2>
+        <div class="person-numbers">
+          <p><strong>{{ page.requests_created }}</strong><span class="hint">request{{ page.requests_created|pluralize }} created</span></p>
+          <p><strong>{{ page.replies }}</strong><span class="hint">repl{{ page.replies|pluralize:"y,ies" }}</span></p>
+        </div>
+        <p class="person-recent">
+          {% if page.last_request %}Last request: <a href="{{ page.last_request.get_absolute_url }}">{{ page.last_request.key }}</a> · {{ page.last_request.created_at|date:"M j" }}<br>{% endif %}
+          {% if person.last_login %}Last sign-in: {{ person.last_login|date:"M j" }}{% else %}Never signed in{% endif %}
+        </p>
+      </section>
+
+      <section class="card person-access-card{% if row.status == 'active' %} person-access-danger{% endif %}" aria-labelledby="access-title">
+        <h2 id="access-title">Access</h2>
+        {% if row.status == "active" %}
+          <p class="hint">Revoking signs {{ person.name|default:person.email }} out on every device right away and stops emails. Their requests and replies stay with {{ company.name }}.</p>
+          {% if revoking %}
+            <p role="alert"><strong>Revoke access for {{ person.name|default:person.email }}?</strong></p>
+            <div class="person-access-buttons">
+              <a class="btn" href="{% url 'person' company.pk person.pk %}">Keep access</a>
+              <form method="post" action="{% url 'revoke_person' company.pk person.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="back" value="person">
+                <button class="btn btn-danger" type="submit">Revoke access</button>
+              </form>
+            </div>
+          {% else %}
+            <a class="btn btn-danger" href="{% url 'person' company.pk person.pk %}?revoke">Revoke access</a>
+          {% endif %}
+        {% elif row.status == "no_access" %}
+          <p class="hint">Access is revoked. Re-invite turns it back on and sends a new 7-day link; devices signed in before stay signed out.</p>
+          <form method="post" action="{% url 'restore_person' company.pk person.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="back" value="person">
+            <button class="btn btn-dark btn-block" type="submit">Re-invite</button>
+          </form>
+        {% else %}
+          <p class="hint">
+            {% if row.status == "invited" %}Invited, not signed in yet.{% if row.when %} The link works until {{ row.when|date:"M j" }}.{% endif %}
+            {% elif row.status == "link_expired" %}The invite expired {{ row.when|date:"M j" }} before they signed in.
+            {% else %}Added without an invite.{% endif %}
+          </p>
+          <div class="person-access-buttons">
+            <form method="post" action="{% url 'resend_invite' company.pk person.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="back" value="person">
+              <button class="btn btn-dark" type="submit">{% if row.status == "not_invited" %}Send invite{% else %}Resend invite{% endif %}</button>
+            </form>
+            <a class="btn" href="{% url 'client' company.pk %}?cancel={{ person.pk }}#person-{{ person.pk }}">Cancel invite</a>
+          </div>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+{% endwith %}
+{% endblock %}
