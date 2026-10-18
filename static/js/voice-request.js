@@ -56,6 +56,9 @@ function setUp() {
   let starting = false;
   let recordingUrl = null;
   let transcript = null;
+  // The title filled in from the draft, so recording again can replace it unless the client
+  // has changed it since.
+  let titleFromDraft = null;
 
   function listenForText() {
     if (!canTranscribe) return;
@@ -82,7 +85,10 @@ function setUp() {
   function showText(text) {
     heard.hidden = text === "";
     form.elements.text.value = text;
-    if (text && !form.elements.title.value) form.elements.title.value = firstSentence(text);
+    if (text && !form.elements.title.value) {
+      titleFromDraft = firstSentence(text);
+      form.elements.title.value = titleFromDraft;
+    }
   }
 
   function dropText() {
@@ -223,6 +229,7 @@ function setUp() {
   function open() {
     recording = null;
     form.reset();
+    titleFromDraft = null;
     heard.hidden = true;
     error.textContent = "";
     dialog.querySelector(".voice-hint").textContent = "Tap to start · up to 2 minutes";
@@ -275,6 +282,8 @@ function setUp() {
   dialog.querySelectorAll("[data-voice-stop]").forEach((button) => button.addEventListener("click", stop));
   dialog.querySelectorAll("[data-voice-close]").forEach((button) => button.addEventListener("click", close));
   dialog.querySelector("[data-voice-again]").addEventListener("click", () => {
+    if (form.elements.title.value === titleFromDraft) form.elements.title.value = "";
+    titleFromDraft = null;
     showText("");
     player.stop();
     forgetRecording();
