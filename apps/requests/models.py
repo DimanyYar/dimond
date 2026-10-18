@@ -268,3 +268,20 @@ class RequestVisit(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} saw {self.request.key} at {self.seen_at:%Y-%m-%d %H:%M}"
+
+
+class InternalNote(models.Model):
+    """The PM's note on a request. Its own table, never a flag on Message: client pages only
+    ever read messages, so a forgotten filter cannot show a note to a client (PRD: internal
+    note). Notes stay in dimond and are never sent to Jira either."""
+
+    request = models.ForeignKey(Request, on_delete=models.PROTECT, related_name="notes")
+    author = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+    def __str__(self) -> str:
+        return f"Note by {self.author} on {self.request.key}"

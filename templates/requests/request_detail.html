@@ -98,6 +98,18 @@
           {% with files=m.attachments.all %}{% if files %}{% include "files/file_list.html" with small=True %}{% endif %}{% endwith %}
         </article>
         {% endwith %}
+      {% elif entry.note %}
+        {% with n=entry.note %}
+        <article id="note-{{ n.pk }}" class="message message-note">
+          <div class="message-head">
+            <strong>Internal note</strong>
+            <span class="muted">{{ n.author }}</span>
+            <time class="muted" datetime="{{ n.created_at|date:'c' }}">{{ n.created_at|date:"M j, H:i" }}</time>
+          </div>
+          <p class="message-text">{{ n.text }}</p>
+          <p class="note-privacy"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Only you see this · never sent to {{ r.company }} or Jira</p>
+        </article>
+        {% endwith %}
       {% else %}
         <p class="thread-event event-{{ entry.status }}">
           <span class="dot" aria-hidden="true"></span>{{ entry.event }}
@@ -116,20 +128,29 @@
     {% if page.can_post %}
       <form id="reply" class="composer" method="post" enctype="multipart/form-data">
         {% csrf_token %}
-        <label for="id_text">{% if is_client %}Reply to Dimon{% else %}Reply to {{ r.company }}{% endif %}</label>
+        {% if page.can_add_note %}
+          <fieldset class="segmented composer-kind">
+            <legend class="visually-hidden">Write</legend>
+            <label><input type="radio" name="kind" value="reply"{% if form.kind.value != "note" %} checked{% endif %}>Reply to {{ r.company }}</label>
+            <label><input type="radio" name="kind" value="note"{% if form.kind.value == "note" %} checked{% endif %}>Internal note</label>
+          </fieldset>
+          <p class="note-privacy note-only">Only you see notes. They never reach {{ r.company }} or Jira.</p>
+        {% endif %}
+        <label for="id_text"{% if page.can_add_note %} class="visually-hidden"{% endif %}>{% if is_client %}Reply to Dimon{% else %}Reply to {{ r.company }} or write a note{% endif %}</label>
         <textarea name="text" id="id_text" class="input" rows="3" maxlength="5000"
-          placeholder="{% if page.question and is_client %}Your answer goes to Dimon, your PM{% elif is_client %}Anything to add? Dimon reads everything here.{% else %}Everyone at {{ r.company }} sees this{% endif %}"
+          placeholder="{% if page.question and is_client %}Your answer goes to Dimon, your PM{% elif is_client %}Anything to add? Dimon reads everything here.{% else %}A reply everyone at {{ r.company }} sees, or a note only you see{% endif %}"
           {% if form.text.errors %}aria-invalid="true" aria-describedby="text-error"{% endif %}>{{ form.text.value|default_if_none:"" }}</textarea>
         {% if form.text.errors %}<span class="error-text" id="text-error">{{ form.text.errors.0 }}</span>{% endif %}
         {% if page.can_ask %}
-          <label class="check">
+          <label class="check reply-only">
             <input type="checkbox" name="ask_for_input"{% if form.ask_for_input.value %} checked{% endif %}>
             Ask the client for input — the request moves to “Needs your input”
           </label>
         {% endif %}
-        {% include "files/attach_field.html" with field=form.attachments compact=True %}
+        <div class="reply-only">{% include "files/attach_field.html" with field=form.attachments compact=True %}</div>
+        {% if form.attachments.errors and form.kind.value == "note" %}<span class="error-text">{{ form.attachments.errors.0 }}</span>{% endif %}
         <div class="composer-actions">
-          <button type="submit" class="btn {% if page.question and is_client %}btn-primary{% else %}btn-dark{% endif %}">{% if is_client %}Send to Dimon{% else %}Send to client{% endif %}</button>
+          <button type="submit" class="btn {% if page.question and is_client %}btn-primary{% else %}btn-dark{% endif %}">{% if is_client %}Send to Dimon{% else %}<span class="reply-only">Send to client</span><span class="note-only">Save note</span>{% endif %}</button>
         </div>
       </form>
     {% else %}

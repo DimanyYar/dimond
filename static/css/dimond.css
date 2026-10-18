@@ -4155,3 +4155,74 @@ kbd {
   flex-direction: column;
   gap: var(--space-2);
 }
+
+/* The PM's internal notes: yellow, so a note never passes for a reply. */
+.message-note {
+  background: #fffbea;
+  border: 1px solid #e9d58a;
+}
+
+.note-privacy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: #6b5800;
+}
+
+.composer-kind {
+  align-self: flex-start;
+  margin: 0;
+  border: 0;
+}
+
+.composer-kind input {
+  position: absolute;
+  opacity: 0;
+}
+
+.composer-kind label {
+  white-space: nowrap;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.composer-kind label:has(input:checked) {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.composer-kind label:has(input[value="note"]:checked) {
+  background: #fff1b8;
+  color: var(--ink);
+}
+
+.composer-kind label:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+/* Writing a note: the box turns yellow, and what only makes sense for a reply hides. */
+.composer .note-only {
+  display: none;
+}
+
+.composer:has(input[name="kind"][value="note"]:checked) {
+  background: #fffbea;
+  border-color: #e9d58a;
+}
+
+.composer:has(input[name="kind"][value="note"]:checked) .note-only {
+  display: inline;
+}
+
+.composer:has(input[name="kind"][value="note"]:checked) p.note-only {
+  display: flex;
+}
+
+.composer:has(input[name="kind"][value="note"]:checked) .reply-only {
+  display: none;
+}

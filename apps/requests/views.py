@@ -200,6 +200,12 @@ def request_detail(request: HttpRequest, pk: int) -> HttpResponse:
     form = MessageForm(request.POST, request.FILES)
     if not form.is_valid():
         return _render_card(request, page, form=form, status=422)
+    if form.is_note():
+        try:
+            note = services.add_note(page.viewer, page.request, form.cleaned_data["text"])
+        except services.NotAllowedError:
+            raise PermissionDenied from None
+        return redirect(f"{page.request.get_absolute_url()}#note-{note.pk}")
     try:
         message = services.post_message(
             page.viewer,

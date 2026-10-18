@@ -37,6 +37,7 @@ from .models import (
     REQUEST_FIELDS,
     BoardColumn,
     ClientStatus,
+    InternalNote,
     Message,
     Request,
     RequestRevision,
@@ -538,6 +539,11 @@ def can_decline(user: User, request: Request) -> bool:
     return _is_pm(user) and request.status not in CLOSED_STATUSES
 
 
+def can_add_note(user: User, request: Request) -> bool:
+    """Only the PM writes notes, in an open request, next to the reply box."""
+    return _is_pm(user) and request.status not in CLOSED_STATUSES
+
+
 def can_mark_handled(user: User, request: Request) -> bool:
     """ "No reply needed" exists only while the client's reply waits for the PM."""
     return _pm_reason_of(user, request) == PmReason.REPLIED
@@ -563,6 +569,7 @@ class ThreadEntry:
 
     at: datetime
     message: Message | None = None
+    note: InternalNote | None = None
     event: str = ""
     status: str = ""  # empty for an edit: it does not change the status
 
@@ -637,9 +644,9 @@ def _event_entry(event: StatusEvent) -> ThreadEntry:
     return ThreadEntry(at=event.created_at, event=text, status=event.to_status)
 
 
-def _thread(request: Request, request_edits: list[Edit]) -> list[ThreadEntry]:
-    """Messages, status changes and edits, oldest first, as one conversation. Private like
-    `_edits`, for the same reason."""
+def _thread(request: Request, request_edits: list[Edit], viewer: User) -> list[ThreadEntry]:
+    """Messages, status changes and edits, oldest first, as one conversation; the PM also
+    sees their internal notes in it. Private like `_edits`, for the same reason."""
     messages = [
         ThreadEntry(at=m.created_at, message=m)
         for m in request.messages.select_related("author", "author__company").prefetch_related(
@@ -657,11 +664,16 @@ def _thread(request: Request, request_edits: list[Edit]) -> list[ThreadEntry]:
         # A confirmed ask shows up as the "Withdrawn" status change instead.
         if ask.confirmed is False and ask.decided_at is not None:
             withdrawals.append(ThreadEntry(at=ask.decided_at, event="Dimon kept the request going"))
+    notes = []
+    if viewer.role == Role.PM:
+        notes = [
+            ThreadEntry(at=n.created_at, note=n) for n in request.notes.select_related("author")
+        ]
     # A message comes before a status change made at the same moment: the PM's question
     # first, then "Waiting for your input".
     return sorted(
-        messages + events + edited + withdrawals,
-        key=lambda entry: (entry.at, entry.message is None),
+        messages + notes + events + edited + withdrawals,
+        key=lambda entry: (entry.at, entry.message is None and entry.note is None),
     )
 
 
@@ -764,6 +776,7 @@ class RequestPage:
     can_move_to_later: bool
     can_bring_back: bool
     can_decline: bool
+    can_add_note: bool
 
 
 def _new_messages(user: User, request: Request, entries: list[ThreadEntry]) -> list[Message]:
@@ -790,7 +803,7 @@ def request_page(user: User, pk: int) -> RequestPage:
     read_at = timezone.now()
     request = request_for(user, pk)
     request_edits = _edits(request)
-    entries = _thread(request, request_edits)
+    entries = _thread(request, request_edits, user)
     new = _new_messages(user, request, entries)
     all_files = list(request.attachments.shown().select_related("uploaded_by"))
     # Every request has at least its "Received" event, so this is never empty.
@@ -819,6 +832,7 @@ def request_page(user: User, pk: int) -> RequestPage:
         can_move_to_later=can_move_to_later(user, request),
         can_bring_back=can_bring_back(user, request),
         can_decline=can_decline(user, request),
+        can_add_note=can_add_note(user, request),
     )
 
 
