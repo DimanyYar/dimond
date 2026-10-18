@@ -209,3 +209,13 @@ def test_pm_card_says_why_the_request_waits(client, pm, anna):
 
     assert response.context["page"].pm_reason == PmReason.NEW
     assert "Requests</a> / <a" in response.content.decode()
+
+
+def test_search_says_how_many_it_found(client, anna):
+    make(anna, "Wrong timezone on reminders")
+    make(anna, "Something else")
+    client.force_login(anna)
+
+    html = client.get(URL, {"q": "timezone"}).content.decode()
+
+    assert "1 found for “timezone”" in html

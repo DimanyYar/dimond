@@ -1547,6 +1547,11 @@ kbd {
   flex-wrap: wrap;
 }
 
+.search-count {
+  margin: 0 0 var(--space-3);
+  font-size: 14px;
+}
+
 /* Search and the board / list switch stay together on the right, and wrap together. */
 .filter-tools {
   display: flex;

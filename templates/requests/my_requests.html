@@ -70,7 +70,7 @@
       {% endfor %}
     </nav>
     <div class="filter-tools">
-      <form class="search" method="get" role="search">
+      <form class="search" method="get" role="search" data-live-search>
         <label class="visually-hidden" for="request-search">Search by title or DMN- key</label>
         <input class="input" type="search" id="request-search" name="q" value="{{ query }}" placeholder="Title or DMN-…">
         <input type="hidden" name="view" value="{{ view }}">
@@ -123,6 +123,10 @@
     </form>
   </div>
 
+  <div id="request-results">
+  {% if query and page.requests %}
+    <p class="search-count muted" role="status">{{ page.requests|length }} found for “{{ query }}” · <a href="{% querystring q=None %}" data-clear-search>Clear</a></p>
+  {% endif %}
   {% if not page.requests %}
     <div class="empty-state">
       <span class="brand-mark" aria-hidden="true">d.</span>
@@ -186,6 +190,8 @@
     </div>
   {% endif %}
   {% endif %}
+  </div>
   <script type="module" src="{% static 'js/my-requests.js' %}"></script>
   {% if is_client %}<script type="module" src="{% static 'js/voice-request.js' %}"></script>{% endif %}
+  <script type="module" src="{% static 'js/live-search.js' %}"></script>
 {% endblock %}
