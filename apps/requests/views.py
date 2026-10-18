@@ -164,6 +164,7 @@ def new_voice_request(request: HttpRequest) -> HttpResponse:
         form.cleaned_data["title"],
         form.cleaned_data["recording"],
         form.request_type(),
+        form.cleaned_data["text"],
     )
     messages.success(request, f"{created.key} · {created.title}")
     return HttpResponse(status=201, headers={"Location": reverse("my_requests")})

@@ -48,6 +48,7 @@
         <span class="muted">{{ r.company }}</span>
         <time class="muted" datetime="{{ r.created_at|date:'c' }}">{{ r.created_at|date:"M j, H:i" }}</time>
       </div>
+      {% if r.description and r.from_voice %}<p class="voice-heard-head"><strong>What we heard</strong> <span class="voice-badge">auto-transcribed · may contain mistakes</span></p>{% endif %}
       {% if r.description %}<p class="message-text">{{ r.description }}</p>{% endif %}
       {% if r.steps %}<p class="message-text"><strong>Steps to reproduce:</strong> {{ r.steps }}</p>{% endif %}
       {% if r.why %}<p class="message-text message-why"><strong>Why it matters:</strong> {{ r.why }}</p>{% endif %}

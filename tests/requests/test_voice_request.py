@@ -60,6 +60,24 @@ def test_voice_request_keeps_the_type_the_client_picked(client, anna):
     assert Request.objects.get().type == RequestType.BUG
 
 
+def test_text_draft_the_client_checked_becomes_the_description(client, anna):
+    client.post(URL, said(text="Since yesterday every web form submission creates two leads."))
+
+    request = Request.objects.get()
+    assert request.description == "Since yesterday every web form submission creates two leads."
+    card = client.get(request.get_absolute_url()).content.decode()
+    assert "What we heard" in card
+    assert "auto-transcribed · may contain mistakes" in card
+
+
+def test_voice_request_without_a_text_draft_has_no_what_we_heard(client, anna):
+    client.post(URL, said())
+
+    request = Request.objects.get()
+    assert request.description == ""
+    assert "What we heard" not in client.get(request.get_absolute_url()).content.decode()
+
+
 def test_voice_request_needs_a_title(client, anna):
     response = client.post(URL, said(title=""))
 

@@ -1,7 +1,7 @@
 {% comment %}"Just say it": a request said out loud (mockups: Just say it, Mobile just say it). Lives over the new
 request form, so "Switch to the full form" can hand the recording, title and type to it. Opened by any button with
 data-voice-open, or on arrival with ?say; static/js/voice-request.js records up to 2 minutes and sends the recording
-with a title and, if picked, a type.{% endcomment %}
+with a title, the text draft where the browser can write one, and, if picked, a type.{% endcomment %}
 <dialog class="voice" id="voice-request" aria-labelledby="voice-title" data-stage="ready">
   <div class="voice-head">
     <div class="voice-heading">
@@ -36,6 +36,10 @@ with a title and, if picked, a type.{% endcomment %}
         <span class="muted">of 2:00</span>
       </div>
     </div>
+    <div class="voice-transcript" data-voice-transcript hidden>
+      <span class="voice-transcript-label">Live transcript · draft</span>
+      <p aria-live="polite"><span data-voice-said></span><span class="voice-transcript-guess" data-voice-guess></span><span class="voice-caret" aria-hidden="true"></span></p>
+    </div>
     <div class="voice-actions">
       <button type="button" class="btn btn-dark" data-voice-stop>Stop and review</button>
       <button type="button" class="btn btn-ghost" data-voice-close>Cancel</button>
@@ -58,6 +62,15 @@ with a title and, if picked, a type.{% endcomment %}
     <div class="field">
       <label for="voice-request-title">Title <span class="optional">· one line, so Dimon finds it</span></label>
       <input class="input" type="text" id="voice-request-title" name="title" maxlength="200" required autocomplete="off">
+    </div>
+
+    <div class="field" data-voice-heard hidden>
+      <div class="voice-heard-head">
+        <label for="voice-request-text">What we heard</label>
+        <span class="voice-badge">auto-transcribed · may contain mistakes</span>
+      </div>
+      <textarea class="input" id="voice-request-text" name="text" rows="4" maxlength="5000" aria-describedby="voice-heard-hint"></textarea>
+      <span class="hint" id="voice-heard-hint">No need to fix every word — Dimon gets the recording too.</span>
     </div>
 
     <fieldset class="voice-types">

@@ -1,18 +1,26 @@
 // "Just say it" (mockups: Just say it, Mobile just say it): the client records the request
 // out loud, listens to it, gives it a title and sends it. The recording is the request; the
-// type is optional and the PM sorts the rest. The window lives over the new request form, so
+// type is optional and the PM sorts the rest. Where the browser can, a text draft is written
+// while the client talks (live-transcript.js); the client checks it, and it goes with the
+// recording as the request's text. The window lives over the new request form, so
 // "Switch to the full form" hands the recording, title and type to it. Buttons and links that
 // open it stay hidden where the browser cannot record, so the page then offers only the form.
 
 import { clock } from "./clock.js";
 import { MAX_DURATION, finishedRecording } from "./compress-video.js";
+import { canTranscribe, firstSentence, liveTranscript } from "./live-transcript.js";
 import { mediaPlayer } from "./media-player.js";
 
 const LEVEL_BARS = 48;
 const TYPES = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg"];
 const EXTENSIONS = { "audio/webm": "webm", "audio/mp4": "m4a", "audio/ogg": "ogg" };
 const COPY = {
-  ready: ["Just say it", "Describe your request out loud. We’ll keep the recording for Dimon."],
+  ready: [
+    "Just say it",
+    canTranscribe
+      ? "Describe your request out loud. We’ll keep the recording and draft the text for you."
+      : "Describe your request out loud. We’ll keep the recording for Dimon.",
+  ],
   recording: ["Listening…", "Talk like you would to Dimon on a call."],
   review: ["Looks right?", "Listen back, give it a title and send it — or record again."],
 };
@@ -32,6 +40,8 @@ function setUp() {
   const time = dialog.querySelector("[data-voice-time]");
   const level = dialog.querySelector("[data-voice-level]");
   const player = mediaPlayer(dialog.querySelector("[data-voice-player]"));
+  const live = dialog.querySelector("[data-voice-transcript]");
+  const heard = dialog.querySelector("[data-voice-heard]");
 
   let recorder = null;
   let stream = null;
@@ -41,6 +51,40 @@ function setUp() {
   // From the tap until recording begins the browser may be asking for the microphone.
   let starting = false;
   let recordingUrl = null;
+  let transcript = null;
+
+  function listenForText() {
+    if (!canTranscribe) return;
+    const said = live.querySelector("[data-voice-said]");
+    const guess = live.querySelector("[data-voice-guess]");
+    said.textContent = "";
+    guess.textContent = "";
+    live.hidden = false;
+    transcript = liveTranscript({
+      onText: (sure, guessing) => {
+        said.textContent = sure;
+        guess.textContent = guessing ? ` ${guessing}` : "";
+      },
+      // The recording goes on: the client just gets no draft this time.
+      onFail: () => {
+        live.hidden = true;
+      },
+    });
+  }
+
+  // The draft for the review: in the "What we heard" field, and its first sentence as the title
+  // unless the client typed one already.
+  function showText(text) {
+    heard.hidden = text === "";
+    form.elements.text.value = text;
+    if (text && !form.elements.title.value) form.elements.title.value = firstSentence(text);
+  }
+
+  function dropText() {
+    transcript?.abort();
+    transcript = null;
+    live.hidden = true;
+  }
 
   function stage(name) {
     dialog.dataset.stage = name;
@@ -126,6 +170,9 @@ function setUp() {
       const name = `voice-request-${stamp}.${EXTENSIONS[recordedType] ?? "webm"}`;
       const recorded = new Blob(chunks, { type: recorder.mimeType });
       recorder = null;
+      const text = transcript === null ? "" : await transcript.stop();
+      transcript = null;
+      live.hidden = true;
       // Cancelled while recording: the window is closed and nothing is kept.
       if (!dialog.open) return;
       try {
@@ -135,6 +182,7 @@ function setUp() {
         recording = new File([recorded], name, { type: recordedType });
       }
       stage("review");
+      showText(text);
       forgetRecording();
       recordingUrl = URL.createObjectURL(recording);
       player.load(recordingUrl);
@@ -149,6 +197,7 @@ function setUp() {
       if (seconds >= MAX_DURATION) stop();
     }, 250);
     listening = listen();
+    listenForText();
     stage("recording");
     dialog.querySelector(".voice-stop").focus();
   }
@@ -158,6 +207,7 @@ function setUp() {
   }
 
   function close() {
+    dropText();
     stop();
     release();
     player.stop();
@@ -168,6 +218,7 @@ function setUp() {
   function open() {
     recording = null;
     form.reset();
+    heard.hidden = true;
     error.textContent = "";
     dialog.querySelector(".voice-hint").textContent = "Tap to start · up to 2 minutes";
     stage("ready");
@@ -219,6 +270,7 @@ function setUp() {
   dialog.querySelectorAll("[data-voice-stop]").forEach((button) => button.addEventListener("click", stop));
   dialog.querySelectorAll("[data-voice-close]").forEach((button) => button.addEventListener("click", close));
   dialog.querySelector("[data-voice-again]").addEventListener("click", () => {
+    showText("");
     player.stop();
     forgetRecording();
     start();
@@ -229,11 +281,14 @@ function setUp() {
     close();
   });
 
-  // The full form gets everything said so far: the recording as a file, the title, the type.
+  // The full form gets everything said so far: the recording as a file, the title, the text
+  // draft as the description, the type.
   dialog.querySelector("[data-voice-switch]").addEventListener("click", () => {
     const full = document.getElementById("new-request-form");
     const title = full.elements.title;
     if (!title.value) title.value = form.elements.title.value;
+    const description = full.elements.description;
+    if (!description.value) description.value = form.elements.text.value;
     const type = form.elements.type.value;
     const radio = type && full.querySelector(`input[name="type"][value="${type}"]`);
     if (radio) {
