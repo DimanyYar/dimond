@@ -3,6 +3,7 @@ from datetime import datetime
 from uuid import UUID
 
 from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 
 from apps.accounts.models import Role, User
@@ -258,21 +259,33 @@ def mark_seen(user: User, request: Request, read_at: datetime) -> None:
     RequestVisit.objects.update_or_create(request=request, user=user, defaults={"seen_at": read_at})
 
 
+def _mark_handled_so_far(request: Request) -> None:
+    """The PM has dealt with everything written so far. Stores the time of the latest
+    message, not "now": a client message that lands while the PM clicks stays unhandled."""
+    latest = request.messages.aggregate(at=Max("created_at"))["at"]
+    request.pm_handled_at = latest or request.created_at
+    request.save(update_fields=["pm_handled_at"])
+
+
 @transaction.atomic
 def move_to_later(pm: User, request: Request) -> Request:
-    """Accepted, but not planned: the client sees it in Later, and it leaves Needs you."""
+    """Accepted, but not planned: the client sees it in Later, and it leaves Needs you,
+    with any reply that was waiting."""
     request = Request.objects.select_for_update().get(pk=request.pk)
     if not can_move_to_later(pm, request):
         raise NotAllowedError
+    _mark_handled_so_far(request)
     return _set_status(request, ClientStatus.LATER, pm)
 
 
 @transaction.atomic
 def bring_back(pm: User, request: Request) -> Request:
-    """Takes a request out of Later, back to Received, where the PM plans it."""
+    """Takes a request out of Later, back to Received, where the PM plans it. The PM chose
+    it, so it does not come back as New."""
     request = Request.objects.select_for_update().get(pk=request.pk)
     if not can_bring_back(pm, request):
         raise NotAllowedError
+    _mark_handled_so_far(request)
     return _set_status(request, ClientStatus.RECEIVED, pm)
 
 
@@ -290,9 +303,11 @@ def decline_request(pm: User, request: Request, reason: str) -> Request:
     return _set_status(request, ClientStatus.DECLINED, pm)
 
 
+@transaction.atomic
 def mark_handled(pm: User, request: Request) -> None:
     """ "No reply needed": the client's latest message leaves the PM's Needs you without an
     answer. The next client message brings the request back."""
+    request = Request.objects.select_for_update().get(pk=request.pk)
     if not can_mark_handled(pm, request):
         raise NotAllowedError
-    Request.objects.filter(pk=request.pk).update(pm_handled_at=timezone.now())
+    _mark_handled_so_far(request)

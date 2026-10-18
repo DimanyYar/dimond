@@ -135,3 +135,41 @@ def test_no_reply_needed_only_while_the_client_replied(client, pm, anna):
     fresh = make(anna)
 
     assert triage(client, pm, fresh, "handled").status_code == 403
+
+
+def test_no_reply_needed_on_a_fresh_request_does_not_leave_it_as_new(client, pm, anna):
+    fresh = make(anna)
+    services.post_message(anna, fresh, "Forgot a detail: it is the Monday export")
+
+    triage(client, pm, fresh, "handled")
+
+    assert reason(pm, fresh) is None
+
+
+def test_moving_to_later_also_handles_a_waiting_reply(client, pm, anna):
+    fresh = make(anna)
+    services.post_message(anna, fresh, "Any news?")
+
+    triage(client, pm, fresh, "later")
+
+    assert reason(pm, fresh) is None
+
+
+def test_handled_covers_the_messages_seen_not_the_moment_of_the_click(pm, anna):
+    building = make(anna, status=ClientStatus.IN_PROGRESS)
+    services.post_message(pm, building, "In review")
+    thanks = services.post_message(anna, building, "Thanks!")
+
+    services.mark_handled(pm, building)
+
+    building.refresh_from_db()
+    # A reply landing right after "Thanks!" is newer than the mark, so it stays unhandled.
+    assert building.pm_handled_at == thanks.created_at
+
+
+def test_a_request_brought_back_from_later_is_not_new_again(client, pm, anna):
+    parked = make(anna, status=ClientStatus.LATER)
+
+    triage(client, pm, parked, "back")
+
+    assert reason(pm, parked) is None

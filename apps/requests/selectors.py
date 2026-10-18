@@ -228,7 +228,11 @@ def with_pm_reason(requests: QuerySet[Request]) -> QuerySet[Request]:
                 open_request & Q(last_author=Role.CLIENT) & unhandled,
                 then=Value(PmReason.REPLIED),
             ),
-            When(Q(status=ClientStatus.RECEIVED) & ~Exists(pm_wrote), then=Value(PmReason.NEW)),
+            # Once the PM handled a request (No reply needed, Later) it is no longer new.
+            When(
+                Q(status=ClientStatus.RECEIVED, pm_handled_at__isnull=True) & ~Exists(pm_wrote),
+                then=Value(PmReason.NEW),
+            ),
             default=None,
             output_field=models.CharField(),
         )
