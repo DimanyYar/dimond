@@ -26,8 +26,8 @@ fix: expired link shows the right message
 
 ### Pull requests
 
-- Small: readable in 15 minutes, roughly under 400 changed lines. Big features are cut into
-  steps (models → screen → emails).
+- Small: readable in one sitting, under ~800 changed lines. Big features are cut into steps
+  (models → screen → emails).
 - One PR does one thing.
 - Fill in the template: what and why (with the PRD section), how to check by hand, screenshot
   for UI changes, the definition-of-done checklist.
