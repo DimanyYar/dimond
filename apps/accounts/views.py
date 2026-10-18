@@ -58,8 +58,18 @@ def sign_in_link(request: HttpRequest, token: str) -> HttpResponse:
         user = services.use_sign_in_link(token)
     except services.SignInLinkRejectedError:
         return _expired(request)
-    login(request, user)
+    _sign_in(request, user)
     return redirect("home")
+
+
+def _sign_in(request: HttpRequest, user: User) -> None:
+    login(request, user)
+    # login() keeps the session of a browser already signed in as this person and empties it
+    # for someone else: a new key either way gives the new device row its own session.
+    request.session.cycle_key()
+    session_key = request.session.session_key
+    assert session_key is not None  # cycle_key() has just saved the session
+    services.record_sign_in(user, session_key, request.headers.get("User-Agent", ""))
 
 
 def _welcome(request: HttpRequest, token: str, invite: SignInLink) -> HttpResponse:
@@ -71,7 +81,7 @@ def _welcome(request: HttpRequest, token: str, invite: SignInLink) -> HttpRespon
             )
         except services.SignInLinkRejectedError:
             return _expired(request)
-        login(request, user)
+        _sign_in(request, user)
         return redirect("home")
     return render(request, "accounts/welcome.html", {"form": form, "invite": invite})
 
@@ -82,6 +92,8 @@ def _expired(request: HttpRequest) -> HttpResponse:
 
 @require_POST
 def sign_out(request: HttpRequest) -> HttpResponse:
+    if request.session.session_key is not None:
+        services.forget_device(request.session.session_key)
     logout(request)
     return redirect("sign_in")
 
@@ -335,4 +347,17 @@ def send_sign_in_link(request: HttpRequest, pk: int, person_pk: int) -> HttpResp
         )
     else:
         messages.success(request, f"A sign-in link is on its way to {person.email}.")
+    return redirect("person", pk, person_pk)
+
+
+@require_POST
+@login_required
+def sign_out_devices(request: HttpRequest, pk: int, person_pk: int) -> HttpResponse:
+    _, person = _person(request, pk, person_pk)
+    services.sign_out_everywhere(person)
+    messages.success(
+        request,
+        f"{person.name or person.email} is signed out on every device. Access stays: they "
+        "sign in again with an email link.",
+    )
     return redirect("person", pk, person_pk)

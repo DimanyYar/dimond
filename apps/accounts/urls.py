@@ -23,6 +23,11 @@ urlpatterns = [
         name="send_sign_in_link",
     ),
     path(
+        "clients/<int:pk>/people/<int:person_pk>/sign-out/",
+        views.sign_out_devices,
+        name="sign_out_devices",
+    ),
+    path(
         "clients/<int:pk>/people/<int:person_pk>/resend/",
         views.resend_invite,
         name="resend_invite",

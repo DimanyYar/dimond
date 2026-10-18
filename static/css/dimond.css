@@ -5164,7 +5164,8 @@ kbd {
 }
 
 .person-access-buttons .btn,
-.person-access-card > .btn {
+.person-access-card > .btn,
+.person-side form > .btn {
   width: 100%;
 }
 
@@ -5187,4 +5188,49 @@ a.person-name {
 
 a.person-name:hover {
   text-decoration: underline;
+}
+
+.device-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.device-list li,
+.device-none {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.device-none {
+  padding-top: 10px;
+  font-size: 14px;
+}
+
+.device-mark {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-s);
+  background: var(--canvas);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.device-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.device-name {
+  font-size: 14px;
+  font-weight: 500;
 }

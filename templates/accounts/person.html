@@ -68,6 +68,30 @@ on the right; one column on a phone. ?revoke asks before revoking, without scrip
     </form>
 
     <div class="person-side">
+      <section class="card person-devices" aria-labelledby="devices-title">
+        <h2 id="devices-title">Signed in on</h2>
+        {% if page.devices %}
+          <ul class="device-list">
+            {% for device in page.devices %}
+              <li>
+                <span class="device-mark" aria-hidden="true">{{ device.system_mark }}</span>
+                <span class="device-text">
+                  <span class="device-name">{{ device.name }}</span>
+                  <span class="hint">Signed in {{ device.signed_in_at|date:"M j" }}</span>
+                </span>
+              </li>
+            {% endfor %}
+          </ul>
+          <form method="post" action="{% url 'sign_out_devices' company.pk person.pk %}">
+            {% csrf_token %}
+            <button class="btn" type="submit">Sign out all devices</button>
+          </form>
+          <p class="hint">Access stays: they sign in again with an email link.</p>
+        {% else %}
+          <p class="device-none muted">Not signed in anywhere.</p>
+        {% endif %}
+      </section>
+
       <section class="card person-activity" aria-labelledby="activity-title">
         <h2 id="activity-title">Activity</h2>
         <div class="person-numbers">
@@ -102,7 +126,7 @@ on the right; one column on a phone. ?revoke asks before revoking, without scrip
           <form method="post" action="{% url 'restore_person' company.pk person.pk %}">
             {% csrf_token %}
             <input type="hidden" name="back" value="person">
-            <button class="btn btn-dark btn-block" type="submit">Re-invite</button>
+            <button class="btn btn-dark" type="submit">Re-invite</button>
           </form>
         {% else %}
           <p class="hint">
