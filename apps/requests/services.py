@@ -2,13 +2,14 @@ from collections.abc import Collection, Sequence
 from datetime import datetime
 from uuid import UUID
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Max
 from django.utils import timezone
 
 from apps.accounts.models import Role, User
 from apps.files.services import attach_files, removable_files, remove_files
 from apps.files.uploads import CheckedFile
+from apps.tracker.base import Issue
 from apps.tracker.connection import current_tracker
 
 from .models import (
@@ -299,8 +300,46 @@ def create_jira_task(
     task = current_tracker().create_issue(
         request.company.jira_project, issue_type, summary, description, ["dimond"]
     )
+    return _plan_with_task(pm, request, task, reply)
+
+
+class TaskNotLinkable(Exception):
+    """The task exists but cannot be tied to this request; the message says why."""
+
+
+@transaction.atomic
+def link_jira_task(pm: User, request: Request, key: str, reply: str) -> Request:
+    """Existing task: ties a task already in the client's Jira project to the request and
+    plans it. Nothing is written to Jira (PRD: Existing task; ADR 0010).
+
+    Raises IssueNotFound for a key Jira does not know and TaskNotLinkable for a task in
+    another project, a finished one or one that belongs to another request.
+    """
+    request = Request.objects.select_for_update().select_related("company").get(pk=request.pk)
+    if not can_create_jira_task(pm, request):
+        raise NotAllowedError
+    task = current_tracker().issue(key.strip().upper())
+    project = request.company.jira_project
+    if task.project_key != project:
+        raise TaskNotLinkable(f"{task.key} is not in {request.company}’s project ({project}).")
+    if task.done:
+        raise TaskNotLinkable(f"{task.key} is already done in Jira.")
+    if Request.objects.filter(jira_key=task.key).exists():
+        raise TaskNotLinkable(f"{task.key} already belongs to another request.")
+    return _plan_with_task(pm, request, task, reply)
+
+
+def _plan_with_task(pm: User, request: Request, task: Issue, reply: str) -> Request:
+    """The request now follows this task: its key on the card, "Planned · FI-2301" in the
+    thread, the PM's reply if written, and it leaves the PM's Needs you."""
     request.jira_key, request.jira_url = task.key, task.url
-    request.save(update_fields=["jira_key", "jira_url", "updated_at"])
+    try:
+        # Two PMs linking the same task at the same moment both pass the check above; the
+        # unique key lets one through, and the other hears why instead of seeing an error page.
+        with transaction.atomic():
+            request.save(update_fields=["jira_key", "jira_url", "updated_at"])
+    except IntegrityError:
+        raise TaskNotLinkable(f"{task.key} already belongs to another request.") from None
     _set_status(request, ClientStatus.PLANNED, pm)
     if reply:
         Message.objects.create(request=request, author=pm, text=reply)

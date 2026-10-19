@@ -5279,3 +5279,112 @@ a.person-name:hover {
     animation: none;
   }
 }
+
+/* Existing task (mockup 5.1): the search stays on top, the list of tasks scrolls. */
+.dialog-contents {
+  display: contents;
+}
+
+.jira-find {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-4) var(--space-5) 0;
+}
+
+.jira-find label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.jira-find-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.jira-find-row .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.task-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.task-choices legend {
+  margin-bottom: 6px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.task-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.task-choice:has(input:checked) {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.task-choice.is-taken {
+  background: var(--canvas);
+  color: var(--ink-soft);
+  cursor: not-allowed;
+}
+
+.task-choice-key {
+  flex: none;
+  min-width: 72px;
+  font-weight: 600;
+}
+
+.task-choice-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .task-choice {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 640px) {
+  /* On a phone the New task / Existing task tabs take their own row under the title. */
+  .jira-task .dialog-head {
+    flex-wrap: wrap;
+  }
+
+  .jira-task .dialog-head .dialog-title {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .jira-task .dialog-head .segmented {
+    order: 3;
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+  }
+
+  .jira-task .dialog-head .segmented a {
+    flex: 1;
+    text-align: center;
+  }
+}

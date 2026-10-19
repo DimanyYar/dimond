@@ -17,6 +17,7 @@ from .forms import (
     DeclineForm,
     EditRequestForm,
     JiraTaskForm,
+    LinkJiraTaskForm,
     MessageForm,
     MyRequestsFilter,
     NewRequestForm,
@@ -152,6 +153,7 @@ def _render_card(
     withdraw_form: WithdrawForm | None = None,
     decline_form: DeclineForm | None = None,
     jira_form: JiraTaskForm | None = None,
+    link_form: LinkJiraTaskForm | None = None,
     status: int = 200,
 ) -> HttpResponse:
     """The card with whichever of its forms was just sent, errors and all."""
@@ -163,6 +165,7 @@ def _render_card(
         "withdraw_form": withdraw_form or WithdrawForm(reason_required=page.can_ask_to_withdraw),
         "decline_form": decline_form or DeclineForm(),
         "jira_form": jira_form,
+        "link": _link_panel(request, page, link_form) if link_form else None,
         # Picks the client's or the PM's navigation and words.
         "is_client": selectors.is_client(page.viewer),
     }
@@ -304,6 +307,8 @@ def request_jira_task(request: HttpRequest, pk: int) -> HttpResponse:
     page = _card_page(request, pk)
     if not page.can_create_jira_task:
         raise PermissionDenied
+    if request.method == "GET" and request.GET.get("mode") == "existing":
+        return _render_card(request, page, link_form=LinkJiraTaskForm())
     form = JiraTaskForm(request.POST or None, request=page.request)
     if not form.is_valid():
         return _render_card(request, page, jira_form=form, status=422 if form.is_bound else 200)
@@ -327,11 +332,45 @@ def request_jira_task(request: HttpRequest, pk: int) -> HttpResponse:
             f"{page.request.company.jira_project} for {page.request.key} before trying again.",
         )
         return _render_card(request, page, jira_form=form, status=422)
-    except TrackerError as error:
+    except (services.TaskNotLinkable, TrackerError) as error:
         form.add_error(None, str(error))
         return _render_card(request, page, jira_form=form, status=422)
     # The thread's new line "Planned · FI-2301" is the confirmation: the card shows no banners.
     return redirect(planned.get_absolute_url())
+
+
+def _link_panel(
+    request: HttpRequest, page: selectors.RequestPage, form: LinkJiraTaskForm
+) -> dict[str, object]:
+    """What the Existing task tab shows: the search, its results and the form to link."""
+    query = request.GET.get("q", "").strip()
+    try:
+        tasks, problem = selectors.tasks_to_link(page.viewer, page.request, query), ""
+    except TrackerError as error:
+        tasks, problem = [], f"Couldn't load the tasks: {error}"
+    return {"form": form, "query": query, "tasks": tasks, "problem": problem}
+
+
+@require_POST
+@login_required
+def request_link_jira_task(request: HttpRequest, pk: int) -> HttpResponse:
+    """Existing task: links the chosen task and plans the request, or says why it can't."""
+    page = _card_page(request, pk)
+    if not page.can_create_jira_task:
+        raise PermissionDenied
+    form = LinkJiraTaskForm(request.POST)
+    if not form.is_valid():
+        return _render_card(request, page, link_form=form, status=422)
+    try:
+        services.link_jira_task(
+            page.viewer, page.request, form.cleaned_data["key"], form.message_for_client()
+        )
+    except services.NotAllowedError:
+        raise PermissionDenied from None
+    except (services.TaskNotLinkable, TrackerError) as error:
+        form.add_error("key", str(error))
+        return _render_card(request, page, link_form=form, status=422)
+    return redirect(page.request.get_absolute_url())
 
 
 @require_http_methods(["GET", "POST"])

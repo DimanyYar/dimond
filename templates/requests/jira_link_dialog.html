@@ -1,0 +1,66 @@
+{% comment %}
+Create Jira task, Existing task (mockup 5.1 · Existing task, Oct 19): find an open task of
+the client's project by its key or words from the title and link it. Tasks that already belong
+to another request are shown greyed out: one task, one request. Linking writes nothing to Jira.
+{% endcomment %}
+{% load static %}
+<dialog class="dialog-backdrop" open data-modal data-close-url="{{ r.get_absolute_url }}" aria-labelledby="jira-task-title" id="jira-task">
+  <div class="dialog jira-task">
+    {% include "requests/jira_task_head.html" with mode="existing" %}
+
+    <form class="jira-find" method="get" action="{% url 'request_jira_task' r.pk %}#jira-task" role="search">
+      <input type="hidden" name="mode" value="existing">
+      <label for="jl-find">Find a task in {{ r.company.jira_project }}</label>
+      <div class="jira-find-row">
+        <input class="input" type="search" id="jl-find" name="q" value="{{ link.query }}"
+               placeholder="{{ r.company.jira_project }}-2214 or words from the title" aria-describedby="jl-find-hint">
+        <button class="btn" type="submit">Search</button>
+      </div>
+      <span class="hint" id="jl-find-hint">Only open tasks of {{ r.company.jira_project }} · {{ r.company }} are listed.</span>
+    </form>
+
+    <form class="dialog-contents" method="post" action="{% url 'request_link_jira_task' r.pk %}" data-busy="Linking…">
+      {% csrf_token %}
+      <div class="dialog-body">
+        {% if link.problem %}<div class="banner banner-error" role="alert">{{ link.problem }}</div>{% endif %}
+        {% if form.key.errors %}<div class="banner banner-error" role="alert" id="jl-key-error">{{ form.key.errors.0 }}</div>{% endif %}
+        <fieldset class="task-choices"{% if form.key.errors %} aria-describedby="jl-key-error"{% endif %}>
+          <legend>{% if link.query %}{{ link.tasks|length }} found{% else %}Open tasks in {{ r.company.jira_project }}, newest first{% endif %}</legend>
+          {% for choice in link.tasks %}
+            {% with t=choice.issue %}
+            <label class="task-choice{% if choice.linked_to %} is-taken{% endif %}">
+              <input type="radio" name="key" value="{{ t.key }}"{% if choice.linked_to %} disabled{% elif form.key.value == t.key %} checked{% endif %}>
+              <span class="task-choice-key">{{ t.key }}</span>
+              <span class="task-choice-text">
+                <span>{{ t.summary }}</span>
+                <span class="hint">{{ t.issue_type }}{% if choice.linked_to %} · linked to {{ choice.linked_to }}{% endif %}</span>
+              </span>
+              <span class="status status-planned">{{ t.status }}</span>
+            </label>
+            {% endwith %}
+          {% empty %}
+            {% if not link.problem %}<p class="hint">No open task matches. A closed task or one from another project can’t be linked.</p>{% endif %}
+          {% endfor %}
+        </fieldset>
+
+        <section class="dialog-section" aria-labelledby="jl-reply-title">
+          <label class="choice-inline" id="jl-reply-title"><input type="checkbox" name="reply"{% if form.reply.value %} checked{% endif %}> Reply to the client</label>
+          <span class="hint" id="jl-reply-hint">Posts the message in {{ r.key }}: everyone at {{ r.company }} sees it. Nothing is posted to Jira.</span>
+          <label for="jl-reply" class="visually-hidden">Message to the client</label>
+          <textarea class="input" id="jl-reply" name="reply_text" rows="3" maxlength="5000"
+                    aria-describedby="jl-reply-hint{% if form.reply_text.errors %} jl-reply-error{% endif %}"
+                    {% if form.reply_text.errors %}aria-invalid="true"{% endif %}>{{ form.reply_text.value|default_if_none:'' }}</textarea>
+          {% if form.reply_text.errors %}<span class="error-text" id="jl-reply-error">{{ form.reply_text.errors.0 }}</span>{% endif %}
+        </section>
+      </div>
+
+      <footer class="dialog-foot">
+        <span class="hint">Linking writes nothing to Jira. {{ r.company }} will see <strong>Planned</strong> and the task key.</span>
+        <a class="btn" href="{{ r.get_absolute_url }}">Cancel</a>
+        <button class="btn btn-primary" type="submit">Link task</button>
+      </footer>
+    </form>
+  </div>
+</dialog>
+<script type="module" src="{% static 'js/dialog.js' %}"></script>
+<script type="module" src="{% static 'js/busy-button.js' %}"></script>

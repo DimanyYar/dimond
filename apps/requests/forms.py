@@ -10,7 +10,7 @@ from django.db import models
 from apps.files.forms import AttachmentsField
 from apps.files.models import Attachment
 from apps.files.uploads import CheckedFile, check_upload
-from apps.tracker.base import TrackerError
+from apps.tracker.base import ISSUE_KEY, TrackerError
 from apps.tracker.connection import current_tracker
 
 from .models import FORM_TYPES, REQUEST_FIELDS, Request, RequestType, WhenNeeded
@@ -321,13 +321,10 @@ def jira_description(request: Request) -> str:
     return "\n\n".join(section for section in sections if section)
 
 
-class JiraTaskForm(forms.Form):
-    """Create Jira task, New task (PRD: "Create task"; mockup: Create Jira task). The project
-    is the client's own and is not chosen here."""
+class _ReplyToClient(forms.Form):
+    """The optional reply that goes into the client's thread when a task is created or
+    linked. Nothing of it reaches Jira."""
 
-    issue_type = forms.ChoiceField()
-    summary = forms.CharField(max_length=255, error_messages={"required": "Name the task."})
-    description = forms.CharField(widget=forms.Textarea, required=False)
     reply = forms.BooleanField(required=False, initial=True)
     reply_text = forms.CharField(
         max_length=5000,
@@ -335,6 +332,25 @@ class JiraTaskForm(forms.Form):
         required=False,
         initial="Thanks — we’ve passed it to the team. You can follow its status right here.",
     )
+
+    def clean(self) -> dict[str, Any]:
+        super().clean()
+        if self.cleaned_data.get("reply") and not self.cleaned_data.get("reply_text", "").strip():
+            self.add_error("reply_text", "Write the reply, or untick “Reply to the client”.")
+        return self.cleaned_data
+
+    def message_for_client(self) -> str:
+        """The message for the client's thread, or nothing when the PM chose not to write."""
+        return self.cleaned_data["reply_text"].strip() if self.cleaned_data["reply"] else ""
+
+
+class JiraTaskForm(_ReplyToClient):
+    """Create Jira task, New task (PRD: "Create task"; mockup: Create Jira task). The project
+    is the client's own and is not chosen here."""
+
+    issue_type = forms.ChoiceField()
+    summary = forms.CharField(max_length=255, error_messages={"required": "Name the task."})
+    description = forms.CharField(widget=forms.Textarea, required=False)
 
     def __init__(self, *args: Any, request: Request, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -356,10 +372,18 @@ class JiraTaskForm(forms.Form):
         super().clean()
         if self.tracker_error:
             raise ValidationError(self.tracker_error)
-        if self.cleaned_data.get("reply") and not self.cleaned_data.get("reply_text", "").strip():
-            self.add_error("reply_text", "Write the reply, or untick “Reply to the client”.")
         return self.cleaned_data
 
-    def message_for_client(self) -> str:
-        """The message for the client's thread, or nothing when the PM chose not to write."""
-        return self.cleaned_data["reply_text"].strip() if self.cleaned_data["reply"] else ""
+
+class LinkJiraTaskForm(_ReplyToClient):
+    """Create Jira task, Existing task: a task picked from the list or a key typed in."""
+
+    key = forms.CharField(
+        max_length=32, error_messages={"required": "Pick a task, or type its key."}
+    )
+
+    def clean_key(self) -> str:
+        key: str = self.cleaned_data["key"].strip().upper()
+        if not ISSUE_KEY.fullmatch(key):
+            raise ValidationError("A Jira key looks like FI-2214.")
+        return key
