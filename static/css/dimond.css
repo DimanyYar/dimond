@@ -5546,3 +5546,9 @@ a.person-name:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* The chosen way of a file is filled black, as in mockup 5.1. */
+.segmented-choice label:has(input:checked) {
+  background: var(--ink);
+  color: var(--surface);
+}
