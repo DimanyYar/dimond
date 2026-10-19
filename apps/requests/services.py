@@ -9,6 +9,7 @@ from django.utils import timezone
 from apps.accounts.models import Role, User
 from apps.files.services import attach_files, removable_files, remove_files
 from apps.files.uploads import CheckedFile
+from apps.tracker.connection import current_tracker
 
 from .models import (
     REQUEST_FIELDS,
@@ -28,6 +29,7 @@ from .selectors import (
     can_ask_for_input,
     can_ask_to_withdraw,
     can_bring_back,
+    can_create_jira_task,
     can_create_requests,
     can_decide_withdrawal,
     can_decline,
@@ -278,6 +280,32 @@ def move_to_later(pm: User, request: Request) -> Request:
         raise NotAllowedError
     _mark_handled_so_far(request)
     return _set_status(request, ClientStatus.LATER, pm)
+
+
+@transaction.atomic
+def create_jira_task(
+    pm: User, request: Request, *, issue_type: str, summary: str, description: str, reply: str
+) -> Request:
+    """Creates the task in the client's Jira project and plans the request (PRD: Jira sync,
+    "Create task"). The thread gets "Planned · FI-2301" and, if written, the PM's reply.
+
+    The row stays locked while Jira answers, so a double click waits and then finds the task
+    already made instead of creating a second one. Tracker problems (TrackerError) leave the
+    request as it was.
+    """
+    request = Request.objects.select_for_update().select_related("company").get(pk=request.pk)
+    if not can_create_jira_task(pm, request):
+        raise NotAllowedError
+    task = current_tracker().create_issue(
+        request.company.jira_project, issue_type, summary, description, ["dimond"]
+    )
+    request.jira_key, request.jira_url = task.key, task.url
+    request.save(update_fields=["jira_key", "jira_url", "updated_at"])
+    _set_status(request, ClientStatus.PLANNED, pm)
+    if reply:
+        Message.objects.create(request=request, author=pm, text=reply)
+    _mark_handled_so_far(request)
+    return request
 
 
 @transaction.atomic

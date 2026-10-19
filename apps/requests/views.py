@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.models import User
+from apps.tracker.base import TrackerError, TrackerUnreachable
 
 from . import selectors, services
 from .forms import (
@@ -15,6 +16,7 @@ from .forms import (
     WHEN_NEEDED_COPY,
     DeclineForm,
     EditRequestForm,
+    JiraTaskForm,
     MessageForm,
     MyRequestsFilter,
     NewRequestForm,
@@ -149,6 +151,7 @@ def _render_card(
     form: MessageForm | None = None,
     withdraw_form: WithdrawForm | None = None,
     decline_form: DeclineForm | None = None,
+    jira_form: JiraTaskForm | None = None,
     status: int = 200,
 ) -> HttpResponse:
     """The card with whichever of its forms was just sent, errors and all."""
@@ -159,6 +162,7 @@ def _render_card(
         "reattach": bool(form and form.errors and request.FILES),
         "withdraw_form": withdraw_form or WithdrawForm(reason_required=page.can_ask_to_withdraw),
         "decline_form": decline_form or DeclineForm(),
+        "jira_form": jira_form,
         # Picks the client's or the PM's navigation and words.
         "is_client": selectors.is_client(page.viewer),
     }
@@ -290,6 +294,44 @@ def request_decline(request: HttpRequest, pk: int) -> HttpResponse:
     except services.NotAllowedError:
         raise PermissionDenied from None
     return redirect(page.request.get_absolute_url())
+
+
+@require_http_methods(["GET", "POST"])
+@login_required
+def request_jira_task(request: HttpRequest, pk: int) -> HttpResponse:
+    """The Create Jira task window over the card; sending it creates the task and plans the
+    request. A Jira refusal comes back in the window with the PM's text kept."""
+    page = _card_page(request, pk)
+    if not page.can_create_jira_task:
+        raise PermissionDenied
+    form = JiraTaskForm(request.POST or None, request=page.request)
+    if not form.is_valid():
+        return _render_card(request, page, jira_form=form, status=422 if form.is_bound else 200)
+    data = form.cleaned_data
+    try:
+        planned = services.create_jira_task(
+            page.viewer,
+            page.request,
+            issue_type=data["issue_type"],
+            summary=data["summary"],
+            description=data["description"],
+            reply=form.message_for_client(),
+        )
+    except services.NotAllowedError:
+        raise PermissionDenied from None
+    except TrackerUnreachable as error:
+        # The connection broke, maybe after Jira made the task: a blind retry could make two.
+        form.add_error(
+            None,
+            f"{error} Jira may still have created the task: search "
+            f"{page.request.company.jira_project} for {page.request.key} before trying again.",
+        )
+        return _render_card(request, page, jira_form=form, status=422)
+    except TrackerError as error:
+        form.add_error(None, str(error))
+        return _render_card(request, page, jira_form=form, status=422)
+    # The thread's new line "Planned · FI-2301" is the confirmation: the card shows no banners.
+    return redirect(planned.get_absolute_url())
 
 
 @require_http_methods(["GET", "POST"])

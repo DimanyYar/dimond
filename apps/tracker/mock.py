@@ -4,7 +4,10 @@ Tests, local development and the public demo use it, so it holds the same Atlas 
 mockups.
 """
 
-from .base import Account, Issue, IssueNotFound, Project, ProjectNotFound
+import time
+from itertools import count
+
+from .base import Account, Issue, IssueNotFound, Project, ProjectNotFound, TrackerRefused
 
 DEMO_ADDRESS = "https://jira.example.com"
 PROJECTS = [Project("FI", "Atlas"), Project("HF", "Harbor Foods"), Project("NW", "Northwind")]
@@ -33,6 +36,12 @@ ISSUES = [
     _issue("FI-2150", "Leads list: sort by date", "Done", "Story", done=True),
     _issue("NW-14", "Invoice PDF shows the wrong VAT", "To Do", "Bug"),
 ]
+
+
+# New demo tasks are not stored, but their keys are saved on requests, which must stay unique
+# across restarts: numbering starts from the second the process started, so a restart begins
+# above every key the previous run gave out.
+_new_numbers = count(int(time.time()) % 1_000_000 + 10_000)
 
 
 class MockTracker:
@@ -65,6 +74,14 @@ class MockTracker:
             if issue.key == key:
                 return issue
         raise IssueNotFound(key)
+
+    def create_issue(
+        self, project_key: str, issue_type: str, summary: str, description: str, labels: list[str]
+    ) -> Issue:
+        self._check_project(project_key)
+        if issue_type not in ISSUE_TYPES:
+            raise TrackerRefused(f"The demo tracker has no issue type {issue_type!r}.")
+        return _issue(f"{project_key}-{next(_new_numbers)}", summary, "To Do", issue_type)
 
     def _check_project(self, key: str) -> None:
         if key not in {project.key for project in PROJECTS}:

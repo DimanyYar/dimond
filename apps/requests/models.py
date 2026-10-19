@@ -119,6 +119,10 @@ class Request(models.Model):
     status = models.CharField(
         max_length=20, choices=ClientStatus.choices, default=ClientStatus.RECEIVED
     )
+    jira_key = models.CharField(
+        max_length=32, blank=True, help_text="The Jira task made from this request, e.g. FI-2301."
+    )
+    jira_url = models.URLField(max_length=500, blank=True)
     pm_handled_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -130,6 +134,13 @@ class Request(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            # One task, one request (PRD: Existing task): a second click or a second PM cannot
+            # tie the same task to another request.
+            models.UniqueConstraint(
+                fields=["jira_key"], condition=~models.Q(jira_key=""), name="one_request_per_task"
+            )
+        ]
 
     def __str__(self) -> str:
         return self.title

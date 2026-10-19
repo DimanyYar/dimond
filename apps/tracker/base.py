@@ -56,6 +56,10 @@ class TrackerForbidden(TrackerError):
     pass
 
 
+class TrackerRefused(TrackerError):
+    """The tracker read the request and said no, e.g. a field the project requires."""
+
+
 class ProjectNotFound(TrackerError):
     def __init__(self, key: str) -> None:
         super().__init__(f"There is no project {key}, or the tracker account cannot see it.")
@@ -82,3 +86,7 @@ class Tracker(Protocol):
         ...
 
     def issue(self, key: str) -> Issue: ...
+
+    def create_issue(
+        self, project_key: str, issue_type: str, summary: str, description: str, labels: list[str]
+    ) -> Issue: ...

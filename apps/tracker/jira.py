@@ -22,6 +22,7 @@ from .base import (
     TrackerError,
     TrackerForbidden,
     TrackerNotConfigured,
+    TrackerRefused,
     TrackerSignInFailed,
     TrackerUnreachable,
 )
@@ -32,6 +33,9 @@ ISSUE_FIELDS = "summary,status,issuetype,project"
 # Jira's text search treats these as operators and answers 400 to a stray one; a PM typing
 # "form - duplicates?" means the words, not the operators.
 TEXT_SEARCH_OPERATORS = re.compile(r"[^\w\s]")
+# Jira Software keeps an epic's required short name in a custom field whose number differs
+# from one Jira to another; its type is what identifies it.
+EPIC_NAME_TYPE = "com.pyxis.greenhopper.jira:gh-epic-label"
 
 
 class JiraTracker:
@@ -61,12 +65,12 @@ class JiraTracker:
         )
 
     def account(self) -> Account:
-        return self._get(
+        return self._call(
             "myself", lambda data: Account(login=data["name"], display_name=data["displayName"])
         )
 
     def projects(self) -> list[Project]:
-        return self._get(
+        return self._call(
             "project",
             lambda data: sorted(
                 (Project(key=item["key"], name=item["name"]) for item in data),
@@ -75,7 +79,7 @@ class JiraTracker:
         )
 
     def issue_types(self, project_key: str) -> list[str]:
-        return self._get(
+        return self._call(
             f"project/{self._checked_project(project_key)}",
             lambda data: [item["name"] for item in data["issueTypes"] if not item["subtask"]],
             missing=ProjectNotFound(project_key),
@@ -93,7 +97,7 @@ class JiraTracker:
         words = TEXT_SEARCH_OPERATORS.sub(" ", text).strip()
         if words:
             jql += f' AND summary ~ "{words}"'
-        return self._get(
+        return self._call(
             "search",
             lambda data: [self._issue(item) for item in data["issues"]],
             {
@@ -106,8 +110,50 @@ class JiraTracker:
     def issue(self, key: str) -> Issue:
         if not ISSUE_KEY.fullmatch(key):
             raise IssueNotFound(key)
-        return self._get(
+        return self._call(
             f"issue/{key}", self._issue, {"fields": ISSUE_FIELDS}, missing=IssueNotFound(key)
+        )
+
+    def create_issue(
+        self, project_key: str, issue_type: str, summary: str, description: str, labels: list[str]
+    ) -> Issue:
+        fields = {
+            "project": {"key": self._checked_project(project_key)},
+            "issuetype": {"name": issue_type},
+            "summary": summary,
+            "description": description,
+            "labels": labels,
+        }
+        if issue_type == "Epic":
+            # Jira refuses an epic without its name; the summary is the natural one.
+            fields |= {field: summary for field in self._epic_name_fields()}
+        key = self._call(
+            "issue",
+            lambda data: str(data["key"]),
+            body={"fields": fields},
+            missing=ProjectNotFound(project_key),
+        )
+        # Built from Jira's answer instead of read back: once the task exists, a failed second
+        # call must not report a failure and invite a second task. The status comes with the
+        # sync (#16).
+        return Issue(
+            key=key,
+            summary=summary,
+            status="",
+            issue_type=issue_type,
+            project_key=project_key,
+            done=False,
+            url=f"{self.address}/browse/{key}",
+        )
+
+    def _epic_name_fields(self) -> list[str]:
+        return self._call(
+            "field",
+            lambda data: [
+                item["id"]
+                for item in data
+                if item.get("schema", {}).get("custom") == EPIC_NAME_TYPE
+            ],
         )
 
     def _open_issue_by_key(self, project_key: str, key: str) -> list[Issue]:
@@ -135,18 +181,22 @@ class JiraTracker:
             url=f"{self.address}/browse/{data['key']}",
         )
 
-    def _get[T](
+    def _call[T](
         self,
         path: str,
         parse: Callable[[Any], T],
         params: dict[str, str | int] | None = None,
+        body: dict[str, Any] | None = None,
         missing: TrackerError | None = None,
     ) -> T:
         """Ask Jira and turn its answer into dimond's values with `parse`. Anything that is
         not the JSON Jira 8.13 sends (a proxy's login page, a changed field) becomes a
         readable TrackerUnreachable instead of a crash."""
         try:
-            response = self._client.get(path, params=params)
+            if body is None:
+                response = self._client.get(path, params=params)
+            else:
+                response = self._client.post(path, json=body)
         except httpx.TransportError as error:
             raise TrackerUnreachable(f"Jira at {self.address} did not answer: {error}") from error
         self._raise_for_answer(response, path, missing)
@@ -183,5 +233,17 @@ class JiraTracker:
             raise TrackerForbidden(f"{self.username!r} has no permission for this in Jira.")
         if response.status_code == 404 and missing is not None:
             raise missing
+        if response.status_code == 400:
+            raise TrackerRefused(f"Jira said no: {_jira_complaints(response)}")
         if response.is_error:
             raise TrackerUnreachable(f"Jira answered {response.status_code} to {path}.")
+
+
+def _jira_complaints(response: httpx.Response) -> str:
+    """Jira lists what it did not like as `errorMessages` and per-field `errors`."""
+    try:
+        data = response.json()
+        complaints = [*data.get("errorMessages", []), *data.get("errors", {}).values()]
+    except (ValueError, AttributeError):
+        complaints = []
+    return " ".join(str(c) for c in complaints) or f"it answered 400 to {response.url.path}."

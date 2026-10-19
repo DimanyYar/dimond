@@ -17,4 +17,5 @@ urlpatterns = [
     ),
     path("requests/<int:pk>/triage/", views.request_triage, name="request_triage"),
     path("requests/<int:pk>/decline/", views.request_decline, name="request_decline"),
+    path("requests/<int:pk>/jira/", views.request_jira_task, name="request_jira_task"),
 ]

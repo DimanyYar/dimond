@@ -1,0 +1,67 @@
+{% comment %}
+Create Jira task, New task (mockup 5.1 · Create Jira task, Oct 19): a window over the request
+card. The address /requests/<id>/jira/ opens it; Cancel, × and Esc go back to the card. The
+project is the client's own and only shown. No fix version and no emails here: the PM sets the
+version in Jira later, and the client reads the reply in the thread.
+{% endcomment %}
+{% load static %}
+<dialog class="dialog-backdrop" open data-modal data-close-url="{{ r.get_absolute_url }}" aria-labelledby="jira-task-title" id="jira-task">
+  <form class="dialog jira-task" method="post" action="{% url 'request_jira_task' r.pk %}">
+    {% csrf_token %}
+    <header class="dialog-head">
+      <div class="dialog-title">
+        <h2 id="jira-task-title">Create Jira task</h2>
+        <p class="muted">From {{ r.key }} · {{ r.company }} · {{ r.title }}</p>
+      </div>
+      <a class="icon-link" href="{{ r.get_absolute_url }}" aria-label="Close">×</a>
+    </header>
+
+    <div class="dialog-body">
+      {% if form.non_field_errors %}
+        <div class="banner banner-error" role="alert">{{ form.non_field_errors.0 }}</div>
+      {% endif %}
+      <p class="jira-task-project">Project <strong>{{ r.company.jira_project }} · {{ r.company }}</strong> <span class="hint">set on the client · tasks go only here</span></p>
+
+      <div class="dialog-grid jira-task-grid">
+        <div class="field">
+          <label for="jt-type">Issue type</label>
+          <select class="input" id="jt-type" name="issue_type" required>
+            {% for value, label in form.fields.issue_type.choices %}
+              <option value="{{ value }}"{% if form.issue_type.value == value %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="jt-summary">Summary</label>
+          <input class="input" id="jt-summary" name="summary" maxlength="255" required
+                 value="{{ form.summary.value|default_if_none:'' }}"
+                 {% if form.summary.errors %}aria-invalid="true" aria-describedby="jt-summary-error"{% endif %}>
+          {% if form.summary.errors %}<span class="error-text" id="jt-summary-error">{{ form.summary.errors.0 }}</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="jt-description">Description <span class="optional">prefilled from the request, edit freely</span></label>
+        <textarea class="input jira-markup" id="jt-description" name="description" rows="10">{{ form.description.value|default_if_none:'' }}</textarea>
+        <span class="hint">Label <strong>dimond</strong> is added. Set the fix version in Jira when you know it: the sync brings the date here.</span>
+      </div>
+
+      <section class="dialog-section" aria-labelledby="jt-reply-title">
+        <label class="choice-inline" id="jt-reply-title"><input type="checkbox" name="reply"{% if form.reply.value %} checked{% endif %}> Reply to the client</label>
+        <span class="hint" id="jt-reply-hint">Posts the message in {{ r.key }}: everyone at {{ r.company }} sees it. Nothing is posted to Jira.</span>
+        <label for="jt-reply" class="visually-hidden">Message to the client</label>
+        <textarea class="input" id="jt-reply" name="reply_text" rows="3" maxlength="5000"
+                  aria-describedby="jt-reply-hint{% if form.reply_text.errors %} jt-reply-error{% endif %}"
+                  {% if form.reply_text.errors %}aria-invalid="true"{% endif %}>{{ form.reply_text.value|default_if_none:'' }}</textarea>
+        {% if form.reply_text.errors %}<span class="error-text" id="jt-reply-error">{{ form.reply_text.errors.0 }}</span>{% endif %}
+      </section>
+    </div>
+
+    <footer class="dialog-foot">
+      <span class="hint">{{ r.company }} will see: <strong>Planned</strong> and the task key.</span>
+      <a class="btn" href="{{ r.get_absolute_url }}">Cancel</a>
+      <button class="btn btn-primary" type="submit">Create task</button>
+    </footer>
+  </form>
+</dialog>
+<script type="module" src="{% static 'js/dialog.js' %}"></script>
