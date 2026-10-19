@@ -38,6 +38,12 @@
   --error: #c41c1c;
   --error-soft: #fdecec;
 
+  /* Client statuses: solid fills for the live ones */
+  --status-planned: #5b4fe0;
+  --status-in-progress: #0f6cbd;
+  --status-ready: #ffc53d;
+  --status-done: #157a3e;
+
   /* Shape and rhythm: 8 px grid */
   --radius-s: 8px;
   --radius-m: 12px;
@@ -625,26 +631,59 @@ textarea.input {
   pointer-events: none;
 }
 
-/* Client statuses: one pill per status, colours from the UI kit. */
+/* Client statuses (decided 19 Oct 2026, take B5): live statuses get a solid colour, closed
+   ones stay quiet, orange means "your move". Each status also has its own icon, so it reads
+   without colour. White text sits only on dark fills; every pair passes WCAG AA. */
 .status {
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
   padding: 3px 10px;
   border-radius: var(--radius-pill);
   font-size: 12px;
   font-weight: 600;
+  line-height: 18px;
   white-space: nowrap;
 }
 
-.status-received { background: var(--surface); border: 1px solid var(--hairline); }
-.status-needs_input { background: #ffd9c4; }
-.status-planned { background: var(--surface-2); }
-.status-in_progress { background: #d9f4f8; }
-.status-ready_to_check { background: var(--accent-soft); border: 1px solid var(--accent); }
-.status-later { background: var(--canvas); border: 1px dashed #b9b4ac; }
-.status-done { background: var(--success-soft); color: var(--success-text); }
-.status-declined { background: var(--canvas); color: var(--muted); }
-.status-withdrawn { background: var(--canvas); color: var(--muted); border: 1px solid var(--hairline); }
+:is(.status-received, .status-needs_input, .status-planned, .status-in_progress,
+  .status-ready_to_check, .status-later, .status-done, .status-declined, .status-withdrawn)::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  vertical-align: -2px;
+  background: currentColor;
+  -webkit-mask: var(--status-icon) center / contain no-repeat;
+  mask: var(--status-icon) center / contain no-repeat;
+}
+
+.status-received::before { --status-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='4' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.status-needs_input::before { --status-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4.2 4.4a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.3' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='6' cy='9.6' r='.85'/%3E%3C/svg%3E"); }
+.status-planned::before { --status-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Crect x='1.8' y='2.6' width='8.4' height='7.6' rx='1.4' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M1.8 5.2h8.4M4.2 1.4v2M7.8 1.4v2' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.status-in_progress::before { --status-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4 2.6v6.8L9.4 6z'/%3E%3C/svg%3E"); }
+.status-ready_to_check::before { --status-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='5.2' cy='5.2' r='3.2' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M7.6 7.6 10.2 10.2' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.status-later::before { --status-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4.4 3v6M7.6 3v6' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.status-done::before { --status-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m2.6 6.3 2.3 2.3 4.6-5' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.status-declined::before { --status-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m3.4 3.4 5.2 5.2M8.6 3.4 3.4 8.6' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.status-withdrawn::before { --status-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 6h6' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+
+.status-received { background: var(--surface); box-shadow: inset 0 0 0 1px var(--hairline); }
+.status-needs_input { background: var(--accent); color: var(--ink); }
+.status-planned { background: var(--status-planned); color: #fff; }
+.status-in_progress { background: var(--status-in-progress); color: #fff; }
+.status-ready_to_check { background: var(--status-ready); color: var(--ink); }
+.status-later { border: 1px dashed #a39783; padding: 2px 9px; color: #5f5648; }
+.status-done { background: var(--status-done); color: #fff; }
+.status-declined { background: #f6dedd; color: #8a2a27; }
+.status-withdrawn {
+  background: #ebe9e6;
+  color: #66655f;
+  text-decoration: line-through;
+  text-decoration-color: rgb(102 101 95 / 60%);
+}
+
+/* A Jira workflow status ("Code review") is not one of ours: plain, no icon. */
+.status-jira { background: var(--surface-2); }
 
 .banner {
   display: flex;
@@ -1383,9 +1422,10 @@ kbd {
 }
 
 .board-column[data-column="needs-you"] { --column-color: var(--accent); }
-.board-column[data-column="in-progress"] { --column-color: var(--ink); }
-.board-column[data-column="ready-to-check"] { --column-color: var(--info); }
+.board-column[data-column="in-progress"] { --column-color: var(--status-in-progress); }
+.board-column[data-column="ready-to-check"] { --column-color: var(--status-ready); }
 .board-column[data-column="later"] { --column-color: var(--hairline-strong); }
+.board-column[data-column="done"] { --column-color: var(--status-done); }
 
 /* Relative so the title link can cover the whole card: it opens on a tap anywhere. */
 .request-card {
@@ -1906,9 +1946,10 @@ kbd {
 }
 
 .event-needs_input .dot { background: var(--accent); }
-.event-in_progress .dot { background: var(--ink); }
-.event-ready_to_check .dot { background: var(--info); }
-.event-done .dot { background: var(--success-text); }
+.event-planned .dot { background: var(--status-planned); }
+.event-in_progress .dot { background: var(--status-in-progress); }
+.event-ready_to_check .dot { background: var(--status-ready); }
+.event-done .dot { background: var(--status-done); }
 
 .composer {
   display: flex;
