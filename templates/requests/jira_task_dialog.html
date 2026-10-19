@@ -47,7 +47,7 @@ the client reads the reply in the thread.
         {% if form.request_files %}
           <section class="jira-attachments" aria-labelledby="jt-files-title">
             <h3 id="jt-files-title">Attachments to Jira</h3>
-            <p class="hint">Images and PDF go as files. Video and voice get a public link: it plays while the task is open.</p>
+            <p class="hint">Images, PDF and text files go as files. Video and voice get a public link: it plays while the request is open in dimond.</p>
             <ul class="jira-files">
               {% for file, choice in form.file_rows %}
                 <li class="jira-file">

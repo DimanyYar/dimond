@@ -308,10 +308,10 @@ def create_jira_task(
         raise NotAllowedError
     tracker = current_tracker()
     if share:
-        links = "\n".join(f"* [{file.name}|{public_link(file)}]" for file in share)
+        links = "\n".join(f"* [{_link_text(file.name)}|{public_link(file)}]" for file in share)
         description = (
             f"{description}\n\nh3. Video and voice\n{links}\n"
-            "_These links play without signing in while the task is open._"
+            "_These links play without signing in while the request is open in dimond._"
         )
     task = tracker.create_issue(
         request.company.jira_project, issue_type, summary, description, ["dimond"]
@@ -325,17 +325,22 @@ def create_jira_task(
 def _attach(tracker: Tracker, pm: User, request: Request, file: Attachment) -> None:
     """One file onto the new task. The task already exists, so a file Jira refuses (too big,
     say) becomes a note for the PM instead of undoing everything."""
-    with file.file.open("rb") as stored:
-        content = stored.read()
     try:
+        with file.file.open("rb") as stored:
+            content = stored.read()
         tracker.attach_file(request.jira_key, file.name, content, file.content_type)
-    except TrackerError as error:
+    except (TrackerError, OSError) as error:
         InternalNote.objects.create(
             request=request,
             author=pm,
             text=f"Couldn't attach {file.name} to {request.jira_key}: {error} "
             "Attach it in Jira by hand.",
         )
+
+
+def _link_text(name: str) -> str:
+    # "[", "]" and "|" are link syntax in Jira markup, and a client's file name may hold them.
+    return name.translate(str.maketrans("[]|", "()/"))
 
 
 class TaskNotLinkable(Exception):

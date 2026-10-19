@@ -288,7 +288,7 @@
                 <span class="hint">{{ file.uploaded_by }} · <time datetime="{{ file.created_at|date:'c' }}">{{ file.created_at|date:"M j, H:i" }}</time> · {{ file.size|filesizeformat }}</span>
                 {% if not is_client and file.public_state %}
                   <span class="hint public-link">
-                    {% if file.public_state == "open" %}<a href="{{ file.public_url }}" target="_blank" rel="noopener noreferrer">Public link</a> · plays while the task is open
+                    {% if file.public_state == "open" %}<a href="{{ file.public_url }}" target="_blank" rel="noopener noreferrer">Public link</a> · plays while the request is open
                     {% elif file.public_state == "shared" %}<a href="{{ file.public_url }}" target="_blank" rel="noopener noreferrer">Public link</a> · shared until {{ file.shared_until|date:"M j" }}
                     {% else %}Public link closed with the request
                       <form method="post" action="{% url 'share_file_again' file.id %}" class="inline-form">{% csrf_token %}<button class="link-button" type="submit">Share for 7 days</button></form>

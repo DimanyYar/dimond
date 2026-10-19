@@ -123,6 +123,39 @@ def test_a_file_jira_refuses_leaves_the_task_and_a_note_for_the_pm(
     assert "Attach it in Jira by hand." in note.text
 
 
+def test_a_file_name_cannot_break_the_link_in_jira(client, pm, request_with_files, monkeypatch):
+    tracker = RecordingTracker()
+    monkeypatch.setattr("apps.requests.services.current_tracker", lambda: tracker)
+    picture, video = files_of(request_with_files)
+    Attachment.objects.filter(pk=video.pk).update(name="x|https://other.site] [1].mp4")
+    client.force_login(pm)
+    client.post(
+        reverse("request_jira_task", args=[request_with_files.pk]),
+        {
+            "issue_type": "Bug",
+            "summary": "Duplicate leads",
+            f"file_{picture.id.hex}": "skip",
+            f"file_{video.id.hex}": "link",
+        },
+    )
+
+    video.refresh_from_db()
+    assert f"* [x/https://other.site) (1).mp4|{video.public_url}]" in tracker.descriptions[0]
+
+
+def test_a_stored_file_gone_missing_leaves_the_task_and_a_note(
+    client, pm, request_with_files, monkeypatch
+):
+    picture = files_of(request_with_files)[0]
+    picture.file.storage.delete(picture.file.name)
+
+    create(client, pm, request_with_files, RecordingTracker(), monkeypatch)
+
+    request_with_files.refresh_from_db()
+    assert request_with_files.status == ClientStatus.PLANNED
+    assert request_with_files.notes.get().text.startswith("Couldn't attach duplicates.png")
+
+
 @pytest.fixture
 def shared_video(client, pm, request_with_files, monkeypatch) -> Attachment:
     create(client, pm, request_with_files, RecordingTracker(), monkeypatch)

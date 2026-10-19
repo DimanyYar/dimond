@@ -5,6 +5,7 @@
   --canvas: #f5f1ec;
   --surface: #ffffff;
   --surface-2: #ebe7e1;
+  --surface-side: #fbfaf8;
   --panel: #111111;
   --panel-raised: #313130;
 
@@ -5452,7 +5453,7 @@ a.person-name:hover {
 
 .jira-side {
   border-left: 1px solid var(--hairline-soft);
-  background: #fbfaf8;
+  background: var(--surface-side);
 }
 
 .jira-side h3,
