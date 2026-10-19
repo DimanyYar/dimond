@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.requests",
     "apps.files",
+    "apps.tracker",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -100,6 +101,12 @@ MEDIA_ROOT = BASE_DIR / env("FILES_ROOT", "uploads")
 EMAIL_HOST = env("EMAIL_HOST", "localhost")
 EMAIL_PORT = int(env("EMAIL_PORT", "1025"))
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "Dimon <dimon@localhost>")
+
+# Jira access for every client project. Which tracker is used is switched in the admin
+# (TrackerSettings); only the address and the account live here, never in the database.
+TRACKER_JIRA_URL = env("TRACKER_JIRA_URL", "")
+TRACKER_JIRA_USERNAME = env("TRACKER_JIRA_USERNAME", "")
+TRACKER_JIRA_PASSWORD = env("TRACKER_JIRA_PASSWORD", "")
 
 LOGIN_URL = "sign_in"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 30

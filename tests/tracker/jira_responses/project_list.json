@@ -1,0 +1,4 @@
+[
+  {"expand": "description,lead,url,projectKeys", "self": "https://j.shakuro.com/rest/api/2/project/10700", "id": "10700", "key": "NW", "name": "Northwind", "projectTypeKey": "software"},
+  {"expand": "description,lead,url,projectKeys", "self": "https://j.shakuro.com/rest/api/2/project/10512", "id": "10512", "key": "FI", "name": "Atlas", "projectTypeKey": "software"}
+]

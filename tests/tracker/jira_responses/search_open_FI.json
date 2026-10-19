@@ -1,0 +1,12 @@
+{"expand": "schema,names", "startAt": 0, "maxResults": 20, "total": 2, "issues": [
+ {"expand": "operations", "id": "48211", "self": "https://j.shakuro.com/rest/api/2/issue/48211", "key": "FI-2231",
+  "fields": {"summary": "Web form: leads created twice on submit",
+   "issuetype": {"id": "1", "name": "Bug", "subtask": false},
+   "project": {"id": "10512", "key": "FI", "name": "Atlas"},
+   "status": {"id": "10000", "name": "To Do", "statusCategory": {"id": 2, "key": "new", "name": "To Do"}}}},
+ {"expand": "operations", "id": "48107", "self": "https://j.shakuro.com/rest/api/2/issue/48107", "key": "FI-2208",
+  "fields": {"summary": "Lead form: validate phone numbers",
+   "issuetype": {"id": "10001", "name": "Story", "subtask": false},
+   "project": {"id": "10512", "key": "FI", "name": "Atlas"},
+   "status": {"id": "3", "name": "In Progress", "statusCategory": {"id": 4, "key": "indeterminate", "name": "In Progress"}}}}
+]}

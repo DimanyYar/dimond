@@ -1,0 +1,5 @@
+{"expand": "renderedFields,names,schema", "id": "47512", "self": "https://j.shakuro.com/rest/api/2/issue/47512", "key": "FI-2150",
+ "fields": {"summary": "Leads list: sort by date",
+  "issuetype": {"id": "10001", "name": "Story", "subtask": false},
+  "project": {"id": "10512", "key": "FI", "name": "Atlas"},
+  "status": {"id": "10001", "name": "Done", "statusCategory": {"id": 3, "key": "done", "name": "Done"}}}}

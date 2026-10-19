@@ -1,0 +1,8 @@
+{"self": "https://j.shakuro.com/rest/api/2/project/10512", "id": "10512", "key": "FI", "name": "Atlas", "projectTypeKey": "software",
+ "issueTypes": [
+  {"id": "10001", "name": "Story", "subtask": false},
+  {"id": "1", "name": "Bug", "subtask": false},
+  {"id": "3", "name": "Task", "subtask": false},
+  {"id": "5", "name": "Sub-task", "subtask": true},
+  {"id": "10000", "name": "Epic", "subtask": false}
+ ]}

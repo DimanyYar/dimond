@@ -1,0 +1,5 @@
+{"expand": "renderedFields,names,schema", "id": "47890", "self": "https://j.shakuro.com/rest/api/2/issue/47890", "key": "FI-2190",
+ "fields": {"summary": "Lead card: show the source campaign",
+  "issuetype": {"id": "10001", "name": "Story", "subtask": false},
+  "project": {"id": "10512", "key": "FI", "name": "Atlas"},
+  "status": {"id": "10403", "name": "on Staging", "statusCategory": {"id": 4, "key": "indeterminate", "name": "In Progress"}}}}

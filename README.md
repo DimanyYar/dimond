@@ -47,6 +47,19 @@ docker compose exec web python manage.py createsuperuser
 Then open http://localhost:8000/admin-local/ (the address comes from `DJANGO_ADMIN_URL` in
 `.env`) and sign in with that email and password. This is the only account with a password.
 
+### Connect Jira (optional)
+
+Out of the box dimond uses built-in demo tasks. To work with a real Jira, fill in
+`TRACKER_JIRA_URL` (https only), `TRACKER_JIRA_USERNAME` and `TRACKER_JIRA_PASSWORD` in `.env`,
+restart, choose "Jira" in the admin under Tracker settings, and check the connection:
+
+```bash
+docker compose exec web python manage.py tracker_check --project FI
+```
+
+It only reads: who dimond signs in as, the projects it sees, a project's issue types and open
+tasks (ADR 0017).
+
 ## Run the checks
 
 The database must be running (`docker compose up db` in another terminal is enough).
