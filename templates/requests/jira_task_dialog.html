@@ -8,13 +8,7 @@ version in Jira later, and the client reads the reply in the thread.
 <dialog class="dialog-backdrop" open data-modal data-close-url="{{ r.get_absolute_url }}" aria-labelledby="jira-task-title" id="jira-task">
   <form class="dialog jira-task" method="post" action="{% url 'request_jira_task' r.pk %}" data-busy="Creating task…">
     {% csrf_token %}
-    <header class="dialog-head">
-      <div class="dialog-title">
-        <h2 id="jira-task-title">Create Jira task</h2>
-        <p class="muted">From {{ r.key }} · {{ r.company }} · {{ r.title }}</p>
-      </div>
-      <a class="icon-link" href="{{ r.get_absolute_url }}" aria-label="Close">×</a>
-    </header>
+    {% include "requests/jira_task_head.html" with mode="new" %}
 
     <div class="dialog-body">
       {% if form.non_field_errors %}

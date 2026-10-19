@@ -312,6 +312,7 @@
 </div>
 {% if page.viewable_files %}{% include "files/media_viewer.html" with files=page.viewable_files %}{% endif %}
 {% if jira_form %}{% include "requests/jira_task_dialog.html" with form=jira_form %}{% endif %}
+{% if link %}{% include "requests/jira_link_dialog.html" with form=link.form %}{% endif %}
 {% endwith %}
 {% if page.can_post %}<script type="module" src="{% static 'js/request-card.js' %}"></script>{% endif %}
 {% if page.first_new %}<script type="module" src="{% static 'js/new-line.js' %}"></script>{% endif %}

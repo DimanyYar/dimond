@@ -74,7 +74,7 @@
     <div class="filter-tools">
       <form class="search" method="get" role="search" data-live-search>
         <label class="visually-hidden" for="request-search">Search by title or DMN- key</label>
-        <input class="input" type="search" id="request-search" name="q" value="{{ query }}" placeholder="Title or DMN-…">
+        <input class="input" type="search" id="request-search" name="q" value="{{ query }}" placeholder="Title, DMN-… or Jira key">
         <input type="hidden" name="view" value="{{ view }}">
         {% if company %}<input type="hidden" name="company" value="{{ company }}">{% endif %}
       </form>

@@ -25,6 +25,8 @@ from django.utils import timezone
 
 from apps.accounts.models import Company, Role, User
 from apps.files.models import Attachment
+from apps.tracker.base import ISSUE_KEY, Issue
+from apps.tracker.connection import current_tracker
 from apps.tracker.models import TrackerSettings
 
 from .models import (
@@ -147,13 +149,16 @@ KEY_PATTERN = re.compile(r"^\s*dmn-?(\d+)\s*$", re.IGNORECASE)
 
 
 def search(user: User, query: str, company: int | None = None) -> QuerySet[Request]:
-    """Requests by their DMN- key or words from the title, whatever their age or status:
+    """Requests by their DMN- key, their Jira key (FI-2301) or words from the title, whatever
+    their age or status:
     someone searching for DMN-1031 wants it even if it closed months ago. The PM's client
     chip still applies, so results never mix clients while one is chosen."""
     requests = _of_company(user, company)
     key = KEY_PATTERN.match(query)
     if key:
         return requests.filter(pk=int(key.group(1)))
+    if ISSUE_KEY.fullmatch(query.strip().upper()):
+        return requests.filter(jira_key__iexact=query.strip())
     return requests.filter(title__icontains=query.strip())
 
 
@@ -565,6 +570,35 @@ def needs_jira_project(user: User, request: Request) -> bool:
         and request.status in JIRA_TASK_STATUSES
         and not request.company.jira_project
     )
+
+
+@dataclass(frozen=True)
+class TaskToLink:
+    issue: Issue
+    # The request the task already belongs to, or "": one task, one request (PRD: Existing
+    # task). A request this PM cannot see is named only as "another request".
+    linked_to: str
+
+
+def tasks_to_link(user: User, request: Request, text: str) -> list[TaskToLink]:
+    """Open tasks of the client's Jira project for Existing task, newest first, found by a key
+    or words from the title. Raises TrackerError when the tracker cannot answer."""
+    found = current_tracker().open_issues(request.company.jira_project, text)
+    taken = dict(
+        Request.objects.filter(jira_key__in=[task.key for task in found]).values_list(
+            "jira_key", "pk"
+        )
+    )
+    visible = set(requests_for(user).filter(pk__in=taken.values()).values_list("pk", flat=True))
+    return [
+        TaskToLink(
+            issue=task,
+            linked_to=""
+            if task.key not in taken
+            else (f"DMN-{taken[task.key]}" if taken[task.key] in visible else "another request"),
+        )
+        for task in found
+    ]
 
 
 def shows_jira_link(user: User) -> bool:
