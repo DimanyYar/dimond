@@ -49,7 +49,8 @@ words: what changed, why, and how to check it by hand.
 5. A new dependency needs an ADR: what it gives, why Django is not enough, what if it dies.
 6. Tests check behaviour named after the PRD
    (`test_client_cannot_open_other_company_request`), never that code exists.
-7. One PR does one thing. Drive-by refactors go into their own PR. Aim for under ~400 lines.
+7. One PR does one thing. Drive-by refactors go into their own PR. Keep it under ~800 changed
+   lines; a bigger feature is cut into steps.
 8. No dead code: no commented-out blocks, no `TODO: implement later`, no unused parameters.
 9. If you cannot explain a line to Dmitry in one sentence, it does not belong in the PR.
 
