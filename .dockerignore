@@ -1,0 +1,20 @@
+# Keeps secrets and private data out of the Docker image: everything not listed here is
+# copied by `COPY . .`. The local compose mounts the project folder over /app anyway, and
+# settings come from `env_file`, so nothing below is needed inside the image.
+
+# Secrets: Django key, database and Jira passwords
+.env
+.env.*
+!.env.example
+
+# Clients' attachments and their previews (FILES_ROOT)
+uploads/
+
+# Local tooling and build leftovers
+.git/
+.venv/
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+staticfiles/
