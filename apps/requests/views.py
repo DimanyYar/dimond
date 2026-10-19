@@ -308,7 +308,7 @@ def request_jira_task(request: HttpRequest, pk: int) -> HttpResponse:
     if not page.can_create_jira_task:
         raise PermissionDenied
     if request.method == "GET" and request.GET.get("mode") == "existing":
-        return _render_card(request, page, link_form=LinkJiraTaskForm())
+        return _render_card(request, page, link_form=LinkJiraTaskForm(files=page.all_files))
     form = JiraTaskForm(request.POST or None, request=page.request, files=page.all_files)
     if not form.is_valid():
         return _render_card(request, page, jira_form=form, status=422 if form.is_bound else 200)
@@ -360,12 +360,19 @@ def request_link_jira_task(request: HttpRequest, pk: int) -> HttpResponse:
     page = _card_page(request, pk)
     if not page.can_create_jira_task:
         raise PermissionDenied
-    form = LinkJiraTaskForm(request.POST)
+    form = LinkJiraTaskForm(request.POST, files=page.all_files)
     if not form.is_valid():
         return _render_card(request, page, link_form=form, status=422)
     try:
+        comment = form.cleaned_data["comment"]
         services.link_jira_task(
-            page.viewer, page.request, form.cleaned_data["key"], form.message_for_client()
+            page.viewer,
+            page.request,
+            form.cleaned_data["key"],
+            form.message_for_client(),
+            comment=comment,
+            attach=form.files_to("file") if comment else [],
+            share=form.files_to("link") if comment else [],
         )
     except services.NotAllowedError:
         raise PermissionDenied from None

@@ -2,6 +2,7 @@ from collections.abc import Collection, Sequence
 from datetime import datetime
 from uuid import UUID
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Max
 from django.utils import timezone
@@ -10,7 +11,7 @@ from apps.accounts.models import Role, User
 from apps.files.models import Attachment
 from apps.files.services import attach_files, public_link, removable_files, remove_files
 from apps.files.uploads import CheckedFile
-from apps.tracker.base import Issue, Tracker, TrackerError
+from apps.tracker.base import Issue, Tracker, TrackerError, TrackerUnreachable
 from apps.tracker.connection import current_tracker
 
 from .models import (
@@ -322,9 +323,9 @@ def create_jira_task(
     return planned
 
 
-def _attach(tracker: Tracker, pm: User, request: Request, file: Attachment) -> None:
-    """One file onto the new task. The task already exists, so a file Jira refuses (too big,
-    say) becomes a note for the PM instead of undoing everything."""
+def _attach(tracker: Tracker, pm: User, request: Request, file: Attachment) -> bool:
+    """One file onto the task; True when it got there. The task already exists, so a file
+    Jira refuses (too big, say) becomes a note for the PM instead of undoing everything."""
     try:
         with file.file.open("rb") as stored:
             content = stored.read()
@@ -336,6 +337,8 @@ def _attach(tracker: Tracker, pm: User, request: Request, file: Attachment) -> N
             text=f"Couldn't attach {file.name} to {request.jira_key}: {error} "
             "Attach it in Jira by hand.",
         )
+        return False
+    return True
 
 
 def _link_text(name: str) -> str:
@@ -343,18 +346,49 @@ def _link_text(name: str) -> str:
     return name.translate(str.maketrans("[]|", "()/"))
 
 
+def _attachment_markup(file: Attachment) -> str:
+    # Jira finds an attachment by its exact name, and a name holding markup characters
+    # cannot be written as a reference, so such a file is only named.
+    if set(file.name) & set("[]|!"):
+        return _link_text(file.name)
+    return f"!{file.name}|thumbnail!" if file.kind == "image" else f"[^{file.name}]"
+
+
 class TaskNotLinkable(Exception):
     """The task exists but cannot be tied to this request; the message says why."""
 
 
-@transaction.atomic
-def link_jira_task(pm: User, request: Request, key: str, reply: str) -> Request:
+def link_jira_task(
+    pm: User,
+    request: Request,
+    key: str,
+    reply: str,
+    *,
+    comment: bool = False,
+    attach: Sequence[Attachment] = (),
+    share: Sequence[Attachment] = (),
+) -> Request:
     """Existing task: ties a task already in the client's Jira project to the request and
-    plans it. Nothing is written to Jira (PRD: Existing task; ADR 0010).
+    plans it (PRD: Existing task). With `comment`, the task gets one comment pointing back to
+    the request, with the chosen files: pictures and PDFs uploaded, video and voice as public
+    links. The description is never touched (ADR 0010); without `comment` nothing reaches Jira.
 
     Raises IssueNotFound for a key Jira does not know and TaskNotLinkable for a task in
     another project, a finished one or one that belongs to another request.
     """
+    planned = _link_task(pm, request, key, reply)
+    # The link is saved first: a database rollback cannot take a file back out of Jira, so
+    # whatever goes wrong while writing to Jira becomes a note and the link stays.
+    if comment:
+        tracker = current_tracker()
+        links = [(file, public_link(file)) for file in share]
+        attached = [file for file in attach if _attach(tracker, pm, planned, file)]
+        _comment_with_files(tracker, pm, planned, attached, links)
+    return planned
+
+
+@transaction.atomic
+def _link_task(pm: User, request: Request, key: str, reply: str) -> Request:
     request = Request.objects.select_for_update().select_related("company").get(pk=request.pk)
     if not can_create_jira_task(pm, request):
         raise NotAllowedError
@@ -367,6 +401,39 @@ def link_jira_task(pm: User, request: Request, key: str, reply: str) -> Request:
     if Request.objects.filter(jira_key=task.key).exists():
         raise TaskNotLinkable(f"{task.key} already belongs to another request.")
     return _plan_with_task(pm, request, task, reply)
+
+
+def _comment_with_files(
+    tracker: Tracker,
+    pm: User,
+    request: Request,
+    attached: Sequence[Attachment],
+    links: Sequence[tuple[Attachment, str]],
+) -> None:
+    """One comment on the linked task, in Jira's markup: where the request lives, the
+    pictures shown inline, other uploaded files and the public links."""
+    lines = [
+        f"From dimond: [{request.key}|{settings.SITE_URL}{request.get_absolute_url()}] · "
+        f"{request.title} ({request.author}, {request.company})"
+    ]
+    lines += [_attachment_markup(file) for file in attached]
+    lines += [f"[{_link_text(file.name)}|{link}]" for file, link in links]
+    try:
+        tracker.add_comment(request.jira_key, "\n".join(lines))
+    except TrackerUnreachable as error:
+        # Jira may have saved the comment and lost only its answer.
+        InternalNote.objects.create(
+            request=request,
+            author=pm,
+            text=f"The comment may not have reached {request.jira_key}: {error} "
+            "Check the task in Jira before adding it by hand.",
+        )
+    except TrackerError as error:
+        InternalNote.objects.create(
+            request=request,
+            author=pm,
+            text=f"Couldn't add the comment to {request.jira_key}: {error}",
+        )
 
 
 def _plan_with_task(pm: User, request: Request, task: Issue, reply: str) -> Request:

@@ -282,3 +282,13 @@ def test_a_file_over_jiras_limit_is_explained():
 
     with pytest.raises(TrackerRefused, match="larger than its attachment limit"):
         jira.attach_file("FI-2190", "huge.png", b"x", "image/png")
+
+
+def test_a_comment_is_added_to_a_task():
+    seen: list[httpx.Request] = []
+    jira = jira_answering({"issue/FI-2190/comment": httpx.Response(201, json={"id": "1"})}, seen)
+
+    jira.add_comment("FI-2190", "From dimond: DMN-12")
+
+    assert seen[0].method == "POST"
+    assert json.loads(seen[0].content) == {"body": "From dimond: DMN-12"}

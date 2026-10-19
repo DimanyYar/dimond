@@ -44,25 +44,7 @@ the client reads the reply in the thread.
       </div>
 
       <div class="jira-side">
-        {% if form.request_files %}
-          <section class="jira-attachments" aria-labelledby="jt-files-title">
-            <h3 id="jt-files-title">Attachments to Jira</h3>
-            <p class="hint">Images, PDF and text files go as files. Video and voice get a public link: it plays while the request is open in dimond.</p>
-            <ul class="jira-files">
-              {% for file, choice in form.file_rows %}
-                <li class="jira-file">
-                  <span class="files-row-picture">{% include "files/file_tile.html" with beside_name=True %}</span>
-                  <span class="jira-file-text"><span title="{{ file.name }}">{{ file.name }}</span><span class="hint">{{ file.size|filesizeformat }}</span></span>
-                  <span class="segmented segmented-choice" role="radiogroup" aria-label="{{ file.name }}">
-                    {% for value, label in choice.field.choices %}
-                      <label><input type="radio" name="{{ choice.html_name }}" value="{{ value }}"{% if choice.value == value %} checked{% endif %}>{{ label }}</label>
-                    {% endfor %}
-                  </span>
-                </li>
-              {% endfor %}
-            </ul>
-          </section>
-        {% endif %}
+        {% include "requests/jira_files.html" %}
         {% include "requests/jira_reply_side.html" %}
       </div>
     </div>
