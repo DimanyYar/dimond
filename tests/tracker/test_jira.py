@@ -265,3 +265,20 @@ def test_an_epic_gets_its_required_epic_name_from_the_summary():
 
     created = next(r for r in seen if r.method == "POST")
     assert json.loads(created.content)["fields"]["customfield_10004"] == "Lead sources"
+
+
+def test_a_file_goes_onto_a_task_as_an_upload_jira_accepts():
+    seen: list[httpx.Request] = []
+    jira = jira_answering({"issue/FI-2190/attachments": httpx.Response(200, json=[])}, seen)
+
+    jira.attach_file("FI-2190", "duplicates.png", b"\x89PNG", "image/png")
+
+    assert seen[0].headers["X-Atlassian-Token"] == "no-check"
+    assert b'filename="duplicates.png"' in seen[0].content
+
+
+def test_a_file_over_jiras_limit_is_explained():
+    jira = jira_answering({"issue/FI-2190/attachments": httpx.Response(413)}, [])
+
+    with pytest.raises(TrackerRefused, match="larger than its attachment limit"):
+        jira.attach_file("FI-2190", "huge.png", b"x", "image/png")

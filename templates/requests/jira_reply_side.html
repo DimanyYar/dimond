@@ -1,0 +1,20 @@
+{% comment %}
+The right column's lower half in the Create Jira task window (mockup 5.1): the optional reply
+to the client and what the client will see. `link_form` is set in Existing task, where these
+fields sit outside the form element and join it by its id.
+{% endcomment %}
+<section class="jira-reply" aria-labelledby="jt-reply-title">
+  <label class="choice-inline jira-reply-title" id="jt-reply-title"><input type="checkbox" name="reply"{% if link_form %} form="{{ link_form }}"{% endif %}{% if form.reply.value %} checked{% endif %}> Reply to the client</label>
+  <span class="hint" id="jt-reply-hint">Posts the message in {{ r.key }}: everyone at {{ r.company }} sees it. Nothing is posted to Jira.</span>
+  <label for="jt-reply" class="visually-hidden">Message to the client</label>
+  <textarea class="input" id="jt-reply" name="reply_text" rows="4" maxlength="5000"{% if link_form %} form="{{ link_form }}"{% endif %}
+            aria-describedby="jt-reply-hint{% if form.reply_text.errors %} jt-reply-error{% endif %}"
+            {% if form.reply_text.errors %}aria-invalid="true"{% endif %}>{{ form.reply_text.value|default_if_none:'' }}</textarea>
+  {% if form.reply_text.errors %}<span class="error-text" id="jt-reply-error">{{ form.reply_text.errors.0 }}</span>{% endif %}
+  <p class="jira-sees">
+    {{ r.company }} will see:
+    <span class="status status-planned">Planned</span>
+    <strong>{{ key|default:"the task key" }}</strong>
+    <span>+ your message, if ticked</span>
+  </p>
+</section>

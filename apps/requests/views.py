@@ -309,7 +309,7 @@ def request_jira_task(request: HttpRequest, pk: int) -> HttpResponse:
         raise PermissionDenied
     if request.method == "GET" and request.GET.get("mode") == "existing":
         return _render_card(request, page, link_form=LinkJiraTaskForm())
-    form = JiraTaskForm(request.POST or None, request=page.request)
+    form = JiraTaskForm(request.POST or None, request=page.request, files=page.all_files)
     if not form.is_valid():
         return _render_card(request, page, jira_form=form, status=422 if form.is_bound else 200)
     data = form.cleaned_data
@@ -321,6 +321,8 @@ def request_jira_task(request: HttpRequest, pk: int) -> HttpResponse:
             summary=data["summary"],
             description=data["description"],
             reply=form.message_for_client(),
+            attach=form.files_to("file"),
+            share=form.files_to("link"),
         )
     except services.NotAllowedError:
         raise PermissionDenied from None

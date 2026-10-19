@@ -146,6 +146,16 @@ class JiraTracker:
             url=f"{self.address}/browse/{key}",
         )
 
+    def attach_file(self, key: str, name: str, content: bytes, content_type: str) -> None:
+        if not ISSUE_KEY.fullmatch(key):
+            raise IssueNotFound(key)
+        self._call(
+            f"issue/{key}/attachments",
+            lambda data: None,
+            upload=(name, content, content_type),
+            missing=IssueNotFound(key),
+        )
+
     def _epic_name_fields(self) -> list[str]:
         return self._call(
             "field",
@@ -187,16 +197,22 @@ class JiraTracker:
         parse: Callable[[Any], T],
         params: dict[str, str | int] | None = None,
         body: dict[str, Any] | None = None,
+        upload: tuple[str, bytes, str] | None = None,
         missing: TrackerError | None = None,
     ) -> T:
         """Ask Jira and turn its answer into dimond's values with `parse`. Anything that is
         not the JSON Jira 8.13 sends (a proxy's login page, a changed field) becomes a
         readable TrackerUnreachable instead of a crash."""
         try:
-            if body is None:
-                response = self._client.get(path, params=params)
-            else:
+            if upload is not None:
+                # Jira refuses uploads without this header, its guard against forged forms.
+                response = self._client.post(
+                    path, files={"file": upload}, headers={"X-Atlassian-Token": "no-check"}
+                )
+            elif body is not None:
                 response = self._client.post(path, json=body)
+            else:
+                response = self._client.get(path, params=params)
         except httpx.TransportError as error:
             raise TrackerUnreachable(f"Jira at {self.address} did not answer: {error}") from error
         self._raise_for_answer(response, path, missing)
@@ -210,6 +226,14 @@ class JiraTracker:
             raise TrackerUnreachable(
                 f"Jira at {self.address} answered {path} in an unexpected shape ({error!r})."
             ) from error
+
+    def _forbidden(self, response: httpx.Response) -> TrackerError:
+        if "CAPTCHA" in response.headers.get("X-Authentication-Denied-Reason", ""):
+            return TrackerSignInFailed(
+                f"Jira asks {self.username!r} for a captcha after wrong passwords. Sign in to "
+                "Jira in a browser once as this user, then try again."
+            )
+        return TrackerForbidden(f"{self.username!r} has no permission for this in Jira.")
 
     def _raise_for_answer(
         self, response: httpx.Response, path: str, missing: TrackerError | None
@@ -225,16 +249,13 @@ class JiraTracker:
                 "and TRACKER_JIRA_PASSWORD."
             )
         if response.status_code == 403:
-            if "CAPTCHA" in response.headers.get("X-Authentication-Denied-Reason", ""):
-                raise TrackerSignInFailed(
-                    f"Jira asks {self.username!r} for a captcha after wrong passwords. Sign in "
-                    "to Jira in a browser once as this user, then try again."
-                )
-            raise TrackerForbidden(f"{self.username!r} has no permission for this in Jira.")
+            raise self._forbidden(response)
         if response.status_code == 404 and missing is not None:
             raise missing
         if response.status_code == 400:
             raise TrackerRefused(f"Jira said no: {_jira_complaints(response)}")
+        if response.status_code == 413:
+            raise TrackerRefused("Jira said the file is larger than its attachment limit.")
         if response.is_error:
             raise TrackerUnreachable(f"Jira answered {response.status_code} to {path}.")
 

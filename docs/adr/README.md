@@ -19,3 +19,4 @@ Why the project is built the way it is. Read the record before changing what it 
 - [0015. Revoking access ends every session for good](0015-revoking-access-ends-every-session.md)
 - [0016. Signed-in devices are recorded at sign-in](0016-signed-in-devices.md)
 - [0017. httpx for tracker calls; the tracker is switched in the admin](0017-httpx-for-tracker-calls.md)
+- [0018. Public links for video and voice in Jira tasks](0018-public-links-for-media-in-jira.md)

@@ -1,58 +1,74 @@
 {% comment %}
-Create Jira task, New task (mockup 5.1 · Create Jira task, Oct 19): a window over the request
-card. The address /requests/<id>/jira/ opens it; Cancel, × and Esc go back to the card. The
-project is the client's own and only shown. No fix version and no emails here: the PM sets the
-version in Jira later, and the client reads the reply in the thread.
+Create Jira task, New task (mockup 5.1 · Create Jira task, Oct 19): a wide window over the
+request card, two columns as in the mockup. Left: the task itself; right, on the light panel:
+attachments to Jira, the reply to the client and what the client will see. On a phone the
+columns stack. No fix version and no emails here: the PM sets the version in Jira later, and
+the client reads the reply in the thread.
 {% endcomment %}
 {% load static %}
 <dialog class="dialog-backdrop" open data-modal data-close-url="{{ r.get_absolute_url }}" aria-labelledby="jira-task-title" id="jira-task">
-  <form class="dialog jira-task" method="post" action="{% url 'request_jira_task' r.pk %}" data-busy="Creating task…">
+  <form class="dialog dialog-wide jira-task" method="post" action="{% url 'request_jira_task' r.pk %}" data-busy="Creating task…">
     {% csrf_token %}
     {% include "requests/jira_task_head.html" with mode="new" %}
 
-    <div class="dialog-body">
-      {% if form.non_field_errors %}
-        <div class="banner banner-error" role="alert">{{ form.non_field_errors.0 }}</div>
-      {% endif %}
-      <p class="jira-task-project">Project <strong>{{ r.company.jira_project }} · {{ r.company }}</strong> <span class="hint">set on the client · tasks go only here</span></p>
+    <div class="dialog-body jira-columns">
+      <div class="jira-main">
+        {% if form.non_field_errors %}
+          <div class="banner banner-error" role="alert">{{ form.non_field_errors.0 }}</div>
+        {% endif %}
+        <p class="jira-task-project">Project <strong>{{ r.company.jira_project }} · {{ r.company }}</strong> <span class="hint">set on the client · tasks go only here</span></p>
 
-      <div class="dialog-grid jira-task-grid">
-        <div class="field">
-          <label for="jt-type">Issue type</label>
-          <select class="input" id="jt-type" name="issue_type" required>
-            {% for value, label in form.fields.issue_type.choices %}
-              <option value="{{ value }}"{% if form.issue_type.value == value %} selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
+        <div class="dialog-grid jira-task-grid">
+          <div class="field">
+            <label for="jt-type">Issue type</label>
+            <select class="input" id="jt-type" name="issue_type" required>
+              {% for value, label in form.fields.issue_type.choices %}
+                <option value="{{ value }}"{% if form.issue_type.value == value %} selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="jt-summary">Summary</label>
+            <input class="input" id="jt-summary" name="summary" maxlength="255" required
+                   value="{{ form.summary.value|default_if_none:'' }}"
+                   {% if form.summary.errors %}aria-invalid="true" aria-describedby="jt-summary-error"{% endif %}>
+            {% if form.summary.errors %}<span class="error-text" id="jt-summary-error">{{ form.summary.errors.0 }}</span>{% endif %}
+          </div>
         </div>
+
         <div class="field">
-          <label for="jt-summary">Summary</label>
-          <input class="input" id="jt-summary" name="summary" maxlength="255" required
-                 value="{{ form.summary.value|default_if_none:'' }}"
-                 {% if form.summary.errors %}aria-invalid="true" aria-describedby="jt-summary-error"{% endif %}>
-          {% if form.summary.errors %}<span class="error-text" id="jt-summary-error">{{ form.summary.errors.0 }}</span>{% endif %}
+          <label for="jt-description">Description <span class="optional">prefilled from the request, edit freely</span></label>
+          <textarea class="input jira-markup" id="jt-description" name="description" rows="12">{{ form.description.value|default_if_none:'' }}</textarea>
         </div>
+        <p class="jira-labels"><span>Label</span> <span class="chip-label">dimond</span> <span class="hint">· fix version: set it in Jira when you know it</span></p>
       </div>
 
-      <div class="field">
-        <label for="jt-description">Description <span class="optional">prefilled from the request, edit freely</span></label>
-        <textarea class="input jira-markup" id="jt-description" name="description" rows="10">{{ form.description.value|default_if_none:'' }}</textarea>
-        <span class="hint">Label <strong>dimond</strong> is added. Set the fix version in Jira when you know it: the sync brings the date here.</span>
+      <div class="jira-side">
+        {% if form.request_files %}
+          <section class="jira-attachments" aria-labelledby="jt-files-title">
+            <h3 id="jt-files-title">Attachments to Jira</h3>
+            <p class="hint">Images, PDF and text files go as files. Video and voice get a public link: it plays while the request is open in dimond.</p>
+            <ul class="jira-files">
+              {% for file, choice in form.file_rows %}
+                <li class="jira-file">
+                  <span class="files-row-picture">{% include "files/file_tile.html" with beside_name=True %}</span>
+                  <span class="jira-file-text"><span title="{{ file.name }}">{{ file.name }}</span><span class="hint">{{ file.size|filesizeformat }}</span></span>
+                  <span class="segmented segmented-choice" role="radiogroup" aria-label="{{ file.name }}">
+                    {% for value, label in choice.field.choices %}
+                      <label><input type="radio" name="{{ choice.html_name }}" value="{{ value }}"{% if choice.value == value %} checked{% endif %}>{{ label }}</label>
+                    {% endfor %}
+                  </span>
+                </li>
+              {% endfor %}
+            </ul>
+          </section>
+        {% endif %}
+        {% include "requests/jira_reply_side.html" %}
       </div>
-
-      <section class="dialog-section" aria-labelledby="jt-reply-title">
-        <label class="choice-inline" id="jt-reply-title"><input type="checkbox" name="reply"{% if form.reply.value %} checked{% endif %}> Reply to the client</label>
-        <span class="hint" id="jt-reply-hint">Posts the message in {{ r.key }}: everyone at {{ r.company }} sees it. Nothing is posted to Jira.</span>
-        <label for="jt-reply" class="visually-hidden">Message to the client</label>
-        <textarea class="input" id="jt-reply" name="reply_text" rows="3" maxlength="5000"
-                  aria-describedby="jt-reply-hint{% if form.reply_text.errors %} jt-reply-error{% endif %}"
-                  {% if form.reply_text.errors %}aria-invalid="true"{% endif %}>{{ form.reply_text.value|default_if_none:'' }}</textarea>
-        {% if form.reply_text.errors %}<span class="error-text" id="jt-reply-error">{{ form.reply_text.errors.0 }}</span>{% endif %}
-      </section>
     </div>
 
     <footer class="dialog-foot">
-      <span class="hint">{{ r.company }} will see: <strong>Planned</strong> and the task key.</span>
+      <span class="hint">Jira gives the key on creation; it shows on {{ r.key }} as “Planned · FI-…”.</span>
       <a class="btn" href="{{ r.get_absolute_url }}">Cancel</a>
       <button class="btn btn-primary" type="submit">Create task</button>
     </footer>

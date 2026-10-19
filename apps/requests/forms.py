@@ -352,8 +352,15 @@ class JiraTaskForm(_ReplyToClient):
     summary = forms.CharField(max_length=255, error_messages={"required": "Name the task."})
     description = forms.CharField(widget=forms.Textarea, required=False)
 
-    def __init__(self, *args: Any, request: Request, **kwargs: Any) -> None:
+    def __init__(
+        self, *args: Any, request: Request, files: Iterable[Attachment] = (), **kwargs: Any
+    ) -> None:
         super().__init__(*args, **kwargs)
+        self.request_files = list(files)
+        for file in self.request_files:
+            self.fields[f"file_{file.id.hex}"] = forms.ChoiceField(
+                choices=JIRA_FILE_CHOICES[_jira_way(file)], initial=_jira_way(file)
+            )
         self.tracker_error = ""
         try:
             types = current_tracker().issue_types(request.company.jira_project)
@@ -373,6 +380,28 @@ class JiraTaskForm(_ReplyToClient):
         if self.tracker_error:
             raise ValidationError(self.tracker_error)
         return self.cleaned_data
+
+    def file_rows(self) -> list[tuple[Attachment, forms.BoundField]]:
+        """Each file with its choice, for the window's list."""
+        return [(file, self[f"file_{file.id.hex}"]) for file in self.request_files]
+
+    def files_to(self, way: str) -> list[Attachment]:
+        """The files the PM sends to Jira this way: "file" uploads, "link" shares."""
+        return [
+            file for file in self.request_files if self.cleaned_data[f"file_{file.id.hex}"] == way
+        ]
+
+
+# What goes to Jira (PRD: attachments to Jira): pictures, PDFs and text as files; video and
+# voice stay in dimond and the task gets a public link that plays them.
+JIRA_FILE_CHOICES = {
+    "file": [("file", "Attach file"), ("skip", "Skip")],
+    "link": [("link", "Public link"), ("skip", "Skip")],
+}
+
+
+def _jira_way(file: Attachment) -> str:
+    return "link" if file.kind in ("video", "audio") else "file"
 
 
 class LinkJiraTaskForm(_ReplyToClient):
