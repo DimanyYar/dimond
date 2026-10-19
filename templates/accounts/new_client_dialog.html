@@ -51,6 +51,19 @@ People are optional; addresses outside the domain come back with "Create anyway"
           {% endfor %}
           <span class="hint">Marks the client in the list and in the chips on Requests</span>
         </fieldset>
+        <div class="field">
+          <label for="nc-jira">Jira project</label>
+          <select class="input" id="nc-jira" name="jira_project" required
+                  aria-describedby="nc-jira-hint{% if form.jira_project.errors or form.tracker_error %} nc-jira-error{% endif %}"
+                  {% if form.jira_project.errors %}aria-invalid="true"{% endif %}>
+            <option value="">Choose a project…</option>
+            {% for key, label in form.fields.jira_project.choices %}
+              <option value="{{ key }}"{% if form.jira_project.value == key %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <span class="hint" id="nc-jira-hint">Projects the tracker account can see. Create the project in Jira first; this client’s tasks go only there.</span>
+          {% if form.jira_project.errors %}<span class="error-text" id="nc-jira-error">{{ form.jira_project.errors.0 }}</span>{% elif form.tracker_error %}<span class="error-text" id="nc-jira-error">{{ form.tracker_error }}</span>{% endif %}
+        </div>
       </section>
 
       <section class="dialog-section" aria-labelledby="nc-people">
@@ -74,7 +87,6 @@ People are optional; addresses outside the domain come back with "Create anyway"
           <label class="choice-inline"><input type="radio" name="notify" value="own"{% if form.notify.value|default:"own" == "own" %} checked{% endif %}>Their own requests</label>
           <label class="choice-inline"><input type="radio" name="notify" value="company"{% if form.notify.value == "company" %} checked{% endif %}>Everything at the company</label>
         </fieldset>
-        <p class="hint">The Jira project comes later, with Jira tasks.</p>
       </section>
     </div>
 

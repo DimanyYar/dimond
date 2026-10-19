@@ -275,6 +275,7 @@ def new_client(request: HttpRequest) -> HttpResponse:
             name=data["name"],
             email_domain=data["email_domain"],
             color=data["color"],
+            jira_project=data["jira_project"],
             emails=data["emails"],
             notify=Notify(data["notify"]),
         )

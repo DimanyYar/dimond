@@ -1,9 +1,12 @@
 import re
-from typing import Any
+from typing import Any, cast
 
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
+
+from apps.tracker.base import TrackerError
+from apps.tracker.connection import current_tracker
 
 from . import selectors
 from .models import Company, Notify, User
@@ -128,14 +131,21 @@ DOMAIN = re.compile(rf"^{DOMAIN_LABEL}(?:\.{DOMAIN_LABEL})+$")
 
 
 class NewClientForm(forms.Form):
-    """The PM's New client window: a company and, optionally, its first invites (PRD: Clients
-    screen). The Jira project joins the window with Jira tasks (#15)."""
+    """The PM's New client window: a company, its Jira project and, optionally, its first
+    invites (PRD: Clients screen; tracker and settings)."""
 
     name = forms.CharField(
         max_length=120, error_messages={"required": "Name the client."}, strip=True
     )
     email_domain = forms.CharField(max_length=120, required=False)
     color = forms.ChoiceField(choices=CLIENT_COLORS)
+    jira_project = forms.ChoiceField(
+        error_messages={
+            "required": "Choose the client's Jira project.",
+            "invalid_choice": "This project is gone from Jira, or the tracker account cannot "
+            "see it any more.",
+        }
+    )
     emails = forms.CharField(widget=forms.Textarea, required=False)
     notify = forms.ChoiceField(
         choices=[(Notify.OWN, "Their own requests"), (Notify.COMPANY, "Everything at the company")],
@@ -148,6 +158,21 @@ class NewClientForm(forms.Form):
         self.owner = owner
         self.outside: list[str] = []
         self.fields["color"].initial = selectors.next_client_color(owner, CLIENT_COLORS)
+        # Asked again when the form is sent, so the chosen key is checked against Jira itself.
+        jira_project = cast(forms.ChoiceField, self.fields["jira_project"])
+        try:
+            projects = current_tracker().projects()
+            self.tracker_error = ""
+        except TrackerError as error:
+            projects = []
+            self.tracker_error = f"Couldn't load the projects: {error}"
+            jira_project.error_messages |= {
+                "required": self.tracker_error,
+                "invalid_choice": self.tracker_error,
+            }
+        jira_project.choices = [
+            (project.key, f"{project.key} · {project.name}") for project in projects
+        ]
 
     def clean_name(self) -> str:
         name: str = self.cleaned_data["name"]

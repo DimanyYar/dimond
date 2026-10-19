@@ -50,7 +50,7 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
           <span class="company-mark company-mark-large" style="background: {{ company.color }}; color: {{ company.text_on_color }}" aria-hidden="true">{{ company.name|first|upper }}</span>
           <div class="company-head-text">
             <h2 id="company-name">{{ company.name }}</h2>
-            <p class="muted">Client since {{ company.created_at|date:"M Y" }}{% if company.email_domain %} · {{ company.email_domain }}{% endif %}</p>
+            <p class="muted">Client since {{ company.created_at|date:"M Y" }}{% if company.email_domain %} · {{ company.email_domain }}{% endif %} · {% if company.jira_project %}Jira {{ company.jira_project }}{% else %}No Jira project yet{% endif %}</p>
           </div>
           <a class="btn" href="{% url 'my_requests' %}?company={{ company.pk }}">{% if company.open_requests %}Open requests · {{ company.open_requests }}{% else %}Requests{% endif %}</a>
           {% if not invite_form %}<a class="btn btn-dark" href="{% url 'client' company.pk %}?invite#invite">Invite people</a>{% endif %}

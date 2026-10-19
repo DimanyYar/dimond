@@ -327,12 +327,15 @@ def create_client(
     name: str,
     email_domain: str,
     color: str,
+    jira_project: str,
     emails: Iterable[str],
     notify: Notify,
 ) -> Company:
-    """A new client owned by this PM, with invites for the first people if any (PRD: Clients
-    screen). The Jira project comes with Jira tasks (#15)."""
-    company = Company(name=name, owner=pm, email_domain=email_domain, color=color)
+    """A new client owned by this PM, in its Jira project, with invites for the first people
+    if any (PRD: Clients screen; tracker and settings)."""
+    company = Company(
+        name=name, owner=pm, email_domain=email_domain, color=color, jira_project=jira_project
+    )
     company.full_clean()
     company.save()
     invite_people(pm, company, emails, notify)

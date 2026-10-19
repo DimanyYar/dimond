@@ -22,9 +22,9 @@ class PeopleInline(admin.TabularInline):
 
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
-    list_display = ["name", "owner", "email_domain", "created_at"]
+    list_display = ["name", "owner", "jira_project", "email_domain", "created_at"]
     list_filter = ["owner"]
-    search_fields = ["name", "email_domain"]
+    search_fields = ["name", "email_domain", "jira_project"]
     inlines = [PeopleInline]
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Company]:
