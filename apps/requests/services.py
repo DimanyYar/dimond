@@ -2,7 +2,7 @@ from collections.abc import Collection, Sequence
 from datetime import datetime
 from uuid import UUID
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Max
 from django.utils import timezone
 
@@ -333,7 +333,13 @@ def _plan_with_task(pm: User, request: Request, task: Issue, reply: str) -> Requ
     """The request now follows this task: its key on the card, "Planned · FI-2301" in the
     thread, the PM's reply if written, and it leaves the PM's Needs you."""
     request.jira_key, request.jira_url = task.key, task.url
-    request.save(update_fields=["jira_key", "jira_url", "updated_at"])
+    try:
+        # Two PMs linking the same task at the same moment both pass the check above; the
+        # unique key lets one through, and the other hears why instead of seeing an error page.
+        with transaction.atomic():
+            request.save(update_fields=["jira_key", "jira_url", "updated_at"])
+    except IntegrityError:
+        raise TaskNotLinkable(f"{task.key} already belongs to another request.") from None
     _set_status(request, ClientStatus.PLANNED, pm)
     if reply:
         Message.objects.create(request=request, author=pm, text=reply)

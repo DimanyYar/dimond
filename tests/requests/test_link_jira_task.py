@@ -131,3 +131,26 @@ def test_requests_are_found_by_their_jira_key(client, pm, anna):
     assert list(selectors.search(pm, "fi-2208")) == [request]
     assert list(selectors.search(anna, "FI-2208")) == [request]
     assert list(selectors.search(pm, "FI-2190")) == []
+
+
+def test_another_pm_never_gets_the_clients_tasks(anna):
+    other_pm = User.objects.create_user("olga@shakuro.com", name="Olga", role=Role.PM)
+
+    assert selectors.tasks_to_link(other_pm, make(anna), "") == []
+
+
+def test_two_pms_linking_one_task_at_once_hear_why(pm, anna, monkeypatch):
+    first, second = make(anna, "First"), make(anna, "Second")
+    services.link_jira_task(pm, first, "FI-2208", "")
+    # The second link passed its check before the first one was saved.
+    real_filter = Request.objects.filter
+    monkeypatch.setattr(
+        Request.objects,
+        "filter",
+        lambda *a, **kw: real_filter(pk=-1) if "jira_key" in kw else real_filter(*a, **kw),
+    )
+
+    with pytest.raises(services.TaskNotLinkable, match="already belongs to another request"):
+        services.link_jira_task(pm, second, "FI-2208", "")
+    second.refresh_from_db()
+    assert second.jira_key == ""

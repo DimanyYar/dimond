@@ -582,7 +582,12 @@ class TaskToLink:
 
 def tasks_to_link(user: User, request: Request, text: str) -> list[TaskToLink]:
     """Open tasks of the client's Jira project for Existing task, newest first, found by a key
-    or words from the title. Raises TrackerError when the tracker cannot answer."""
+    or words from the title. Raises TrackerError when the tracker cannot answer.
+
+    Anyone but the client's own PM, or a request that cannot take a task, gets nothing and
+    the tracker is not even asked."""
+    if not can_create_jira_task(user, request):
+        return []
     found = current_tracker().open_issues(request.company.jira_project, text)
     taken = dict(
         Request.objects.filter(jira_key__in=[task.key for task in found]).values_list(

@@ -332,7 +332,7 @@ def request_jira_task(request: HttpRequest, pk: int) -> HttpResponse:
             f"{page.request.company.jira_project} for {page.request.key} before trying again.",
         )
         return _render_card(request, page, jira_form=form, status=422)
-    except TrackerError as error:
+    except (services.TaskNotLinkable, TrackerError) as error:
         form.add_error(None, str(error))
         return _render_card(request, page, jira_form=form, status=422)
     # The thread's new line "Planned · FI-2301" is the confirmation: the card shows no banners.
