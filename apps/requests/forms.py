@@ -1,14 +1,17 @@
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from django import forms
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.files.forms import AttachmentsField
 from apps.files.models import Attachment
 from apps.files.uploads import CheckedFile, check_upload
+from apps.tracker.base import TrackerError
+from apps.tracker.connection import current_tracker
 
 from .models import FORM_TYPES, REQUEST_FIELDS, Request, RequestType, WhenNeeded
 from .selectors import Period, Show
@@ -296,3 +299,67 @@ class DeclineForm(forms.Form):
         widget=forms.Textarea,
         error_messages={"required": "Tell the client why: they read it in the thread."},
     )
+
+
+def jira_description(request: Request) -> str:
+    """The task description, in Jira's own markup, from the client's words. The PM edits it
+    freely before creating the task and rewrites it into a spec in Jira later; dimond never
+    syncs it back (ADR 0010)."""
+    sections = [request.description]
+    if request.why:
+        sections.append(f"h3. Why it matters\n{request.why}")
+    if request.steps:
+        sections.append(f"h3. Steps to reproduce\n{request.steps}")
+    if request.link:
+        sections.append(f"h3. Link\n{request.link}")
+    link = f"{settings.SITE_URL}{request.get_absolute_url()}"
+    voice = " · sent by voice, the recording is in dimond" if request.from_voice else ""
+    sections.append(
+        f"----\nRequested by {request.author} ({request.company}) · wants: "
+        f"{request.get_when_needed_display()}{voice} · dimond: [{request.key}|{link}]"
+    )
+    return "\n\n".join(section for section in sections if section)
+
+
+class JiraTaskForm(forms.Form):
+    """Create Jira task, New task (PRD: "Create task"; mockup: Create Jira task). The project
+    is the client's own and is not chosen here."""
+
+    issue_type = forms.ChoiceField()
+    summary = forms.CharField(max_length=255, error_messages={"required": "Name the task."})
+    description = forms.CharField(widget=forms.Textarea, required=False)
+    reply = forms.BooleanField(required=False, initial=True)
+    reply_text = forms.CharField(
+        max_length=5000,
+        widget=forms.Textarea,
+        required=False,
+        initial="Thanks — we’ve passed it to the team. You can follow its status right here.",
+    )
+
+    def __init__(self, *args: Any, request: Request, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.tracker_error = ""
+        try:
+            types = current_tracker().issue_types(request.company.jira_project)
+        except TrackerError as error:
+            types = []
+            self.tracker_error = f"Couldn't read the issue types: {error}"
+        issue_type = cast(forms.ChoiceField, self.fields["issue_type"])
+        issue_type.choices = [(name, name) for name in types]
+        # Jira has no Improvement type, so everything but a bug starts as a Story.
+        wanted = "Bug" if request.type == RequestType.BUG else "Story"
+        issue_type.initial = wanted if wanted in types else next(iter(types), "")
+        self.fields["summary"].initial = request.title
+        self.fields["description"].initial = jira_description(request)
+
+    def clean(self) -> dict[str, Any]:
+        super().clean()
+        if self.tracker_error:
+            raise ValidationError(self.tracker_error)
+        if self.cleaned_data.get("reply") and not self.cleaned_data.get("reply_text", "").strip():
+            self.add_error("reply_text", "Write the reply, or untick “Reply to the client”.")
+        return self.cleaned_data
+
+    def message_for_client(self) -> str:
+        """The message for the client's thread, or nothing when the PM chose not to write."""
+        return self.cleaned_data["reply_text"].strip() if self.cleaned_data["reply"] else ""

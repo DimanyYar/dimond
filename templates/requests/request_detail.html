@@ -180,9 +180,18 @@
         </ol>
       {% endif %}
     </section>
-    {% if page.can_edit or page.can_withdraw_now or page.can_ask_to_withdraw or page.withdrawal or page.can_move_to_later or page.can_bring_back or page.can_decline %}
+    {% if page.can_edit or page.can_withdraw_now or page.can_ask_to_withdraw or page.withdrawal or page.can_move_to_later or page.can_bring_back or page.can_decline or page.can_create_jira_task or page.needs_jira_project %}
       <section class="card actions-card" id="actions" aria-labelledby="actions-title">
         <h2 id="actions-title">Actions</h2>
+
+        {% if page.can_create_jira_task %}
+          <a class="btn btn-primary btn-action" href="{% url 'request_jira_task' r.pk %}#jira-task">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Create Jira task
+          </a>
+        {% elif page.needs_jira_project %}
+          <p class="hint">To create a Jira task, <a href="{% url 'client' r.company_id %}?jira#jira">choose {{ r.company }}’s Jira project</a> first.</p>
+        {% endif %}
 
         {% if page.can_edit %}
           <a class="btn btn-action" href="{% url 'request_edit' r.pk %}">
@@ -296,11 +305,13 @@
     <dl class="facts">
       <div><dt>{% if is_client %}You asked for{% else %}Client asked for{% endif %}</dt><dd>{{ r.get_when_needed_display }}</dd></div>
       <div><dt>Request ID</dt><dd>{{ r.key }}</dd></div>
+      {% if r.jira_key %}<div><dt>Jira task</dt><dd>{% if page.shows_jira_link %}<a href="{{ r.jira_url }}" target="_blank" rel="noopener noreferrer">{{ r.jira_key }} ↗</a>{% else %}{{ r.jira_key }}{% endif %}</dd></div>{% endif %}
       {% if r.link %}<div><dt>Link</dt><dd><a href="{{ r.link }}" target="_blank" rel="noopener noreferrer">{{ r.link }}</a></dd></div>{% endif %}
     </dl>
   </aside>
 </div>
 {% if page.viewable_files %}{% include "files/media_viewer.html" with files=page.viewable_files %}{% endif %}
+{% if jira_form %}{% include "requests/jira_task_dialog.html" with form=jira_form %}{% endif %}
 {% endwith %}
 {% if page.can_post %}<script type="module" src="{% static 'js/request-card.js' %}"></script>{% endif %}
 {% if page.first_new %}<script type="module" src="{% static 'js/new-line.js' %}"></script>{% endif %}

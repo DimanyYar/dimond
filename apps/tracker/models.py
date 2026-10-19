@@ -20,6 +20,11 @@ class TrackerSettings(models.Model):
         help_text="Where dimond reads and creates tasks. Jira needs TRACKER_JIRA_URL, "
         "TRACKER_JIRA_USERNAME and TRACKER_JIRA_PASSWORD in .env.",
     )
+    clients_see_jira_links = models.BooleanField(
+        default=False,
+        help_text="Clients always see the task key on their request. On: the key opens the task "
+        "in Jira (for clients who have access to our Jira). Off: just the key.",
+    )
 
     class Meta:
         verbose_name = verbose_name_plural = "tracker settings"

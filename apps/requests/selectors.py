@@ -25,6 +25,7 @@ from django.utils import timezone
 
 from apps.accounts.models import Company, Role, User
 from apps.files.models import Attachment
+from apps.tracker.models import TrackerSettings
 
 from .models import (
     ASK_TO_WITHDRAW_STATUSES,
@@ -541,6 +542,37 @@ def can_decline(user: User, request: Request) -> bool:
     return _is_owner_pm(user, request) and request.status not in CLOSED_STATUSES
 
 
+# A task is made from a request the PM has not planned yet; once planned, it already has one.
+JIRA_TASK_STATUSES = (ClientStatus.RECEIVED, ClientStatus.NEEDS_INPUT, ClientStatus.LATER)
+
+
+def can_create_jira_task(user: User, request: Request) -> bool:
+    """Create Jira task, in the client's own project (PRD: PM buttons; tracker and settings)."""
+    return (
+        _is_owner_pm(user, request)
+        and not request.jira_key
+        and request.status in JIRA_TASK_STATUSES
+        and bool(request.company.jira_project)
+    )
+
+
+def needs_jira_project(user: User, request: Request) -> bool:
+    """The task could be created if only the client had a Jira project: the card says where
+    to choose one instead of showing a button that cannot work."""
+    return (
+        _is_owner_pm(user, request)
+        and not request.jira_key
+        and request.status in JIRA_TASK_STATUSES
+        and not request.company.jira_project
+    )
+
+
+def shows_jira_link(user: User) -> bool:
+    """The PM always opens the task in Jira; a client only while the admin allows it, for
+    clients who have access to our Jira (PRD: tracker and settings)."""
+    return user.role == Role.PM or TrackerSettings.load().clients_see_jira_links
+
+
 def can_add_note(user: User, request: Request) -> bool:
     """Only the PM writes notes, in an open request, next to the reply box."""
     return _is_owner_pm(user, request) and request.status not in CLOSED_STATUSES
@@ -641,6 +673,8 @@ def _edits(request: Request) -> list[Edit]:
 
 def _event_entry(event: StatusEvent) -> ThreadEntry:
     text = STATUS_EVENT_TEXT[ClientStatus(event.to_status)]
+    if event.to_status == ClientStatus.PLANNED and event.request.jira_key:
+        text = f"{text} · {event.request.jira_key}"
     if event.to_status == ClientStatus.RECEIVED and event.from_status:
         text = "Back with Dimon"
     return ThreadEntry(at=event.created_at, event=text, status=event.to_status)
@@ -655,7 +689,7 @@ def _thread(request: Request, request_edits: list[Edit], viewer: User) -> list[T
             Prefetch("attachments", queryset=Attachment.objects.shown())
         )
     ]
-    events = [_event_entry(e) for e in request.status_events.all()]
+    events = [_event_entry(e) for e in request.status_events.select_related("request")]
     # An edit gets a line too, so the PM notices that the request they read has changed.
     edited = [ThreadEntry(at=e.at, event=f"{e.editor} edited the request") for e in request_edits]
     withdrawals = []
@@ -779,6 +813,9 @@ class RequestPage:
     can_bring_back: bool
     can_decline: bool
     can_add_note: bool
+    can_create_jira_task: bool
+    needs_jira_project: bool
+    shows_jira_link: bool
 
 
 def _new_messages(user: User, request: Request, entries: list[ThreadEntry]) -> list[Message]:
@@ -835,6 +872,9 @@ def request_page(user: User, pk: int) -> RequestPage:
         can_bring_back=can_bring_back(user, request),
         can_decline=can_decline(user, request),
         can_add_note=can_add_note(user, request),
+        can_create_jira_task=can_create_jira_task(user, request),
+        needs_jira_project=needs_jira_project(user, request),
+        shows_jira_link=shows_jira_link(user),
     )
 
 

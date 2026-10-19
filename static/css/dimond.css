@@ -5234,3 +5234,25 @@ a.person-name:hover {
   font-size: 14px;
   font-weight: 500;
 }
+
+/* Create Jira task (mockup 5.1): type next to summary, the description in Jira's markup. */
+.jira-task-project {
+  margin: 0;
+  font-size: 14px;
+}
+
+.jira-task-grid {
+  grid-template-columns: minmax(160px, 200px) minmax(0, 1fr);
+}
+
+.jira-markup {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+@media (max-width: 640px) {
+  .jira-task-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

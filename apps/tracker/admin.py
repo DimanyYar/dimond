@@ -11,7 +11,7 @@ from .models import TrackerKind, TrackerSettings
 class TrackerSettingsForm(forms.ModelForm):
     class Meta:
         model = TrackerSettings
-        fields = ["tracker"]
+        fields = ["tracker", "clients_see_jira_links"]
 
     def clean_tracker(self) -> str:
         tracker: str = self.cleaned_data["tracker"]

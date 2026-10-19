@@ -13,6 +13,7 @@ from apps.tracker.base import (
     ProjectNotFound,
     TrackerForbidden,
     TrackerNotConfigured,
+    TrackerRefused,
     TrackerSignInFailed,
     TrackerUnreachable,
 )
@@ -201,5 +202,43 @@ def test_a_rejected_search_is_not_mistaken_for_a_missing_project():
         [],
     )
 
-    with pytest.raises(TrackerUnreachable, match="answered 400 to search"):
+    with pytest.raises(TrackerRefused, match="Jira said no: Error in the JQL Query"):
         jira.open_issues("FI", "duplicates")
+
+
+def test_a_new_task_is_created_in_the_project_with_its_label_and_read_back():
+    seen: list[httpx.Request] = []
+    jira = jira_answering(
+        {
+            "issue": httpx.Response(201, json={"id": "47890", "key": "FI-2190"}),
+            "issue/FI-2190": saved("issue_FI-2190.json"),
+        },
+        seen,
+    )
+
+    created = jira.create_issue("FI", "Story", "Lead card: source", "h3. What happens", ["dimond"])
+
+    assert (created.key, created.status) == ("FI-2190", "on Staging")
+    sent = json.loads(seen[0].content)["fields"]
+    assert sent == {
+        "project": {"key": "FI"},
+        "issuetype": {"name": "Story"},
+        "summary": "Lead card: source",
+        "description": "h3. What happens",
+        "labels": ["dimond"],
+    }
+
+
+def test_jira_saying_no_to_a_new_task_explains_why():
+    jira = jira_answering(
+        {
+            "issue": httpx.Response(
+                400,
+                json={"errorMessages": [], "errors": {"components": "Component/s is required."}},
+            )
+        },
+        [],
+    )
+
+    with pytest.raises(TrackerRefused, match="Jira said no: Component/s is required."):
+        jira.create_issue("FI", "Bug", "Duplicate leads", "", ["dimond"])
