@@ -29,6 +29,8 @@ from .base import (
 
 TIMEOUT_SECONDS = 15
 OPEN_ISSUES_LIMIT = 20
+# Jira 8.13 gives at most 50 tasks per search page unless its admin raised the limit.
+LINKED_BATCH = 50
 ISSUE_FIELDS = "summary,status,issuetype,project"
 # Jira's text search treats these as operators and answers 400 to a stray one; a PM typing
 # "form - duplicates?" means the words, not the operators.
@@ -113,6 +115,25 @@ class JiraTracker:
         return self._call(
             f"issue/{key}", self._issue, {"fields": ISSUE_FIELDS}, missing=IssueNotFound(key)
         )
+
+    def issues(self, keys: list[str]) -> list[Issue]:
+        checked = [key for key in keys if ISSUE_KEY.fullmatch(key)]
+        found: list[Issue] = []
+        for start in range(0, len(checked), LINKED_BATCH):
+            batch = checked[start : start + LINKED_BATCH]
+            found += self._call(
+                "search",
+                lambda data: [self._issue(item) for item in data["issues"]],
+                {
+                    "jql": f"key in ({','.join(batch)})",
+                    "fields": ISSUE_FIELDS,
+                    "maxResults": LINKED_BATCH,
+                    # With validation on, one deleted task's key makes Jira refuse the whole
+                    # search; without it Jira just leaves that task out.
+                    "validateQuery": "false",
+                },
+            )
+        return found
 
     def create_issue(
         self, project_key: str, issue_type: str, summary: str, description: str, labels: list[str]

@@ -292,3 +292,51 @@ def test_a_comment_is_added_to_a_task():
 
     assert seen[0].method == "POST"
     assert json.loads(seen[0].content) == {"body": "From dimond: DMN-12"}
+
+
+def test_linked_tasks_are_read_with_their_current_status():
+    seen: list[httpx.Request] = []
+    jira = jira_answering({"search": saved("search_linked.json")}, seen)
+
+    issues = jira.issues(["FI-2214", "FI-2150"])
+
+    assert [(i.key, i.status, i.done) for i in issues] == [
+        ("FI-2214", "Code review", False),
+        ("FI-2150", "Done", True),
+    ]
+    assert seen[0].url.params["jql"] == "key in (FI-2214,FI-2150)"
+
+
+def test_a_deleted_task_is_left_out_instead_of_failing_the_whole_search():
+    seen: list[httpx.Request] = []
+    jira = jira_answering({"search": saved("search_linked.json")}, seen)
+
+    issues = jira.issues(["FI-2214", "FI-2207", "FI-2150"])
+
+    assert "FI-2207" not in [i.key for i in issues]
+    assert seen[0].url.params["validateQuery"] == "false"
+
+
+def test_many_linked_tasks_are_read_fifty_per_search():
+    seen: list[httpx.Request] = []
+    jira = jira_answering({"search": saved("search_linked.json")}, seen)
+
+    jira.issues([f"FI-{n}" for n in range(1, 121)])
+
+    assert [len(r.url.params["jql"].split(",")) for r in seen] == [50, 50, 20]
+
+
+def test_a_malformed_key_never_goes_into_the_search():
+    seen: list[httpx.Request] = []
+    jira = jira_answering({"search": saved("search_linked.json")}, seen)
+
+    jira.issues(["FI-2214", "FI-1) OR (project = HR"])
+
+    assert seen[0].url.params["jql"] == "key in (FI-2214)"
+
+
+def test_no_linked_tasks_asks_jira_nothing():
+    seen: list[httpx.Request] = []
+
+    assert jira_answering({}, seen).issues([]) == []
+    assert seen == []
