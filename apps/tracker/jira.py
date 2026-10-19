@@ -33,6 +33,9 @@ ISSUE_FIELDS = "summary,status,issuetype,project"
 # Jira's text search treats these as operators and answers 400 to a stray one; a PM typing
 # "form - duplicates?" means the words, not the operators.
 TEXT_SEARCH_OPERATORS = re.compile(r"[^\w\s]")
+# Jira Software keeps an epic's required short name in a custom field whose number differs
+# from one Jira to another; its type is what identifies it.
+EPIC_NAME_TYPE = "com.pyxis.greenhopper.jira:gh-epic-label"
 
 
 class JiraTracker:
@@ -121,6 +124,9 @@ class JiraTracker:
             "description": description,
             "labels": labels,
         }
+        if issue_type == "Epic":
+            # Jira refuses an epic without its name; the summary is the natural one.
+            fields |= {field: summary for field in self._epic_name_fields()}
         key = self._call(
             "issue",
             lambda data: str(data["key"]),
@@ -128,6 +134,16 @@ class JiraTracker:
             missing=ProjectNotFound(project_key),
         )
         return self.issue(key)
+
+    def _epic_name_fields(self) -> list[str]:
+        return self._call(
+            "field",
+            lambda data: [
+                item["id"]
+                for item in data
+                if item.get("schema", {}).get("custom") == EPIC_NAME_TYPE
+            ],
+        )
 
     def _open_issue_by_key(self, project_key: str, key: str) -> list[Issue]:
         try:

@@ -242,3 +242,30 @@ def test_jira_saying_no_to_a_new_task_explains_why():
 
     with pytest.raises(TrackerRefused, match="Jira said no: Component/s is required."):
         jira.create_issue("FI", "Bug", "Duplicate leads", "", ["dimond"])
+
+
+def test_an_epic_gets_its_required_epic_name_from_the_summary():
+    seen: list[httpx.Request] = []
+    jira = jira_answering(
+        {
+            "field": httpx.Response(
+                200,
+                json=[
+                    {"id": "summary", "name": "Summary", "schema": {"type": "string"}},
+                    {
+                        "id": "customfield_10004",
+                        "name": "Epic Name",
+                        "schema": {"custom": "com.pyxis.greenhopper.jira:gh-epic-label"},
+                    },
+                ],
+            ),
+            "issue": httpx.Response(201, json={"id": "47890", "key": "FI-2190"}),
+            "issue/FI-2190": saved("issue_FI-2190.json"),
+        },
+        seen,
+    )
+
+    jira.create_issue("FI", "Epic", "Lead sources", "", ["dimond"])
+
+    created = next(r for r in seen if r.method == "POST")
+    assert json.loads(created.content)["fields"]["customfield_10004"] == "Lead sources"
