@@ -6,7 +6,7 @@ People are optional; addresses outside the domain come back with "Create anyway"
 {% endcomment %}
 {% load static %}
 <dialog class="dialog-backdrop" open data-modal data-close-url="{% url 'clients' %}" aria-labelledby="new-client-title">
-  <form class="dialog new-client" method="post" action="{% url 'new_client' %}">
+  <form class="dialog new-client" method="post" action="{% url 'new_client' %}" data-busy="Creating…">
     {% csrf_token %}
     <header class="dialog-head">
       <div class="dialog-title">
@@ -91,3 +91,4 @@ People are optional; addresses outside the domain come back with "Create anyway"
 </dialog>
 <script type="module" src="{% static 'js/dialog.js' %}"></script>
 <script type="module" src="{% static 'js/filter-select.js' %}"></script>
+<script type="module" src="{% static 'js/busy-button.js' %}"></script>
