@@ -6,7 +6,7 @@ version in Jira later, and the client reads the reply in the thread.
 {% endcomment %}
 {% load static %}
 <dialog class="dialog-backdrop" open data-modal data-close-url="{{ r.get_absolute_url }}" aria-labelledby="jira-task-title" id="jira-task">
-  <form class="dialog jira-task" method="post" action="{% url 'request_jira_task' r.pk %}">
+  <form class="dialog jira-task" method="post" action="{% url 'request_jira_task' r.pk %}" data-busy="Creating task…">
     {% csrf_token %}
     <header class="dialog-head">
       <div class="dialog-title">
@@ -65,3 +65,4 @@ version in Jira later, and the client reads the reply in the thread.
   </form>
 </dialog>
 <script type="module" src="{% static 'js/dialog.js' %}"></script>
+<script type="module" src="{% static 'js/busy-button.js' %}"></script>
