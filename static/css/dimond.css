@@ -5280,16 +5280,11 @@ a.person-name:hover {
   }
 }
 
-/* Existing task (mockup 5.1): the search stays on top, the list of tasks scrolls. */
-.dialog-contents {
-  display: contents;
-}
-
+/* Existing task (mockup 5.1): the search above the list of open tasks. */
 .jira-find {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: var(--space-4) var(--space-5) 0;
 }
 
 .jira-find label {
@@ -5410,7 +5405,6 @@ a.person-name:hover {
   flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 .segmented-choice {
@@ -5432,4 +5426,123 @@ a.person-name:hover {
   .jira-file {
     flex-wrap: wrap;
   }
+}
+
+
+/* Create Jira task as in mockup 5.1: a wide window, the task on the left, attachments and the
+   reply on a light panel on the right. On a phone the columns stack. */
+.dialog-wide {
+  width: min(1040px, 100%);
+}
+
+.jira-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 0;
+  padding: 0;
+}
+
+.jira-main,
+.jira-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 22px 28px;
+}
+
+.jira-side {
+  border-left: 1px solid var(--hairline-soft);
+  background: #fbfaf8;
+}
+
+.jira-side h3,
+.jira-reply-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.jira-attachments,
+.jira-reply,
+.jira-picked {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.jira-reply {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.jira-attachments + .jira-reply,
+.jira-picked + .jira-reply {
+  margin-top: 0;
+}
+
+.jira-file {
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.jira-labels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 13px;
+}
+
+.jira-labels > span:first-child {
+  font-weight: 500;
+}
+
+.chip-label {
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+
+.jira-sees {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.jira-sees strong {
+  color: var(--ink);
+}
+
+@media (max-width: 800px) {
+  .jira-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .jira-side {
+    border-top: 1px solid var(--hairline-soft);
+    border-left: 0;
+  }
+
+  .jira-main,
+  .jira-side {
+    padding: 20px var(--space-5);
+  }
+}
+
+/* A long file name ends in "…" rather than breaking mid-word; the full name is its title. */
+.jira-file-text > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

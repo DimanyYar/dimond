@@ -108,7 +108,7 @@ def test_one_task_belongs_to_one_request(client, pm, anna):
 
     page = existing_tab(client, pm, second).content.decode()
     assert f"linked to {first.key}" in page
-    assert 'value="FI-2208" disabled' in page
+    assert 'value="FI-2208" form="jira-link" disabled' in page
 
     response = link(client, pm, second, "FI-2208")
     assert "FI-2208 already belongs to another request." in response.content.decode()

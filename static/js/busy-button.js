@@ -2,7 +2,10 @@
 // seconds: the button gets the spinner's orbit and the words from data-busy, and a second
 // press does nothing. The form is sent the normal way, so it works without this script too.
 for (const form of document.querySelectorAll("form[data-busy]")) {
-  const button = form.querySelector('button[type="submit"]');
+  // The button may sit outside the form and join it by id, as in Existing task.
+  const button =
+    form.querySelector('button[type="submit"]') ??
+    document.querySelector(`button[type="submit"][form="${form.id}"]`);
   const label = button.textContent;
   let sending = false;
 
