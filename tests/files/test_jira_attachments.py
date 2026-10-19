@@ -12,8 +12,8 @@ from apps.accounts.models import Company, Role, User
 from apps.files.models import Attachment
 from apps.files.uploads import check_upload
 from apps.requests.models import ClientStatus, Request, RequestType, WhenNeeded
-from apps.requests.services import create_request
-from apps.tracker.base import Issue, TrackerRefused
+from apps.requests.services import create_request, link_jira_task
+from apps.tracker.base import Issue, TrackerRefused, TrackerUnreachable
 from apps.tracker.mock import MockTracker
 
 from .conftest import MP4, PNG, upload
@@ -218,14 +218,14 @@ def test_the_client_never_sees_the_public_link_on_the_card(client, anna, shared_
 
 
 class CommentingTracker(RecordingTracker):
-    def __init__(self, refuse_comment: bool = False) -> None:
+    def __init__(self, comment_fails_with: Exception | None = None) -> None:
         super().__init__()
-        self.refuse_comment = refuse_comment
+        self.comment_fails_with = comment_fails_with
         self.comments: list[tuple[str, str]] = []
 
     def add_comment(self, key: str, body: str) -> None:
-        if self.refuse_comment:
-            raise TrackerRefused("Jira said no: comments are off.")
+        if self.comment_fails_with:
+            raise self.comment_fails_with
         self.comments.append((key, body))
 
 
@@ -268,7 +268,8 @@ def test_unticked_comment_writes_nothing_to_jira(client, pm, request_with_files,
 
 
 def test_a_refused_comment_leaves_the_link_and_a_note(client, pm, request_with_files, monkeypatch):
-    link(client, pm, request_with_files, CommentingTracker(refuse_comment=True), monkeypatch)
+    refused = TrackerRefused("Jira said no: comments are off.")
+    link(client, pm, request_with_files, CommentingTracker(refused), monkeypatch)
 
     request_with_files.refresh_from_db()
     assert request_with_files.status == ClientStatus.PLANNED
@@ -307,3 +308,32 @@ def test_a_file_name_with_markup_is_only_named_in_the_comment(
     ((_, body),) = tracker.comments
     assert "shot/1).png" in body
     assert "!shot" not in body
+
+
+def test_a_comment_whose_answer_got_lost_asks_to_check_jira_first(
+    client, pm, request_with_files, monkeypatch
+):
+    lost = TrackerUnreachable("Jira did not answer in time.")
+
+    link(client, pm, request_with_files, CommentingTracker(lost), monkeypatch)
+
+    note = request_with_files.notes.get().text
+    assert note.startswith("The comment may not have reached FI-2208")
+    assert "Check the task in Jira before adding it by hand." in note
+
+
+def test_the_link_is_kept_whatever_happens_while_writing_to_jira(
+    pm, request_with_files, monkeypatch
+):
+    tracker = CommentingTracker(RuntimeError("the worker was stopped"))
+    monkeypatch.setattr("apps.requests.services.current_tracker", lambda: tracker)
+    picture = files_of(request_with_files)[0]
+
+    with pytest.raises(RuntimeError):
+        link_jira_task(pm, request_with_files, "FI-2208", "", comment=True, attach=[picture])
+
+    request_with_files.refresh_from_db()
+    assert (request_with_files.jira_key, request_with_files.status) == (
+        "FI-2208",
+        ClientStatus.PLANNED,
+    )
