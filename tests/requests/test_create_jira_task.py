@@ -7,7 +7,7 @@ from django.urls import reverse
 from apps.accounts.models import Company, Role, User
 from apps.requests import services
 from apps.requests.models import ClientStatus, Request, RequestType, WhenNeeded
-from apps.tracker.base import Issue, TrackerRefused
+from apps.tracker.base import Issue, TrackerRefused, TrackerUnreachable
 from apps.tracker.mock import MockTracker
 from apps.tracker.models import TrackerSettings
 
@@ -210,3 +210,24 @@ def test_client_sees_the_task_key_and_opens_it_only_when_allowed(client, pm, ann
 
     TrackerSettings.objects.update_or_create(pk=1, defaults={"clients_see_jira_links": True})
     assert f'href="{bug.jira_url}"' in client.get(bug.get_absolute_url()).content.decode()
+
+
+def test_a_broken_connection_warns_that_the_task_may_exist(client, pm, bug, monkeypatch):
+    class Silent(MockTracker):
+        def create_issue(self, *args: object) -> Issue:
+            raise TrackerUnreachable("Jira at https://j.shakuro.com did not answer: timed out")
+
+    monkeypatch.setattr("apps.requests.services.current_tracker", Silent)
+
+    page = create(client, pm, bug).content.decode()
+
+    assert f"Jira may still have created the task: search FI for {bug.key}" in page
+    bug.refresh_from_db()
+    assert bug.jira_key == ""
+
+
+def test_demo_keys_never_repeat_a_key_already_given():
+    first = MockTracker().create_issue("FI", "Bug", "One", "", ["dimond"])
+    second = MockTracker().create_issue("FI", "Bug", "Two", "", ["dimond"])
+
+    assert first.key != second.key

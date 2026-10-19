@@ -4,6 +4,7 @@ Tests, local development and the public demo use it, so it holds the same Atlas 
 mockups.
 """
 
+import time
 from itertools import count
 
 from .base import Account, Issue, IssueNotFound, Project, ProjectNotFound, TrackerRefused
@@ -37,8 +38,10 @@ ISSUES = [
 ]
 
 
-# New demo tasks get numbers after the built-in ones; they live as long as the process.
-_new_numbers = count(2301)
+# New demo tasks are not stored, but their keys are saved on requests, which must stay unique
+# across restarts: numbering starts from the second the process started, so a restart begins
+# above every key the previous run gave out.
+_new_numbers = count(int(time.time()) % 1_000_000 + 10_000)
 
 
 class MockTracker:

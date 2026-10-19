@@ -133,7 +133,18 @@ class JiraTracker:
             body={"fields": fields},
             missing=ProjectNotFound(project_key),
         )
-        return self.issue(key)
+        # Built from Jira's answer instead of read back: once the task exists, a failed second
+        # call must not report a failure and invite a second task. The status comes with the
+        # sync (#16).
+        return Issue(
+            key=key,
+            summary=summary,
+            status="",
+            issue_type=issue_type,
+            project_key=project_key,
+            done=False,
+            url=f"{self.address}/browse/{key}",
+        )
 
     def _epic_name_fields(self) -> list[str]:
         return self._call(

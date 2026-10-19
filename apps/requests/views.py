@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.models import User
-from apps.tracker.base import TrackerError
+from apps.tracker.base import TrackerError, TrackerUnreachable
 
 from . import selectors, services
 from .forms import (
@@ -319,6 +319,14 @@ def request_jira_task(request: HttpRequest, pk: int) -> HttpResponse:
         )
     except services.NotAllowedError:
         raise PermissionDenied from None
+    except TrackerUnreachable as error:
+        # The connection broke, maybe after Jira made the task: a blind retry could make two.
+        form.add_error(
+            None,
+            f"{error} Jira may still have created the task: search "
+            f"{page.request.company.jira_project} for {page.request.key} before trying again.",
+        )
+        return _render_card(request, page, jira_form=form, status=422)
     except TrackerError as error:
         form.add_error(None, str(error))
         return _render_card(request, page, jira_form=form, status=422)
