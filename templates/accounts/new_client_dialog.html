@@ -51,6 +51,7 @@ People are optional; addresses outside the domain come back with "Create anyway"
           {% endfor %}
           <span class="hint">Marks the client in the list and in the chips on Requests</span>
         </fieldset>
+        {% include "accounts/jira_project_select.html" with field=form.jira_project select_id="nc-jira" tracker_error=form.tracker_error %}
       </section>
 
       <section class="dialog-section" aria-labelledby="nc-people">
@@ -74,7 +75,6 @@ People are optional; addresses outside the domain come back with "Create anyway"
           <label class="choice-inline"><input type="radio" name="notify" value="own"{% if form.notify.value|default:"own" == "own" %} checked{% endif %}>Their own requests</label>
           <label class="choice-inline"><input type="radio" name="notify" value="company"{% if form.notify.value == "company" %} checked{% endif %}>Everything at the company</label>
         </fieldset>
-        <p class="hint">The Jira project comes later, with Jira tasks.</p>
       </section>
     </div>
 
@@ -90,3 +90,4 @@ People are optional; addresses outside the domain come back with "Create anyway"
   </form>
 </dialog>
 <script type="module" src="{% static 'js/dialog.js' %}"></script>
+<script type="module" src="{% static 'js/filter-select.js' %}"></script>

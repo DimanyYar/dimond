@@ -1,9 +1,12 @@
 import re
-from typing import Any
+from typing import Any, cast
 
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
+
+from apps.tracker.base import TrackerError
+from apps.tracker.connection import current_tracker
 
 from . import selectors
 from .models import Company, Notify, User
@@ -127,15 +130,60 @@ DOMAIN_LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
 DOMAIN = re.compile(rf"^{DOMAIN_LABEL}(?:\.{DOMAIN_LABEL})+$")
 
 
+JIRA_PROJECT_ERRORS = {
+    "required": "Choose the client's Jira project.",
+    "invalid_choice": "This project is gone from Jira, or the tracker account cannot see it "
+    "any more.",
+}
+
+
+def fill_jira_projects(field: forms.ChoiceField, keep: str = "") -> str:
+    """Puts the projects the tracker account sees into `field` and returns the tracker's
+    problem, if any, in plain words. The list is asked for again when a form is sent, so the
+    chosen key is checked against the tracker itself (PRD: tracker and settings).
+
+    `keep` is the client's current project: it stays on the list even if the tracker no
+    longer shows it, so saving a form without changing it never fails.
+    """
+    try:
+        projects = current_tracker().projects()
+        error = ""
+    except TrackerError as problem:
+        projects = []
+        error = f"Couldn't load the projects: {problem}"
+        field.error_messages |= {"required": error, "invalid_choice": error}
+    choices = [(project.key, f"{project.key} · {project.name}") for project in projects]
+    if keep and keep not in {key for key, _ in choices}:
+        choices.insert(0, (keep, f"{keep} · not visible to the tracker account now"))
+    field.choices = choices
+    return error
+
+
+class JiraProjectForm(forms.Form):
+    """The PM changes a client's Jira project on the Clients page. New tasks go there; tasks
+    created before keep their keys."""
+
+    jira_project = forms.ChoiceField(error_messages=JIRA_PROJECT_ERRORS)
+
+    def __init__(self, *args: Any, company: Company, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.company = company
+        self.tracker_error = fill_jira_projects(
+            cast(forms.ChoiceField, self.fields["jira_project"]), keep=company.jira_project
+        )
+        self.fields["jira_project"].initial = company.jira_project
+
+
 class NewClientForm(forms.Form):
-    """The PM's New client window: a company and, optionally, its first invites (PRD: Clients
-    screen). The Jira project joins the window with Jira tasks (#15)."""
+    """The PM's New client window: a company, its Jira project and, optionally, its first
+    invites (PRD: Clients screen; tracker and settings)."""
 
     name = forms.CharField(
         max_length=120, error_messages={"required": "Name the client."}, strip=True
     )
     email_domain = forms.CharField(max_length=120, required=False)
     color = forms.ChoiceField(choices=CLIENT_COLORS)
+    jira_project = forms.ChoiceField(error_messages=JIRA_PROJECT_ERRORS)
     emails = forms.CharField(widget=forms.Textarea, required=False)
     notify = forms.ChoiceField(
         choices=[(Notify.OWN, "Their own requests"), (Notify.COMPANY, "Everything at the company")],
@@ -148,6 +196,9 @@ class NewClientForm(forms.Form):
         self.owner = owner
         self.outside: list[str] = []
         self.fields["color"].initial = selectors.next_client_color(owner, CLIENT_COLORS)
+        self.tracker_error = fill_jira_projects(
+            cast(forms.ChoiceField, self.fields["jira_project"])
+        )
 
     def clean_name(self) -> str:
         name: str = self.cleaned_data["name"]

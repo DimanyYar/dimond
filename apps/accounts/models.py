@@ -2,9 +2,12 @@ from typing import Any, ClassVar
 
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
+
+from apps.tracker.base import PROJECT_KEY
 
 
 class Role(models.TextChoices):
@@ -34,6 +37,12 @@ class Company(models.Model):
         help_text="Invites to other domains ask the PM to confirm, e.g. atlas-crm.com",
     )
     color = models.CharField(max_length=7, default="#ff5600", help_text="Hex colour in the sidebar")
+    jira_project = models.CharField(
+        max_length=20,
+        blank=True,
+        validators=[RegexValidator(rf"^{PROJECT_KEY.pattern}$", "A Jira project key, like FI.")],
+        help_text="Key of the client's Jira project, e.g. FI. Their tasks are created only there.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

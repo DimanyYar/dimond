@@ -4,6 +4,7 @@ import pytest
 from django.urls import reverse
 
 from apps.accounts.models import Company, LinkKind, Role, SignInLink, User
+from apps.tracker.base import TrackerUnreachable
 
 pytestmark = pytest.mark.django_db
 
@@ -21,6 +22,7 @@ def create(client, **fields):
         "name": "Harbor Foods",
         "email_domain": "",
         "color": "#6e56cf",
+        "jira_project": "HF",
         "emails": "",
         "notify": "own",
     }
@@ -129,3 +131,102 @@ def test_empty_clients_page_leads_to_new_client(signed_in_pm):
     html = signed_in_pm.get(reverse("clients")).content.decode()
 
     assert URL in html
+
+
+def test_new_client_works_in_the_jira_project_the_pm_chose(signed_in_pm):
+    create(signed_in_pm, jira_project="HF")
+
+    assert Company.objects.get(name="Harbor Foods").jira_project == "HF"
+
+
+def test_the_window_offers_the_projects_the_tracker_account_sees(signed_in_pm):
+    page = signed_in_pm.get(URL).content.decode()
+
+    assert '<option value="FI">FI · Atlas</option>' in page
+    assert '<option value="HF">HF · Harbor Foods</option>' in page
+
+
+def test_a_client_needs_a_jira_project(signed_in_pm):
+    response = create(signed_in_pm, jira_project="")
+
+    assert "Choose the client&#x27;s Jira project." in response.content.decode()
+    assert not Company.objects.filter(name="Harbor Foods").exists()
+
+
+def test_a_project_the_tracker_does_not_know_is_refused(signed_in_pm):
+    response = create(signed_in_pm, jira_project="ZZ")
+
+    assert "This project is gone from Jira" in response.content.decode()
+    assert not Company.objects.filter(name="Harbor Foods").exists()
+
+
+def test_tracker_trouble_is_shown_and_no_client_is_created(signed_in_pm, monkeypatch):
+    def jira_down():
+        raise TrackerUnreachable("Jira at https://j.shakuro.com did not answer.")
+
+    monkeypatch.setattr("apps.accounts.forms.current_tracker", jira_down)
+
+    page = create(signed_in_pm, jira_project="FI").content.decode()
+
+    assert "Couldn&#x27;t load the projects: Jira at https://j.shakuro.com did not answer." in page
+    assert not Company.objects.filter(name="Harbor Foods").exists()
+
+
+def test_the_clients_page_shows_the_jira_project(signed_in_pm, pm):
+    atlas = Company.objects.create(name="Atlas", owner=pm, jira_project="FI")
+    northwind = Company.objects.create(name="Northwind", owner=pm)
+
+    assert "Jira FI" in signed_in_pm.get(reverse("client", args=[atlas.pk])).content.decode()
+    page = signed_in_pm.get(reverse("client", args=[northwind.pk])).content.decode()
+    assert "No Jira project yet" in page
+
+
+def test_pm_changes_a_clients_jira_project_on_the_clients_page(signed_in_pm, pm):
+    atlas = Company.objects.create(name="Atlas", owner=pm, jira_project="FI")
+    page = signed_in_pm.get(reverse("client", args=[atlas.pk]) + "?jira").content.decode()
+    assert "Atlas’s Jira project" in page
+    assert '<option value="FI" selected>FI · Atlas</option>' in page
+
+    response = signed_in_pm.post(
+        reverse("change_jira_project", args=[atlas.pk]), {"jira_project": "NW"}
+    )
+
+    assert response.url == reverse("client", args=[atlas.pk])
+    atlas.refresh_from_db()
+    assert atlas.jira_project == "NW"
+
+
+def test_a_jira_project_the_tracker_does_not_know_is_not_saved(signed_in_pm, pm):
+    atlas = Company.objects.create(name="Atlas", owner=pm, jira_project="FI")
+
+    response = signed_in_pm.post(
+        reverse("change_jira_project", args=[atlas.pk]), {"jira_project": "ZZ"}
+    )
+
+    assert "This project is gone from Jira" in response.content.decode()
+    atlas.refresh_from_db()
+    assert atlas.jira_project == "FI"
+
+
+def test_a_project_the_tracker_no_longer_shows_can_be_kept(signed_in_pm, pm):
+    atlas = Company.objects.create(name="Atlas", owner=pm, jira_project="OLD")
+    page = signed_in_pm.get(reverse("client", args=[atlas.pk]) + "?jira").content.decode()
+    assert "OLD · not visible to the tracker account now" in page
+
+    signed_in_pm.post(reverse("change_jira_project", args=[atlas.pk]), {"jira_project": "OLD"})
+
+    atlas.refresh_from_db()
+    assert atlas.jira_project == "OLD"
+
+
+def test_pm_cannot_change_another_pms_client(signed_in_pm):
+    other_pm = User.objects.create_user("olga@shakuro.com", name="Olga", role=Role.PM)
+    theirs = Company.objects.create(name="Northwind", owner=other_pm, jira_project="NW")
+
+    response = signed_in_pm.post(
+        reverse("change_jira_project", args=[theirs.pk]), {"jira_project": "FI"}
+    )
+
+    assert response.status_code == 404
+    theirs.refresh_from_db()
+    assert theirs.jira_project == "NW"

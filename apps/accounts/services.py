@@ -320,6 +320,15 @@ def cancel_invite(person: User) -> None:
     person.delete()
 
 
+def change_jira_project(pm: User, company: Company, jira_project: str) -> Company:
+    """New tasks for this client go to another Jira project; existing tasks keep their keys.
+    `company` comes from `client_for(pm, …)`, so it is one of this PM's own clients."""
+    company.jira_project = jira_project
+    company.full_clean()
+    company.save(update_fields=["jira_project"])
+    return company
+
+
 @transaction.atomic
 def create_client(
     pm: User,
@@ -327,12 +336,15 @@ def create_client(
     name: str,
     email_domain: str,
     color: str,
+    jira_project: str,
     emails: Iterable[str],
     notify: Notify,
 ) -> Company:
-    """A new client owned by this PM, with invites for the first people if any (PRD: Clients
-    screen). The Jira project comes with Jira tasks (#15)."""
-    company = Company(name=name, owner=pm, email_domain=email_domain, color=color)
+    """A new client owned by this PM, in its Jira project, with invites for the first people
+    if any (PRD: Clients screen; tracker and settings)."""
+    company = Company(
+        name=name, owner=pm, email_domain=email_domain, color=color, jira_project=jira_project
+    )
     company.full_clean()
     company.save()
     invite_people(pm, company, emails, notify)
