@@ -18,7 +18,7 @@ class TrackerSettingsForm(forms.ModelForm):
         if tracker == TrackerKind.JIRA and not jira_is_configured():
             raise forms.ValidationError(
                 "Fill in TRACKER_JIRA_URL, TRACKER_JIRA_USERNAME and TRACKER_JIRA_PASSWORD in "
-                ".env and restart dimond first."
+                ".env (the address with https://) and restart dimond first."
             )
         return tracker
 

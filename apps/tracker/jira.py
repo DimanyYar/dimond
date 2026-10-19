@@ -86,6 +86,9 @@ class JiraTracker:
         text = text.strip()
         if ISSUE_KEY.fullmatch(text.upper()):
             return self._open_issue_by_key(project_key, text.upper())
+        # Jira answers a search in an unknown project with the same 400 as a broken query, so
+        # the project is asked for first: only a missing project becomes ProjectNotFound.
+        self.issue_types(project_key)
         jql = f'project = "{project_key}" AND statusCategory != Done'
         words = TEXT_SEARCH_OPERATORS.sub(" ", text).strip()
         if words:
@@ -98,7 +101,6 @@ class JiraTracker:
                 "fields": ISSUE_FIELDS,
                 "maxResults": OPEN_ISSUES_LIMIT,
             },
-            missing=ProjectNotFound(project_key),
         )
 
     def issue(self, key: str) -> Issue:

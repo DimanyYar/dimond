@@ -100,3 +100,12 @@ def test_tracker_check_explains_missing_jira_settings(settings):
 
     with pytest.raises(CommandError, match="empty in .env"):
         call_command("tracker_check")
+
+
+def test_admin_refuses_jira_at_an_http_address(admin_client, jira_in_env, settings):
+    settings.TRACKER_JIRA_URL = "http://j.shakuro.com"
+
+    response = admin_client.post(ADMIN_PAGE, {"tracker": TrackerKind.JIRA})
+
+    assert "with https://" in response.content.decode()
+    assert TrackerSettings.load().tracker == TrackerKind.DEMO

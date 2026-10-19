@@ -60,23 +60,27 @@ def test_issue_types_leave_out_subtasks():
 
 def test_open_tasks_ask_jira_only_for_unfinished_tasks_of_the_project():
     seen: list[httpx.Request] = []
-    jira = jira_answering({"search": saved("search_open_FI.json")}, seen)
+    jira = jira_answering(
+        {"project/FI": saved("project_FI.json"), "search": saved("search_open_FI.json")}, seen
+    )
 
     issues = jira.open_issues("FI")
 
     assert [i.key for i in issues] == ["FI-2231", "FI-2208"]
     assert issues[0].url == "https://j.shakuro.com/browse/FI-2231"
-    jql = seen[0].url.params["jql"]
+    jql = seen[-1].url.params["jql"]
     assert jql == 'project = "FI" AND statusCategory != Done ORDER BY created DESC'
 
 
 def test_words_search_drops_characters_jira_reads_as_operators():
     seen: list[httpx.Request] = []
-    jira = jira_answering({"search": saved("search_open_FI.json")}, seen)
+    jira = jira_answering(
+        {"project/FI": saved("project_FI.json"), "search": saved("search_open_FI.json")}, seen
+    )
 
     jira.open_issues("FI", 'form - "duplicates"?')
 
-    assert 'summary ~ "form    duplicates"' in seen[0].url.params["jql"]
+    assert 'summary ~ "form    duplicates"' in seen[-1].url.params["jql"]
 
 
 def test_a_typed_key_finds_that_open_task_of_the_project():
@@ -177,3 +181,25 @@ def test_an_answer_in_an_unexpected_shape_is_reported_not_crashed_on():
         jira_with(
             lambda request: httpx.Response(200, json={"issues": [{"key": "FI-1"}]})
         ).open_issues("FI")
+
+
+def test_searching_an_unknown_project_says_the_project_is_missing():
+    seen: list[httpx.Request] = []
+    jira = jira_answering({}, seen)
+
+    with pytest.raises(ProjectNotFound, match="There is no project ZZ"):
+        jira.open_issues("ZZ")
+    assert all(request.url.path.endswith("/project/ZZ") for request in seen)
+
+
+def test_a_rejected_search_is_not_mistaken_for_a_missing_project():
+    jira = jira_answering(
+        {
+            "project/FI": saved("project_FI.json"),
+            "search": httpx.Response(400, json={"errorMessages": ["Error in the JQL Query"]}),
+        },
+        [],
+    )
+
+    with pytest.raises(TrackerUnreachable, match="answered 400 to search"):
+        jira.open_issues("FI", "duplicates")
