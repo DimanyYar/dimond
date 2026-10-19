@@ -143,9 +143,13 @@ def test_board_card_names_its_status_only_where_the_column_mixes_them(client, an
     received = services.create_request(
         anna, RequestType.BUG, "Waits in line", why="x", when_needed=WhenNeeded.NOT_SURE
     )
-    building = services.create_request(
-        anna, RequestType.BUG, "Being built", why="x", when_needed=WhenNeeded.NOT_SURE
+    planned, building = (
+        services.create_request(
+            anna, RequestType.BUG, title, why="x", when_needed=WhenNeeded.NOT_SURE
+        )
+        for title in ("Has a Jira task", "Being built")
     )
+    Request.objects.filter(pk=planned.pk).update(status=ClientStatus.PLANNED)
     Request.objects.filter(pk=building.pk).update(status=ClientStatus.IN_PROGRESS)
     client.force_login(anna)
 
@@ -154,9 +158,11 @@ def test_board_card_names_its_status_only_where_the_column_mixes_them(client, an
     in_progress = html.split('data-column="in-progress"')[1].split('class="board-column"')[0]
 
     assert received.title in queued
-    assert "status-received" in queued
+    assert "status-received" not in queued
+    assert planned.title in in_progress
     assert building.title in in_progress
-    assert "status-in_progress" not in in_progress
+    assert "status-planned" in in_progress
+    assert "status-in_progress" in in_progress
 
 
 def test_threads_from_before_unread_tracking_are_not_new(anna, pm, bug):

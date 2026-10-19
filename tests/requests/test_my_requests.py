@@ -197,7 +197,8 @@ def test_board_groups_statuses_into_columns_and_skips_empty_ones(anna):
 
     assert [(g.column.name, [r.title for r in g.requests]) for g in columns] == [
         ("Needs you", ["Question"]),
-        ("Queued", ["Scheduled", "Waiting"]),
+        ("Queued", ["Waiting"]),
+        ("In progress", ["Scheduled"]),
     ]
 
 

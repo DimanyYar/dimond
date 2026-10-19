@@ -83,13 +83,14 @@ class BoardColumn(NamedTuple):
 
 
 # Fewer columns than statuses: the client cares whether a request waits for them, waits in
-# line, is being built, needs checking, was parked or is over.
+# line, is being built, needs checking, was parked or is over. A planned request already has
+# a Jira task, so the team has taken it on: it sits with the work in progress.
 NEEDS_YOU_COLUMN = "needs-you"
 QUEUED_COLUMN = "queued"
 BOARD_COLUMNS = (
     BoardColumn(NEEDS_YOU_COLUMN, "Needs you", (ClientStatus.NEEDS_INPUT,)),
-    BoardColumn(QUEUED_COLUMN, "Queued", (ClientStatus.RECEIVED, ClientStatus.PLANNED)),
-    BoardColumn("in-progress", "In progress", (ClientStatus.IN_PROGRESS,)),
+    BoardColumn(QUEUED_COLUMN, "Queued", (ClientStatus.RECEIVED,)),
+    BoardColumn("in-progress", "In progress", (ClientStatus.PLANNED, ClientStatus.IN_PROGRESS)),
     BoardColumn("ready-to-check", "Ready to check", (ClientStatus.READY_TO_CHECK,)),
     BoardColumn("later", "Later", (ClientStatus.LATER,)),
     BoardColumn("done", "Done", CLOSED_STATUSES),
