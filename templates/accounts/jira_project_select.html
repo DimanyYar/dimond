@@ -1,0 +1,20 @@
+{% comment %}
+The Jira project list with a search box (PRD: tracker and settings). Jira may show a hundred
+projects or more, so filter-select.js narrows the list as the PM types a key or a name. Without
+scripts the box stays hidden and the plain list still works. Needs: field, select_id.
+{% endcomment %}
+<div class="field">
+  <label for="{{ select_id }}">Jira project</label>
+  <input class="input" type="search" id="{{ select_id }}-search" placeholder="Search by key or name"
+         aria-label="Search Jira projects" aria-controls="{{ select_id }}" data-filter-select="{{ select_id }}" hidden>
+  <select class="input" id="{{ select_id }}" name="jira_project" required
+          aria-describedby="{{ select_id }}-hint{% if field.errors or tracker_error %} {{ select_id }}-error{% endif %}"
+          {% if field.errors %}aria-invalid="true"{% endif %}>
+    <option value="">Choose a project…</option>
+    {% for key, label in field.field.choices %}
+      <option value="{{ key }}"{% if field.value == key %} selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <span class="hint" id="{{ select_id }}-hint" data-filter-count="{{ select_id }}" aria-live="polite">Projects the tracker account can see. Create the project in Jira first; this client’s tasks go only there.</span>
+  {% if field.errors %}<span class="error-text" id="{{ select_id }}-error">{{ field.errors.0 }}</span>{% elif tracker_error %}<span class="error-text" id="{{ select_id }}-error">{{ tracker_error }}</span>{% endif %}
+</div>

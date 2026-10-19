@@ -11,6 +11,7 @@ urlpatterns = [
     path("clients/new/", views.new_client, name="new_client"),
     path("clients/<int:pk>/", views.clients, name="client"),
     path("clients/<int:pk>/invite/", views.invite_people, name="invite_people"),
+    path("clients/<int:pk>/jira-project/", views.change_jira_project, name="change_jira_project"),
     path("clients/<int:pk>/people/<int:person_pk>/", views.person, name="person"),
     path(
         "clients/<int:pk>/people/<int:person_pk>/save/",

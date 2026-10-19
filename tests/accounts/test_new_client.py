@@ -179,3 +179,54 @@ def test_the_clients_page_shows_the_jira_project(signed_in_pm, pm):
     assert "Jira FI" in signed_in_pm.get(reverse("client", args=[atlas.pk])).content.decode()
     page = signed_in_pm.get(reverse("client", args=[northwind.pk])).content.decode()
     assert "No Jira project yet" in page
+
+
+def test_pm_changes_a_clients_jira_project_on_the_clients_page(signed_in_pm, pm):
+    atlas = Company.objects.create(name="Atlas", owner=pm, jira_project="FI")
+    page = signed_in_pm.get(reverse("client", args=[atlas.pk]) + "?jira").content.decode()
+    assert "Atlas’s Jira project" in page
+    assert '<option value="FI" selected>FI · Atlas</option>' in page
+
+    response = signed_in_pm.post(
+        reverse("change_jira_project", args=[atlas.pk]), {"jira_project": "NW"}
+    )
+
+    assert response.url == reverse("client", args=[atlas.pk])
+    atlas.refresh_from_db()
+    assert atlas.jira_project == "NW"
+
+
+def test_a_jira_project_the_tracker_does_not_know_is_not_saved(signed_in_pm, pm):
+    atlas = Company.objects.create(name="Atlas", owner=pm, jira_project="FI")
+
+    response = signed_in_pm.post(
+        reverse("change_jira_project", args=[atlas.pk]), {"jira_project": "ZZ"}
+    )
+
+    assert "This project is gone from Jira" in response.content.decode()
+    atlas.refresh_from_db()
+    assert atlas.jira_project == "FI"
+
+
+def test_a_project_the_tracker_no_longer_shows_can_be_kept(signed_in_pm, pm):
+    atlas = Company.objects.create(name="Atlas", owner=pm, jira_project="OLD")
+    page = signed_in_pm.get(reverse("client", args=[atlas.pk]) + "?jira").content.decode()
+    assert "OLD · not visible to the tracker account now" in page
+
+    signed_in_pm.post(reverse("change_jira_project", args=[atlas.pk]), {"jira_project": "OLD"})
+
+    atlas.refresh_from_db()
+    assert atlas.jira_project == "OLD"
+
+
+def test_pm_cannot_change_another_pms_client(signed_in_pm):
+    other_pm = User.objects.create_user("olga@shakuro.com", name="Olga", role=Role.PM)
+    theirs = Company.objects.create(name="Northwind", owner=other_pm, jira_project="NW")
+
+    response = signed_in_pm.post(
+        reverse("change_jira_project", args=[theirs.pk]), {"jira_project": "FI"}
+    )
+
+    assert response.status_code == 404
+    theirs.refresh_from_db()
+    assert theirs.jira_project == "NW"

@@ -1,0 +1,19 @@
+{% comment %}
+The PM changes a client's Jira project from the Clients page ("Change" next to it). New tasks
+go to the new project; tasks created before keep their keys.
+{% endcomment %}
+{% load static %}
+<form class="card invite-form" id="jira" method="post" action="{% url 'change_jira_project' company.pk %}" aria-labelledby="jira-title">
+  {% csrf_token %}
+  <div class="invite-form-head">
+    <h3 id="jira-title">{{ company.name }}’s Jira project</h3>
+    <a class="icon-link" href="{% url 'client' company.pk %}" aria-label="Close">×</a>
+  </div>
+  {% include "accounts/jira_project_select.html" with field=form.jira_project select_id="jira-project" tracker_error=form.tracker_error %}
+  <p class="hint">New tasks go to the project you choose. Tasks created before keep their keys.</p>
+  <div class="invite-form-foot">
+    <a class="btn" href="{% url 'client' company.pk %}">Cancel</a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </div>
+</form>
+<script type="module" src="{% static 'js/filter-select.js' %}"></script>

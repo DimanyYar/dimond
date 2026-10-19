@@ -14,6 +14,7 @@ from .forms import (
     CLIENT_COLORS,
     EmailForm,
     InviteForm,
+    JiraProjectForm,
     NewClientForm,
     PersonForm,
     WelcomeForm,
@@ -124,6 +125,7 @@ def _clients_screen(
     pk: int | None,
     invite_form: InviteForm | None = None,
     new_client_form: NewClientForm | None = None,
+    jira_form: JiraProjectForm | None = None,
 ) -> HttpResponse:
     try:
         page = selectors.clients_page(pm, pk)
@@ -133,6 +135,8 @@ def _clients_screen(
     # All of it works without scripts, and the address can be shared or reloaded.
     if invite_form is None and "invite" in request.GET and page.chosen is not None:
         invite_form = InviteForm(company=page.chosen)
+    if jira_form is None and "jira" in request.GET and page.chosen is not None:
+        jira_form = JiraProjectForm(company=page.chosen)
     cancel = request.GET.get("cancel", "")
     revoke = request.GET.get("revoke", "")
     return render(
@@ -144,6 +148,7 @@ def _clients_screen(
             "cancel_person": int(cancel) if cancel.isdigit() else None,
             "revoke_person": int(revoke) if revoke.isdigit() else None,
             "new_client_form": new_client_form,
+            "jira_form": jira_form,
             "client_colors": CLIENT_COLORS,
         },
     )
@@ -154,6 +159,23 @@ def _clients_screen(
 def clients(request: HttpRequest, pk: int | None = None) -> HttpResponse:
     """The PM's Clients screen: their companies and the people at the chosen one."""
     return _clients_screen(request, _pm(request), pk)
+
+
+@require_POST
+@login_required
+def change_jira_project(request: HttpRequest, pk: int) -> HttpResponse:
+    """The client's Jira project, changed from the Clients page."""
+    pm = _pm(request)
+    try:
+        company = selectors.client_for(pm, pk)
+    except Company.DoesNotExist:
+        raise Http404 from None
+    form = JiraProjectForm(request.POST, company=company)
+    if not form.is_valid():
+        return _clients_screen(request, pm, pk, jira_form=form)
+    services.change_jira_project(pm, company, form.cleaned_data["jira_project"])
+    messages.success(request, f"New {company.name} tasks will go to Jira {company.jira_project}.")
+    return redirect("client", pk)
 
 
 @require_POST

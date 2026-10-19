@@ -320,6 +320,15 @@ def cancel_invite(person: User) -> None:
     person.delete()
 
 
+def change_jira_project(pm: User, company: Company, jira_project: str) -> Company:
+    """New tasks for this client go to another Jira project; existing tasks keep their keys.
+    `company` comes from `client_for(pm, …)`, so it is one of this PM's own clients."""
+    company.jira_project = jira_project
+    company.full_clean()
+    company.save(update_fields=["jira_project"])
+    return company
+
+
 @transaction.atomic
 def create_client(
     pm: User,

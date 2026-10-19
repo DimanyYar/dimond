@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
+from django import forms
 from django.contrib import admin, messages
 from django.db.models import QuerySet
 from django.http import HttpRequest
 
 from . import services
+from .forms import fill_jira_projects
 from .models import Company, User
 
 
@@ -20,8 +24,30 @@ class PeopleInline(admin.TabularInline):
         return False
 
 
+class CompanyAdminForm(forms.ModelForm):
+    """The Jira project is picked from the projects the tracker sees, as in the New client
+    window. If the tracker cannot be reached, the key can still be typed by hand."""
+
+    class Meta:
+        model = Company
+        fields = ["name", "owner", "jira_project", "email_domain", "color"]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        current = self.instance.jira_project if self.instance.pk else ""
+        listed = forms.ChoiceField(required=False, label="Jira project")
+        problem = fill_jira_projects(listed, keep=current)
+        if problem:
+            self.fields["jira_project"].help_text = f"{problem} Type the key by hand, like FI."
+            return
+        listed.choices = [("", "—"), *cast(list[tuple[str, str]], listed.choices)]
+        listed.help_text = self.fields["jira_project"].help_text
+        self.fields["jira_project"] = listed
+
+
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
+    form = CompanyAdminForm
     list_display = ["name", "owner", "jira_project", "email_domain", "created_at"]
     list_filter = ["owner"]
     search_fields = ["name", "email_domain", "jira_project"]

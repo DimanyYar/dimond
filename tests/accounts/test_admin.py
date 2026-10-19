@@ -3,6 +3,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 
 from apps.accounts.models import Company, Role, User
+from apps.tracker.base import TrackerUnreachable
 
 pytestmark = pytest.mark.django_db
 
@@ -68,3 +69,21 @@ def test_a_jira_project_key_must_look_like_one(dmitry):
 
     with pytest.raises(ValidationError, match="A Jira project key, like FI."):
         atlas.full_clean()
+
+
+def test_admin_offers_the_projects_the_tracker_sees(pm_client, dmitry):
+    atlas = Company.objects.create(name="Atlas", owner=dmitry)
+
+    page = pm_client.get(f"/{settings.ADMIN_URL}accounts/company/{atlas.pk}/change/").content
+    assert '<option value="FI">FI · Atlas</option>' in page.decode()
+
+
+def test_admin_takes_a_typed_key_when_the_tracker_is_down(pm_client, dmitry, monkeypatch):
+    def jira_down():
+        raise TrackerUnreachable("Jira at https://j.shakuro.com did not answer.")
+
+    monkeypatch.setattr("apps.accounts.forms.current_tracker", jira_down)
+    atlas = Company.objects.create(name="Atlas", owner=dmitry)
+
+    page = pm_client.get(f"/{settings.ADMIN_URL}accounts/company/{atlas.pk}/change/").content
+    assert "Type the key by hand" in page.decode()
