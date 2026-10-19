@@ -7,9 +7,10 @@ from django.db.models import Max
 from django.utils import timezone
 
 from apps.accounts.models import Role, User
-from apps.files.services import attach_files, removable_files, remove_files
+from apps.files.models import Attachment
+from apps.files.services import attach_files, public_link, removable_files, remove_files
 from apps.files.uploads import CheckedFile
-from apps.tracker.base import Issue
+from apps.tracker.base import Issue, Tracker, TrackerError
 from apps.tracker.connection import current_tracker
 
 from .models import (
@@ -285,7 +286,15 @@ def move_to_later(pm: User, request: Request) -> Request:
 
 @transaction.atomic
 def create_jira_task(
-    pm: User, request: Request, *, issue_type: str, summary: str, description: str, reply: str
+    pm: User,
+    request: Request,
+    *,
+    issue_type: str,
+    summary: str,
+    description: str,
+    reply: str,
+    attach: Sequence[Attachment] = (),
+    share: Sequence[Attachment] = (),
 ) -> Request:
     """Creates the task in the client's Jira project and plans the request (PRD: Jira sync,
     "Create task"). The thread gets "Planned · FI-2301" and, if written, the PM's reply.
@@ -297,10 +306,36 @@ def create_jira_task(
     request = Request.objects.select_for_update().select_related("company").get(pk=request.pk)
     if not can_create_jira_task(pm, request):
         raise NotAllowedError
-    task = current_tracker().create_issue(
+    tracker = current_tracker()
+    if share:
+        links = "\n".join(f"* [{file.name}|{public_link(file)}]" for file in share)
+        description = (
+            f"{description}\n\nh3. Video and voice\n{links}\n"
+            "_These links play without signing in while the task is open._"
+        )
+    task = tracker.create_issue(
         request.company.jira_project, issue_type, summary, description, ["dimond"]
     )
-    return _plan_with_task(pm, request, task, reply)
+    planned = _plan_with_task(pm, request, task, reply)
+    for file in attach:
+        _attach(tracker, pm, planned, file)
+    return planned
+
+
+def _attach(tracker: Tracker, pm: User, request: Request, file: Attachment) -> None:
+    """One file onto the new task. The task already exists, so a file Jira refuses (too big,
+    say) becomes a note for the PM instead of undoing everything."""
+    with file.file.open("rb") as stored:
+        content = stored.read()
+    try:
+        tracker.attach_file(request.jira_key, file.name, content, file.content_type)
+    except TrackerError as error:
+        InternalNote.objects.create(
+            request=request,
+            author=pm,
+            text=f"Couldn't attach {file.name} to {request.jira_key}: {error} "
+            "Attach it in Jira by hand.",
+        )
 
 
 class TaskNotLinkable(Exception):

@@ -1,5 +1,7 @@
 import logging
+import secrets
 from collections.abc import Collection, Iterable
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from django.core.files.base import ContentFile
@@ -113,3 +115,24 @@ def make_pending_previews(limit: int = 20) -> int:
             # the files after it still get their previews now.
             log.warning("Preview postponed for attachment %s", attachment.id, exc_info=True)
     return len(pending)
+
+
+# A manual share is for a look after the request closed: a week, then it closes again.
+SHARE_AGAIN_FOR = timedelta(days=7)
+
+
+def public_link(attachment: Attachment) -> str:
+    """The address that plays the file without signing in (PRD: attachments to Jira). The
+    secret part is made once and kept, so links already in Jira keep working."""
+    if not attachment.public_token:
+        attachment.public_token = secrets.token_urlsafe(32)
+        attachment.save(update_fields=["public_token"])
+    return attachment.public_url
+
+
+def share_again(attachment: Attachment, now: datetime) -> Attachment:
+    """Opens a closed request's public link for another week. The caller checks it is the
+    client's PM (`can_share_again`)."""
+    attachment.shared_until = now + SHARE_AGAIN_FOR
+    attachment.save(update_fields=["shared_until"])
+    return attachment

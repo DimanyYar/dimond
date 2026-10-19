@@ -1,11 +1,14 @@
 import uuid
+from datetime import datetime
 from pathlib import Path
 
+from django.conf import settings
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.requests.models import Message, Request, RequestRevision
+from apps.requests.models import CLOSED_STATUSES, Message, Request, RequestRevision
 
 
 def _stored_name(attachment: "Attachment", filename: str) -> str:
@@ -100,6 +103,21 @@ class Attachment(models.Model):
         help_text="The edit that removed it from the card. The file itself is kept.",
     )
 
+    public_token = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="The secret part of the file's public link, made when a video or voice goes "
+        "to a Jira task. Empty: no public link.",
+    )
+    shared_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="The PM opened the public link again after the request closed; it works "
+        "until this moment.",
+    )
+
     objects = AttachmentQuerySet.as_manager()
 
     class Meta:
@@ -126,6 +144,32 @@ class Attachment(models.Model):
     @property
     def shown_in_browser(self) -> bool:
         return self.content_type in SHOWN_IN_BROWSER
+
+    @property
+    def public_url(self) -> str:
+        """The address that plays the file without signing in; empty without a public link."""
+        if not self.public_token:
+            return ""
+        return f"{settings.SITE_URL}{reverse('public_file', args=[self.public_token])}"
+
+    @property
+    def public_state(self) -> str:
+        """For the card: "" (no public link), "open", "shared" (opened again by the PM for a
+        while) or "closed"."""
+        if not self.public_token:
+            return ""
+        now = timezone.now()
+        if not self.is_public(now):
+            return "closed"
+        return "open" if self.request.status not in CLOSED_STATUSES else "shared"
+
+    def is_public(self, now: datetime) -> bool:
+        """The public link works while the request is open, so while its Jira task is, and
+        afterwards only for the days the PM shared it again (PRD: attachments to Jira)."""
+        if not self.public_token:
+            return False
+        open_request = self.request.status not in CLOSED_STATUSES
+        return open_request or (self.shared_until is not None and self.shared_until > now)
 
     @property
     def kind(self) -> str:

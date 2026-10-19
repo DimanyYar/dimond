@@ -40,6 +40,26 @@ version in Jira later, and the client reads the reply in the thread.
         <span class="hint">Label <strong>dimond</strong> is added. Set the fix version in Jira when you know it: the sync brings the date here.</span>
       </div>
 
+      {% if form.request_files %}
+        <section class="dialog-section" aria-labelledby="jt-files-title">
+          <h3 id="jt-files-title">Attachments to Jira</h3>
+          <p class="hint">Pictures, PDFs and text go as files. Video and voice stay in dimond: the task gets a public link that plays them while the task is open.</p>
+          <ul class="jira-files">
+            {% for file, choice in form.file_rows %}
+              <li class="jira-file">
+                <span class="files-row-picture">{% include "files/file_tile.html" with beside_name=True %}</span>
+                <span class="jira-file-text"><span>{{ file.name }}</span><span class="hint">{{ file.size|filesizeformat }}</span></span>
+                <span class="segmented segmented-choice" role="radiogroup" aria-label="{{ file.name }}">
+                  {% for value, label in choice.field.choices %}
+                    <label><input type="radio" name="{{ choice.html_name }}" value="{{ value }}"{% if choice.value == value %} checked{% endif %}>{{ label }}</label>
+                  {% endfor %}
+                </span>
+              </li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endif %}
+
       <section class="dialog-section" aria-labelledby="jt-reply-title">
         <label class="choice-inline" id="jt-reply-title"><input type="checkbox" name="reply"{% if form.reply.value %} checked{% endif %}> Reply to the client</label>
         <span class="hint" id="jt-reply-hint">Posts the message in {{ r.key }}: everyone at {{ r.company }} sees it. Nothing is posted to Jira.</span>

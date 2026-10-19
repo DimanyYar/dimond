@@ -83,6 +83,11 @@ class MockTracker:
             raise TrackerRefused(f"The demo tracker has no issue type {issue_type!r}.")
         return _issue(f"{project_key}-{next(_new_numbers)}", summary, "To Do", issue_type)
 
+    def attach_file(self, key: str, name: str, content: bytes, content_type: str) -> None:
+        """The demo keeps no files: a known key is enough to say it went well."""
+        if key.split("-")[0] not in {project.key for project in PROJECTS}:
+            raise IssueNotFound(key)
+
     def _check_project(self, key: str) -> None:
         if key not in {project.key for project in PROJECTS}:
             raise ProjectNotFound(key)

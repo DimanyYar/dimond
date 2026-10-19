@@ -5388,3 +5388,48 @@ a.person-name:hover {
     text-align: center;
   }
 }
+
+/* Attachments to Jira in the Create Jira task window: a tile, the name, the way it goes. */
+.jira-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jira-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.jira-file-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.segmented-choice {
+  flex: none;
+}
+
+.segmented-choice label {
+  flex: none;
+  padding: 7px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.public-link .inline-form {
+  display: inline;
+}
+
+@media (max-width: 640px) {
+  .jira-file {
+    flex-wrap: wrap;
+  }
+}
