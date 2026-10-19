@@ -344,7 +344,41 @@ class _ReplyToClient(forms.Form):
         return self.cleaned_data["reply_text"].strip() if self.cleaned_data["reply"] else ""
 
 
-class JiraTaskForm(_ReplyToClient):
+# What goes to Jira (PRD: attachments to Jira): pictures, PDFs and text as files; video and
+# voice stay in dimond and the task gets a public link that plays them.
+JIRA_FILE_CHOICES = {
+    "file": [("file", "Attach file"), ("skip", "Skip")],
+    "link": [("link", "Public link"), ("skip", "Skip")],
+}
+
+
+def _jira_way(file: Attachment) -> str:
+    return "link" if file.kind in ("video", "audio") else "file"
+
+
+class _FilesToJira(_ReplyToClient):
+    """The reply plus one choice per file of the request: how it goes to Jira, if at all."""
+
+    def __init__(self, *args: Any, files: Iterable[Attachment] = (), **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.request_files = list(files)
+        for file in self.request_files:
+            self.fields[f"file_{file.id.hex}"] = forms.ChoiceField(
+                choices=JIRA_FILE_CHOICES[_jira_way(file)], initial=_jira_way(file)
+            )
+
+    def file_rows(self) -> list[tuple[Attachment, forms.BoundField]]:
+        """Each file with its choice, for the window's list."""
+        return [(file, self[f"file_{file.id.hex}"]) for file in self.request_files]
+
+    def files_to(self, way: str) -> list[Attachment]:
+        """The files the PM sends to Jira this way: "file" uploads, "link" shares."""
+        return [
+            file for file in self.request_files if self.cleaned_data[f"file_{file.id.hex}"] == way
+        ]
+
+
+class JiraTaskForm(_FilesToJira):
     """Create Jira task, New task (PRD: "Create task"; mockup: Create Jira task). The project
     is the client's own and is not chosen here."""
 
@@ -352,15 +386,8 @@ class JiraTaskForm(_ReplyToClient):
     summary = forms.CharField(max_length=255, error_messages={"required": "Name the task."})
     description = forms.CharField(widget=forms.Textarea, required=False)
 
-    def __init__(
-        self, *args: Any, request: Request, files: Iterable[Attachment] = (), **kwargs: Any
-    ) -> None:
+    def __init__(self, *args: Any, request: Request, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self.request_files = list(files)
-        for file in self.request_files:
-            self.fields[f"file_{file.id.hex}"] = forms.ChoiceField(
-                choices=JIRA_FILE_CHOICES[_jira_way(file)], initial=_jira_way(file)
-            )
         self.tracker_error = ""
         try:
             types = current_tracker().issue_types(request.company.jira_project)
@@ -381,35 +408,15 @@ class JiraTaskForm(_ReplyToClient):
             raise ValidationError(self.tracker_error)
         return self.cleaned_data
 
-    def file_rows(self) -> list[tuple[Attachment, forms.BoundField]]:
-        """Each file with its choice, for the window's list."""
-        return [(file, self[f"file_{file.id.hex}"]) for file in self.request_files]
 
-    def files_to(self, way: str) -> list[Attachment]:
-        """The files the PM sends to Jira this way: "file" uploads, "link" shares."""
-        return [
-            file for file in self.request_files if self.cleaned_data[f"file_{file.id.hex}"] == way
-        ]
-
-
-# What goes to Jira (PRD: attachments to Jira): pictures, PDFs and text as files; video and
-# voice stay in dimond and the task gets a public link that plays them.
-JIRA_FILE_CHOICES = {
-    "file": [("file", "Attach file"), ("skip", "Skip")],
-    "link": [("link", "Public link"), ("skip", "Skip")],
-}
-
-
-def _jira_way(file: Attachment) -> str:
-    return "link" if file.kind in ("video", "audio") else "file"
-
-
-class LinkJiraTaskForm(_ReplyToClient):
-    """Create Jira task, Existing task: a task picked from the list or a key typed in."""
+class LinkJiraTaskForm(_FilesToJira):
+    """Create Jira task, Existing task: a task picked from the list or a key typed in, and,
+    if ticked, a comment on it with the request's files (decided Oct 19)."""
 
     key = forms.CharField(
         max_length=32, error_messages={"required": "Pick a task, or type its key."}
     )
+    comment = forms.BooleanField(required=False, initial=True)
 
     def clean_key(self) -> str:
         key: str = self.cleaned_data["key"].strip().upper()

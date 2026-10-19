@@ -215,3 +215,95 @@ def test_the_client_never_sees_the_public_link_on_the_card(client, anna, shared_
     page = client.get(shared_video.request.get_absolute_url()).content.decode()
 
     assert shared_video.public_token not in page
+
+
+class CommentingTracker(RecordingTracker):
+    def __init__(self, refuse_comment: bool = False) -> None:
+        super().__init__()
+        self.refuse_comment = refuse_comment
+        self.comments: list[tuple[str, str]] = []
+
+    def add_comment(self, key: str, body: str) -> None:
+        if self.refuse_comment:
+            raise TrackerRefused("Jira said no: comments are off.")
+        self.comments.append((key, body))
+
+
+def link(client, pm: User, request: Request, tracker: RecordingTracker, monkeypatch, **fields):
+    monkeypatch.setattr("apps.requests.services.current_tracker", lambda: tracker)
+    picture, video = files_of(request)
+    client.force_login(pm)
+    data = {
+        "key": "FI-2208",
+        "comment": "on",
+        f"file_{picture.id.hex}": "file",
+        f"file_{video.id.hex}": "link",
+    } | fields
+    return client.post(reverse("request_link_jira_task", args=[request.pk]), data)
+
+
+def test_linking_adds_one_comment_with_the_files(client, pm, request_with_files, monkeypatch):
+    tracker = CommentingTracker()
+
+    link(client, pm, request_with_files, tracker, monkeypatch)
+
+    request_with_files.refresh_from_db()
+    video = files_of(request_with_files)[1]
+    assert request_with_files.jira_key == "FI-2208"
+    assert tracker.attached == [("FI-2208", "duplicates.png", PNG)]
+    ((key, body),) = tracker.comments
+    assert key == "FI-2208"
+    assert f"From dimond: [{request_with_files.key}|http://localhost:8000/requests/" in body
+    assert "!duplicates.png|thumbnail!" in body
+    assert f"[form-submit.mp4|{video.public_url}]" in body
+
+
+def test_unticked_comment_writes_nothing_to_jira(client, pm, request_with_files, monkeypatch):
+    tracker = CommentingTracker()
+
+    link(client, pm, request_with_files, tracker, monkeypatch, comment="")
+
+    assert (tracker.attached, tracker.comments) == ([], [])
+    assert not files_of(request_with_files)[1].public_token
+
+
+def test_a_refused_comment_leaves_the_link_and_a_note(client, pm, request_with_files, monkeypatch):
+    link(client, pm, request_with_files, CommentingTracker(refuse_comment=True), monkeypatch)
+
+    request_with_files.refresh_from_db()
+    assert request_with_files.status == ClientStatus.PLANNED
+    assert "Couldn't add the comment to FI-2208" in request_with_files.notes.get().text
+
+
+def test_the_existing_task_tab_offers_the_comment_and_the_files(client, pm, request_with_files):
+    picture = files_of(request_with_files)[0]
+    client.force_login(pm)
+
+    url = reverse("request_jira_task", args=[request_with_files.pk]) + "?mode=existing"
+    page = client.get(url).content.decode()
+
+    assert 'name="comment" form="jira-link" checked' in page
+    assert f'name="file_{picture.id.hex}" value="file" form="jira-link" checked' in page
+
+
+def test_a_file_name_with_markup_is_only_named_in_the_comment(
+    client, pm, request_with_files, monkeypatch
+):
+    picture, video = files_of(request_with_files)
+    tracker = CommentingTracker()
+    monkeypatch.setattr("apps.requests.services.current_tracker", lambda: tracker)
+    Attachment.objects.filter(pk=picture.pk).update(name="shot|1].png")
+    client.force_login(pm)
+    client.post(
+        reverse("request_link_jira_task", args=[request_with_files.pk]),
+        {
+            "key": "FI-2208",
+            "comment": "on",
+            f"file_{picture.id.hex}": "file",
+            f"file_{video.id.hex}": "skip",
+        },
+    )
+
+    ((_, body),) = tracker.comments
+    assert "shot/1).png" in body
+    assert "!shot" not in body

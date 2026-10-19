@@ -1,0 +1,24 @@
+{% comment %}
+The request's files and how each goes to Jira (PRD: attachments to Jira): images, PDFs and
+text as files, video and voice as a public link. `link_form` is set in Existing task, where
+these choices sit outside the form element and join it by its id.
+{% endcomment %}
+{% if form.request_files %}
+  <section class="jira-attachments" aria-labelledby="jt-files-title">
+    <h3 id="jt-files-title">Attachments to Jira</h3>
+    <p class="hint">{% if link_form %}They go with the comment: images, PDF and text files as files, video and voice as a public link.{% else %}Images, PDF and text files go as files. Video and voice get a public link: it plays while the request is open in dimond.{% endif %}</p>
+    <ul class="jira-files">
+      {% for file, choice in form.file_rows %}
+        <li class="jira-file">
+          <span class="files-row-picture">{% include "files/file_tile.html" with beside_name=True %}</span>
+          <span class="jira-file-text"><span title="{{ file.name }}">{{ file.name }}</span><span class="hint">{{ file.size|filesizeformat }}</span></span>
+          <span class="segmented segmented-choice" role="radiogroup" aria-label="{{ file.name }}">
+            {% for value, label in choice.field.choices %}
+              <label><input type="radio" name="{{ choice.html_name }}" value="{{ value }}"{% if link_form %} form="{{ link_form }}"{% endif %}{% if choice.value == value %} checked{% endif %}>{{ label }}</label>
+            {% endfor %}
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endif %}

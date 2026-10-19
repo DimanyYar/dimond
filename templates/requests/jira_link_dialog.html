@@ -3,7 +3,8 @@ Create Jira task, Existing task (mockup 5.1 · Existing task, Oct 19): the same 
 Left: find an open task of the client's project by key or words and pick it; tasks that
 already belong to another request are greyed out (one task, one request). Right: the reply and
 what the client will see. The search is its own small form, so the fields of the linking form
-join it by its id (form="jira-link"). Linking writes nothing to Jira.
+join it by its id (form="jira-link"). If ticked, linking adds one comment with the files;
+the description is never changed (decided Oct 19).
 {% endcomment %}
 {% load static %}
 <dialog class="dialog-backdrop" open data-modal data-close-url="{{ r.get_absolute_url }}" aria-labelledby="jira-task-title" id="jira-task">
@@ -48,15 +49,16 @@ join it by its id (form="jira-link"). Linking writes nothing to Jira.
 
       <div class="jira-side">
         <section class="jira-picked">
-          <h3>Linking</h3>
-          <p class="hint">dimond ties the chosen task to {{ r.key }} and adds nothing to it in Jira. The request follows the task’s status from now on.</p>
+          <label class="choice-inline jira-reply-title"><input type="checkbox" name="comment" form="jira-link"{% if form.comment.value %} checked{% endif %}> Add a comment to the task</label>
+          <p class="hint">One comment with a link back to {{ r.key }} and the files below. The task’s description is never changed. Untick to write nothing to Jira.</p>
         </section>
+        {% include "requests/jira_files.html" with link_form="jira-link" %}
         {% include "requests/jira_reply_side.html" with link_form="jira-link" %}
       </div>
     </div>
 
     <footer class="dialog-foot">
-      <span class="hint">Linking writes nothing to Jira.</span>
+      <span class="hint">The task’s description stays as it is.</span>
       <a class="btn" href="{{ r.get_absolute_url }}">Cancel</a>
       <button class="btn btn-primary" type="submit" form="jira-link">Link task</button>
     </footer>

@@ -156,6 +156,16 @@ class JiraTracker:
             missing=IssueNotFound(key),
         )
 
+    def add_comment(self, key: str, body: str) -> None:
+        if not ISSUE_KEY.fullmatch(key):
+            raise IssueNotFound(key)
+        self._call(
+            f"issue/{key}/comment",
+            lambda data: None,
+            body={"body": body},
+            missing=IssueNotFound(key),
+        )
+
     def _epic_name_fields(self) -> list[str]:
         return self._call(
             "field",

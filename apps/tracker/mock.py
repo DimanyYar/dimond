@@ -88,6 +88,10 @@ class MockTracker:
         if key.split("-")[0] not in {project.key for project in PROJECTS}:
             raise IssueNotFound(key)
 
+    def add_comment(self, key: str, body: str) -> None:
+        """The demo keeps no comments: a known task is enough to say it went well."""
+        self.issue(key)
+
     def _check_project(self, key: str) -> None:
         if key not in {project.key for project in PROJECTS}:
             raise ProjectNotFound(key)
