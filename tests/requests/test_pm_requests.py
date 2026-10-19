@@ -167,6 +167,14 @@ def test_request_waiting_on_the_client_sits_in_queued_for_the_pm(client, pm, ann
     assert "Waiting on client" in response.content.decode()
 
 
+def test_a_planned_request_sits_in_in_progress_for_the_client_and_the_pm(client, pm, anna):
+    planned = make(anna, "Has a Jira task", status=ClientStatus.PLANNED)
+
+    for user in (anna, pm):
+        client.force_login(user)
+        assert column_of(client.get(URL).context["page"].board, planned) == "in-progress"
+
+
 def test_client_board_keeps_needs_you_for_the_pms_questions(client, pm, anna):
     question = make(anna, "Needs a link")
     services.post_message(pm, question, "Which lead?", ask_for_input=True)
