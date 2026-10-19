@@ -6,6 +6,7 @@ its own base URL as http, and a redirect would send the password to wherever it 
 """
 
 import re
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -60,20 +61,25 @@ class JiraTracker:
         )
 
     def account(self) -> Account:
-        data = self._get("myself")
-        return Account(login=data["name"], display_name=data["displayName"])
+        return self._get(
+            "myself", lambda data: Account(login=data["name"], display_name=data["displayName"])
+        )
 
     def projects(self) -> list[Project]:
-        data = self._get("project")
-        return sorted(
-            (Project(key=item["key"], name=item["name"]) for item in data), key=lambda p: p.key
+        return self._get(
+            "project",
+            lambda data: sorted(
+                (Project(key=item["key"], name=item["name"]) for item in data),
+                key=lambda p: p.key,
+            ),
         )
 
     def issue_types(self, project_key: str) -> list[str]:
-        data = self._get(
-            f"project/{self._checked_project(project_key)}", missing=ProjectNotFound(project_key)
+        return self._get(
+            f"project/{self._checked_project(project_key)}",
+            lambda data: [item["name"] for item in data["issueTypes"] if not item["subtask"]],
+            missing=ProjectNotFound(project_key),
         )
-        return [item["name"] for item in data["issueTypes"] if not item["subtask"]]
 
     def open_issues(self, project_key: str, text: str = "") -> list[Issue]:
         project_key = self._checked_project(project_key)
@@ -84,8 +90,9 @@ class JiraTracker:
         words = TEXT_SEARCH_OPERATORS.sub(" ", text).strip()
         if words:
             jql += f' AND summary ~ "{words}"'
-        data = self._get(
+        return self._get(
             "search",
+            lambda data: [self._issue(item) for item in data["issues"]],
             {
                 "jql": f"{jql} ORDER BY created DESC",
                 "fields": ISSUE_FIELDS,
@@ -93,13 +100,13 @@ class JiraTracker:
             },
             missing=ProjectNotFound(project_key),
         )
-        return [self._issue(item) for item in data["issues"]]
 
     def issue(self, key: str) -> Issue:
         if not ISSUE_KEY.fullmatch(key):
             raise IssueNotFound(key)
-        data = self._get(f"issue/{key}", {"fields": ISSUE_FIELDS}, missing=IssueNotFound(key))
-        return self._issue(data)
+        return self._get(
+            f"issue/{key}", self._issue, {"fields": ISSUE_FIELDS}, missing=IssueNotFound(key)
+        )
 
     def _open_issue_by_key(self, project_key: str, key: str) -> list[Issue]:
         try:
@@ -126,16 +133,35 @@ class JiraTracker:
             url=f"{self.address}/browse/{data['key']}",
         )
 
-    def _get(
+    def _get[T](
         self,
         path: str,
+        parse: Callable[[Any], T],
         params: dict[str, str | int] | None = None,
         missing: TrackerError | None = None,
-    ) -> Any:
+    ) -> T:
+        """Ask Jira and turn its answer into dimond's values with `parse`. Anything that is
+        not the JSON Jira 8.13 sends (a proxy's login page, a changed field) becomes a
+        readable TrackerUnreachable instead of a crash."""
         try:
             response = self._client.get(path, params=params)
         except httpx.TransportError as error:
             raise TrackerUnreachable(f"Jira at {self.address} did not answer: {error}") from error
+        self._raise_for_answer(response, path, missing)
+        try:
+            return parse(response.json())
+        except ValueError as error:
+            raise TrackerUnreachable(
+                f"Jira at {self.address} answered {path} with something that is not JSON."
+            ) from error
+        except (KeyError, TypeError) as error:
+            raise TrackerUnreachable(
+                f"Jira at {self.address} answered {path} in an unexpected shape ({error!r})."
+            ) from error
+
+    def _raise_for_answer(
+        self, response: httpx.Response, path: str, missing: TrackerError | None
+    ) -> None:
         if response.is_redirect:
             raise TrackerUnreachable(
                 f"Jira sent us to {response.headers.get('location')}; put that address in "
@@ -157,4 +183,3 @@ class JiraTracker:
             raise missing
         if response.is_error:
             raise TrackerUnreachable(f"Jira answered {response.status_code} to {path}.")
-        return response.json()

@@ -163,3 +163,17 @@ def test_jira_errors_are_reported_with_their_code():
 def test_http_address_is_refused_because_the_password_would_travel_in_plain_text():
     with pytest.raises(TrackerNotConfigured, match="https://"):
         JiraTracker("http://j.shakuro.com", "dsmirnov", "secret")
+
+
+def test_a_page_that_is_not_json_is_reported_not_crashed_on():
+    proxy_login = lambda request: httpx.Response(200, text="<html>Sign in to the proxy</html>")  # noqa: E731
+
+    with pytest.raises(TrackerUnreachable, match="not JSON"):
+        jira_with(proxy_login).account()
+
+
+def test_an_answer_in_an_unexpected_shape_is_reported_not_crashed_on():
+    with pytest.raises(TrackerUnreachable, match="unexpected shape"):
+        jira_with(
+            lambda request: httpx.Response(200, json={"issues": [{"key": "FI-1"}]})
+        ).open_issues("FI")
