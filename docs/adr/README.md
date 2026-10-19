@@ -18,3 +18,4 @@ Why the project is built the way it is. Read the record before changing what it 
 - [0014. Every PM has their own clients](0014-every-pm-has-their-own-clients.md)
 - [0015. Revoking access ends every session for good](0015-revoking-access-ends-every-session.md)
 - [0016. Signed-in devices are recorded at sign-in](0016-signed-in-devices.md)
+- [0017. httpx for tracker calls; the tracker is switched in the admin](0017-httpx-for-tracker-calls.md)

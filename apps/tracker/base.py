@@ -1,0 +1,84 @@
+"""What every tracker adapter gives the rest of dimond (ADR 0008).
+
+Nothing outside `apps.tracker` talks to Jira directly: it asks `current_tracker()` for an
+object with these methods and gets plain values back.
+"""
+
+import re
+from dataclasses import dataclass
+from typing import Protocol
+
+# A project key as Jira allows it: FI, ATL, HR2. Checked before a key goes into a query.
+PROJECT_KEY = re.compile(r"[A-Z][A-Z0-9_]+")
+ISSUE_KEY = re.compile(r"[A-Z][A-Z0-9_]+-\d+")
+
+
+@dataclass(frozen=True)
+class Account:
+    login: str
+    display_name: str
+
+
+@dataclass(frozen=True)
+class Project:
+    key: str
+    name: str
+
+
+@dataclass(frozen=True)
+class Issue:
+    key: str
+    summary: str
+    status: str
+    issue_type: str
+    project_key: str
+    done: bool
+    url: str
+
+
+class TrackerError(Exception):
+    """A problem the PM can read and act on; the message says what happened in plain words."""
+
+
+class TrackerNotConfigured(TrackerError):
+    pass
+
+
+class TrackerUnreachable(TrackerError):
+    pass
+
+
+class TrackerSignInFailed(TrackerError):
+    pass
+
+
+class TrackerForbidden(TrackerError):
+    pass
+
+
+class ProjectNotFound(TrackerError):
+    def __init__(self, key: str) -> None:
+        super().__init__(f"There is no project {key}, or the tracker account cannot see it.")
+
+
+class IssueNotFound(TrackerError):
+    def __init__(self, key: str) -> None:
+        super().__init__(f"There is no task {key}, or the tracker account cannot see it.")
+
+
+class Tracker(Protocol):
+    name: str
+    address: str
+
+    def account(self) -> Account: ...
+
+    def projects(self) -> list[Project]: ...
+
+    def issue_types(self, project_key: str) -> list[str]: ...
+
+    def open_issues(self, project_key: str, text: str = "") -> list[Issue]:
+        """Tasks of the project that are not done, newest first. `text` is a task key or
+        words from the title."""
+        ...
+
+    def issue(self, key: str) -> Issue: ...
