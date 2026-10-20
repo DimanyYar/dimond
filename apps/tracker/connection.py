@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+
 from django.conf import settings
 
 from .base import Tracker, TrackerNotConfigured
@@ -30,3 +33,24 @@ def current_tracker() -> Tracker:
             settings.TRACKER_JIRA_PASSWORD,
         )
     return MockTracker()
+
+
+def login_fingerprint() -> str:
+    """The Jira login in .env as a keyed hash, never the password itself: it tells whether the
+    login Jira rejected is still the one in use."""
+    login = "\n".join(
+        [settings.TRACKER_JIRA_URL, settings.TRACKER_JIRA_USERNAME, settings.TRACKER_JIRA_PASSWORD]
+    )
+    return hmac.new(settings.SECRET_KEY.encode(), login.encode(), hashlib.sha256).hexdigest()
+
+
+def jira_login_paused() -> bool:
+    """Jira rejected the login that is still in .env: anything that would sign in to Jira
+    waits, since each try brings Jira closer to locking the account. Only reads; the sync
+    worker is what lifts the pause."""
+    row = TrackerSettings.load()
+    return (
+        row.sync_paused_at is not None
+        and row.tracker == TrackerKind.JIRA
+        and row.sync_paused_login == login_fingerprint()
+    )

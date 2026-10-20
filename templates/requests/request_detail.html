@@ -180,7 +180,7 @@
         </ol>
       {% endif %}
     </section>
-    {% if page.can_edit or page.can_withdraw_now or page.can_ask_to_withdraw or page.withdrawal or page.can_move_to_later or page.can_bring_back or page.can_decline or page.can_create_jira_task or page.needs_jira_project %}
+    {% if page.can_edit or page.can_withdraw_now or page.can_ask_to_withdraw or page.withdrawal or page.can_move_to_later or page.can_bring_back or page.can_decline or page.can_create_jira_task or page.jira_task_paused or page.needs_jira_project %}
       <section class="card actions-card" id="actions" aria-labelledby="actions-title">
         <h2 id="actions-title">Actions</h2>
 
@@ -189,6 +189,12 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
             Create Jira task
           </a>
+        {% elif page.jira_task_paused %}
+          <button class="btn btn-primary btn-action" type="button" disabled>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Create Jira task
+          </button>
+          <p class="hint">Jira rejected dimond’s login, so the sync is paused and tasks wait too. <a href="{% url 'logs' %}">See Logs</a> for what to fix.</p>
         {% elif page.needs_jira_project %}
           <p class="hint">To create a Jira task, <a href="{% url 'client' r.company_id %}?jira#jira">choose {{ r.company }}’s Jira project</a> first.</p>
         {% endif %}

@@ -26,7 +26,7 @@ from django.utils import timezone
 from apps.accounts.models import Company, Role, User
 from apps.files.models import Attachment
 from apps.tracker.base import ISSUE_KEY, Issue
-from apps.tracker.connection import current_tracker
+from apps.tracker.connection import current_tracker, jira_login_paused
 from apps.tracker.models import TrackerSettings
 
 from .models import (
@@ -558,15 +558,21 @@ def can_decline(user: User, request: Request) -> bool:
 JIRA_TASK_STATUSES = (ClientStatus.RECEIVED, ClientStatus.NEEDS_INPUT, ClientStatus.LATER)
 
 
-def can_create_jira_task(user: User, request: Request) -> bool:
-    """Create Jira task, in the client's own project (PRD: PM buttons; tracker and settings),
-    for any open request without a task. Past Planned that only happens once its task was
+def could_create_jira_task(user: User, request: Request) -> bool:
+    """The request may get a task, in the client's own project (PRD: PM buttons; tracker and
+    settings): any open request without one. Past Planned that only happens once its task was
     lost (deleted, unlinked); a task moved to another client's project may be replaced too."""
     if not _is_owner_pm(user, request) or not request.company.jira_project:
         return False
     if request.status in CLOSED_STATUSES:
         return False
     return not request.jira_key or bool(request.jira_moved_to)
+
+
+def can_create_jira_task(user: User, request: Request) -> bool:
+    """Create Jira task works now: not while the sync is paused for a rejected login, when
+    the window would only spend another try at Jira's password (PRD: Jira sync)."""
+    return could_create_jira_task(user, request) and not jira_login_paused()
 
 
 def can_unlink_task(user: User, request: Request) -> bool:
@@ -871,6 +877,8 @@ class RequestPage:
     can_decline: bool
     can_add_note: bool
     can_create_jira_task: bool
+    # Create Jira task waits for the sync's pause (Jira rejected the login) to lift.
+    jira_task_paused: bool
     needs_jira_project: bool
     shows_jira_link: bool
 
@@ -930,6 +938,7 @@ def request_page(user: User, pk: int) -> RequestPage:
         can_decline=can_decline(user, request),
         can_add_note=can_add_note(user, request),
         can_create_jira_task=can_create_jira_task(user, request),
+        jira_task_paused=could_create_jira_task(user, request) and jira_login_paused(),
         needs_jira_project=needs_jira_project(user, request),
         shows_jira_link=shows_jira_link(user),
     )
