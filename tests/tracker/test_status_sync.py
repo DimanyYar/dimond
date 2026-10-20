@@ -282,13 +282,14 @@ def test_the_demo_tracker_brings_its_statuses_too(anna, pm, capsys):
     request = services.create_request(
         anna, RequestType.IMPROVEMENT, "Filter by source", "Context", WhenNeeded.NEXT_RELEASE
     )
-    services.link_jira_task(pm, request, "FI-2214", reply="", comment=False)
+    # FI-2208 has no team question, so only its status comes back.
+    services.link_jira_task(pm, request, "FI-2208", reply="", comment=False)
     assert status_of(request) == ClientStatus.PLANNED
 
     call_command("sync_tracker")
 
     assert status_of(request) == ClientStatus.IN_PROGRESS
-    assert SyncEvent.objects.get().what == "Status in Jira: Code review"
+    assert SyncEvent.objects.get().what == "Status in Jira: In Progress"
     assert "Succeeded: 1 task(s), 1 change(s)" in capsys.readouterr().out
 
 

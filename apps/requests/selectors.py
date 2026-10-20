@@ -222,7 +222,11 @@ def with_pm_reason(requests: QuerySet[Request]) -> QuerySet[Request]:
     has not answered yet. Any message from anyone at the client's company counts, since
     clients only ever talk to the PM.
     """
-    latest = Message.objects.filter(request=OuterRef("pk")).order_by("-created_at", "-pk")
+    # The team's questions from Jira are left out: one arriving after a client's message must
+    # not hide that message from the PM.
+    latest = Message.objects.filter(request=OuterRef("pk"), author__isnull=False).order_by(
+        "-created_at", "-pk"
+    )
     last_author_role = Subquery(latest.values("author__role")[:1])
     last_message_at = Subquery(latest.values("created_at")[:1])
     # "No reply needed" covers the client's messages up to that moment, not later ones.
@@ -479,17 +483,20 @@ def can_post_message(user: User, request: Request) -> bool:
 def can_ask_for_input(user: User, request: Request) -> bool:
     """Only the PM asks, and only before the request is planned: later questions come from
     the team in Jira (PRD: statuses and Jira mapping)."""
-    return _is_owner_pm(user, request) and request.status in (
-        ClientStatus.RECEIVED,
-        ClientStatus.NEEDS_INPUT,
-    )
+    return _is_owner_pm(user, request) and _before_the_task(request)
 
 
 def can_edit_request(user: User, request: Request) -> bool:
     """Anyone at the client's company rewrites the request until it is planned. After that the
     team works from the Jira task, so news goes into the thread instead. The PM never edits
     the client's words: their own version of the task lives in Jira (ADR 0010)."""
-    return _is_company_client(user, request) and request.status in EDITABLE_STATUSES
+    return _is_company_client(user, request) and _before_the_task(request)
+
+
+def _before_the_task(request: Request) -> bool:
+    """Not planned yet. Needs your input alone does not say so: a team question from Jira puts
+    a request with a task there too (PRD: Jira sync, team questions)."""
+    return request.status in EDITABLE_STATUSES and not request.jira_key
 
 
 def _is_company_client(user: User, request: Request) -> bool:
@@ -514,16 +521,21 @@ def _pending_withdrawal(request: Request) -> WithdrawalRequest | None:
 
 def can_withdraw_now(user: User, request: Request) -> bool:
     """Before it is planned the client withdraws on the spot: nobody works on it yet."""
-    return _is_company_client(user, request) and request.status in EDITABLE_STATUSES
+    return _is_company_client(user, request) and _before_the_task(request)
 
 
 def can_ask_to_withdraw(user: User, request: Request) -> bool:
     """From Planned on the client asks with a reason, once at a time, and the PM decides."""
     return (
         _is_company_client(user, request)
-        and request.status in ASK_TO_WITHDRAW_STATUSES
+        and (request.status in ASK_TO_WITHDRAW_STATUSES or _waits_with_a_task(request))
         and _pending_withdrawal(request) is None
     )
+
+
+def _waits_with_a_task(request: Request) -> bool:
+    """A team question the client has not answered yet: the team may be working already."""
+    return request.status == ClientStatus.NEEDS_INPUT and bool(request.jira_key)
 
 
 def can_decide_withdrawal(user: User, request: Request) -> bool:
@@ -538,10 +550,7 @@ def _is_owner_pm(user: User, request: Request) -> bool:
 def can_move_to_later(user: User, request: Request) -> bool:
     """Later is "yes, but not now": for a request the PM has not planned yet (PRD: PM
     buttons). Once planned, the Jira sync moves it there when the task leaves the release."""
-    return _is_owner_pm(user, request) and request.status in (
-        ClientStatus.RECEIVED,
-        ClientStatus.NEEDS_INPUT,
-    )
+    return _is_owner_pm(user, request) and _before_the_task(request)
 
 
 def can_bring_back(user: User, request: Request) -> bool:

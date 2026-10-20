@@ -1,3 +1,4 @@
+import re
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -12,7 +13,15 @@ from apps.accounts.models import Role, User
 from apps.files.models import Attachment
 from apps.files.services import attach_files, public_link, removable_files, remove_files
 from apps.files.uploads import CheckedFile
-from apps.tracker.base import Issue, Release, Tracker, TrackerError, TrackerUnreachable
+from apps.tracker.base import (
+    CLIENT_TAG,
+    Comment,
+    Issue,
+    Release,
+    Tracker,
+    TrackerError,
+    TrackerUnreachable,
+)
 from apps.tracker.connection import current_tracker
 
 from .models import (
@@ -629,6 +638,60 @@ def _sync_effect(
     if target != before:
         return f"Went back in Jira; the client keeps seeing “{before.label}”."
     return f"The client still sees “{before.label}”."
+
+
+@dataclass(frozen=True)
+class QuestionFollowed:
+    """A team question the sync brought into a request, or an edit of one, for the sync log."""
+
+    request: Request
+    message: Message
+    edited: bool
+    status_from: ClientStatus
+
+
+def _question_text(comment: Comment) -> str:
+    """The question as the client reads it: the tag is for the team, not for them."""
+    without_tag = CLIENT_TAG.sub("", comment.text)
+    return "\n".join(
+        re.sub(r"[ \t]{2,}", " ", line).strip() for line in without_tag.split("\n")
+    ).strip()
+
+
+@transaction.atomic
+def add_team_question(
+    request: Request,
+    comment: Comment,
+    files: Sequence[CheckedFile],
+    files_not_shown: Sequence[str],
+) -> QuestionFollowed:
+    """A comment tagged #client becomes the team's message to the client, from "Team", and
+    the request waits for their answer, whatever its status: a closed request opens again
+    (PRD: Jira sync, team questions). The PM sees it as a new message, not in Needs you."""
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    message = Message.objects.create(
+        request=request,
+        author=None,
+        text=_question_text(comment),
+        team_comment_id=comment.id,
+        team_author=comment.author_name,
+        team_edited_at=comment.updated,
+        files_not_shown=list(files_not_shown),
+    )
+    attach_files(request, None, files, message=message)
+    status_from = ClientStatus(request.status)
+    request = _set_status(request, ClientStatus.NEEDS_INPUT, None)
+    return QuestionFollowed(request, message, edited=False, status_from=status_from)
+
+
+@transaction.atomic
+def edit_team_question(request: Request, comment: Comment) -> QuestionFollowed:
+    """The team reworded the question in Jira: the client reads the new words. Files stay as
+    they were copied; the status does not change."""
+    message = Message.objects.select_for_update().get(request=request, team_comment_id=comment.id)
+    message.text, message.team_edited_at = _question_text(comment), comment.updated
+    message.save(update_fields=["text", "team_edited_at"])
+    return QuestionFollowed(request, message, edited=True, status_from=ClientStatus(request.status))
 
 
 @dataclass(frozen=True)

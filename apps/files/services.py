@@ -36,13 +36,14 @@ def _preview_status(checked: CheckedFile) -> PreviewStatus:
 
 def attach_files(
     request: Request,
-    uploader: User,
+    uploader: User | None,
     files: Iterable[CheckedFile],
     *,
     message: Message | None = None,
     added_in: RequestRevision | None = None,
 ) -> list[Attachment]:
-    """Save checked files to the request, to one of its replies or as part of an edit. Called
+    """Save checked files to the request, to one of its replies or as part of an edit; with no
+    uploader, the files of a team question the Jira sync copied. Called
     from inside a request action that has already decided this person may add files, so the
     files and the action are saved or rolled back together."""
     return [

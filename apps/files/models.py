@@ -72,7 +72,14 @@ class Attachment(models.Model):
         related_name="attachments",
         help_text="Empty for the request's own files; set for files sent with a reply.",
     )
-    uploaded_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
+    uploaded_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text="Empty for a file the team attached to a question in Jira.",
+    )
     file = models.FileField(upload_to=_stored_name, max_length=100)
     name = models.CharField(max_length=255, help_text="The file's name on the uploader's computer.")
     content_type = models.CharField(

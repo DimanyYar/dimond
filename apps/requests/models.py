@@ -317,21 +317,62 @@ class TaskEvent(models.Model):
 
 class Message(models.Model):
     """A reply in a request's thread. Everyone who can open the request reads every message,
-    so PM notes and Jira comments never go here."""
+    so PM notes never go here, and of the Jira comments only the team's questions tagged
+    #client (PRD: Jira sync)."""
 
     request = models.ForeignKey(Request, on_delete=models.PROTECT, related_name="messages")
-    author = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
+    author = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text="Empty for a question the team asked in Jira.",
+    )
     text = models.TextField()
     asks_for_input = models.BooleanField(
         default=False, help_text="The PM's question that moved the request to Needs your input."
+    )
+    team_comment_id = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="The Jira comment this team question came from: the sync copies it once and "
+        "follows its edits.",
+    )
+    team_author = models.CharField(
+        max_length=200, blank=True, help_text="Who asked in Jira. The thread says “Team”."
+    )
+    team_edited_at = models.DateTimeField(
+        null=True, blank=True, help_text="When the comment last changed in Jira."
+    )
+    files_not_shown = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Files of the Jira comment dimond could not show: gone from the task, too big "
+        "or of a kind it does not accept.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["created_at", "pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["team_comment_id"],
+                condition=~models.Q(team_comment_id=""),
+                name="one_message_per_jira_comment",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(author__isnull=False) | ~models.Q(team_comment_id=""),
+                name="message_has_an_author_or_a_jira_comment",
+            ),
+        ]
 
     def __str__(self) -> str:
-        return f"{self.author} on {self.request.key}"
+        return f"{self.author or 'Team'} on {self.request.key}"
+
+    @property
+    def from_team(self) -> bool:
+        return bool(self.team_comment_id)
 
 
 class RequestRevision(models.Model):
