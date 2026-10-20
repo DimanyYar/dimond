@@ -9,6 +9,7 @@ urlpatterns = [
     path("", include("apps.accounts.urls")),
     path("", include("apps.requests.urls")),
     path("", include("apps.files.urls")),
+    path("", include("apps.tracker.urls")),
     path("healthz", health, name="health"),
     path("favicon.ico", favicon),
     path("styleguide/", styleguide, name="styleguide"),
