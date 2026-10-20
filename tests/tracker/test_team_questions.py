@@ -368,3 +368,22 @@ def test_while_the_team_waits_the_pm_does_not_ask_a_question_of_their_own(jira, 
     request.refresh_from_db()
 
     assert not can_ask_for_input(pm, request)
+
+
+def test_a_question_shown_to_another_client_never_reaches_this_one(jira, anna, pm):
+    first = linked(anna)
+    jira.comments = [comment()]
+    sync_tasks()
+    # Jira moved the task to Northwind's project; the PM links it to Northwind's request.
+    Request.objects.filter(pk=first.pk).update(jira_moved_to="NW-15")
+    northwind = Company.objects.create(name="Northwind", owner=pm, jira_project="NW")
+    nina = User.objects.create_user("nina@northwind.test", company=northwind)
+    second = services.create_request(
+        nina, RequestType.BUG, "Invoice VAT", "Context", WhenNeeded.HOTFIX, link="https://a.b"
+    )
+    Request.objects.filter(pk=second.pk).update(jira_key="NW-15", jira_status="Code review")
+
+    run = sync_tasks()
+
+    assert not second.messages.exists()
+    assert run.outcome == SyncOutcome.SUCCEEDED

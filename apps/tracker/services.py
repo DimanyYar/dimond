@@ -208,8 +208,16 @@ def _follow_questions(run: SyncRun, tracker: Tracker, request: Request, issue: I
         .exclude(team_comment_id="")
         .values_list("team_comment_id", "team_edited_at")
     )
-    for comment in issue.comments:
-        if not comment.asks_the_client:
+    asked = [c for c in issue.comments if c.asks_the_client]
+    # A task Jira moved between clients' projects keeps its comments: a question already shown
+    # to another request's client was meant for them, never for this one.
+    elsewhere = set(
+        Message.objects.filter(team_comment_id__in=[c.id for c in asked])
+        .exclude(request=request)
+        .values_list("team_comment_id", flat=True)
+    )
+    for comment in asked:
+        if comment.id in elsewhere:
             continue
         if comment.id in known:
             if known[comment.id] != comment.updated:
