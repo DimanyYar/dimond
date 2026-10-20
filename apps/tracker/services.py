@@ -1,11 +1,8 @@
 """The Jira sync: every linked task's status comes back to its request (PRD: Jira sync;
 ADR 0010, 0019)."""
 
-import hashlib
-import hmac
 from datetime import datetime, timedelta
 
-from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -32,7 +29,7 @@ from .base import (
     TrackerSignInFailed,
     TrackerUnreachable,
 )
-from .connection import current_tracker
+from .connection import current_tracker, login_fingerprint
 from .models import SyncEvent, SyncOutcome, SyncRun, TrackerKind, TrackerSettings
 
 # How often the worker looks for a Sync now between its regular runs.
@@ -68,13 +65,6 @@ def ask_for_sync(pm: User) -> SyncRun:
     return waiting.first() or SyncRun.objects.create(outcome=SyncOutcome.QUEUED, manual=True)
 
 
-def _login_fingerprint() -> str:
-    login = "\n".join(
-        [settings.TRACKER_JIRA_URL, settings.TRACKER_JIRA_USERNAME, settings.TRACKER_JIRA_PASSWORD]
-    )
-    return hmac.new(settings.SECRET_KEY.encode(), login.encode(), hashlib.sha256).hexdigest()
-
-
 def _pause(reason: str, captcha: bool) -> None:
     """Jira rejected the login. Every further try with the same password counts as another
     wrong one, and Jira Server then asks the account for a captcha, which breaks it for
@@ -84,7 +74,7 @@ def _pause(reason: str, captcha: bool) -> None:
         sync_paused_at=timezone.now(),
         sync_paused_reason=reason,
         sync_paused_captcha=captcha,
-        sync_paused_login=_login_fingerprint(),
+        sync_paused_login=login_fingerprint(),
     )
 
 
@@ -100,7 +90,7 @@ def sync_paused() -> bool:
     row = TrackerSettings.load()
     if row.sync_paused_at is None:
         return False
-    if row.tracker != TrackerKind.JIRA or row.sync_paused_login != _login_fingerprint():
+    if row.tracker != TrackerKind.JIRA or row.sync_paused_login != login_fingerprint():
         _resume()
         return False
     return True
