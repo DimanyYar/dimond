@@ -18,6 +18,7 @@ from apps.requests.models import CLOSED_STATUSES, JIRA_STATUSES, ClientStatus, R
 from .base import TrackerNotConfigured
 from .connection import current_tracker
 from .models import SyncEvent, SyncOutcome, SyncRun
+from .services import STUCK_AFTER
 
 RUNS_SHOWN = 50
 DONE_RUNS = (SyncOutcome.SUCCEEDED, SyncOutcome.PROBLEMS, SyncOutcome.FAILED)
@@ -197,7 +198,8 @@ def sync_state(pm: User) -> SyncState:
         connected=connected,
         last=SyncRun.objects.filter(outcome__in=DONE_RUNS).first(),
         waiting=SyncRun.objects.filter(
-            outcome__in=[SyncOutcome.QUEUED, SyncOutcome.RUNNING]
+            Q(outcome=SyncOutcome.QUEUED)
+            | Q(outcome=SyncOutcome.RUNNING, started_at__gte=timezone.now() - STUCK_AFTER)
         ).exists(),
         attention=len(needs_attention(pm)),
     )

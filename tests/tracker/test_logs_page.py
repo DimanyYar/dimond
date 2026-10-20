@@ -1,6 +1,8 @@
 """Logs · Jira sync (PRD: Jira sync; mockup 4.x · PM logs): only PMs, each sees their own
 clients' events; Sync now queues a run the worker picks up."""
 
+from datetime import timedelta
+
 import pytest
 from django.core.management import call_command
 from django.urls import reverse
@@ -10,6 +12,7 @@ from apps.accounts.models import Company, Role, User
 from apps.requests import services
 from apps.requests.models import ClientStatus, Request, RequestType, WhenNeeded
 from apps.tracker.models import SyncEvent, SyncOutcome, SyncRun
+from apps.tracker.services import close_cut_off_runs
 
 pytestmark = pytest.mark.django_db
 
@@ -190,3 +193,21 @@ def test_the_logs_link_counts_what_needs_attention(client, pm, anna):
     page = client.get(reverse("clients")).content.decode()
 
     assert 'aria-label="1 need attention"' in page
+
+
+def test_a_run_cut_off_by_a_restart_stops_saying_syncing(client, pm):
+    cut_off = SyncRun.objects.create(outcome=SyncOutcome.RUNNING)
+    SyncRun.objects.filter(pk=cut_off.pk).update(started_at=timezone.now() - timedelta(minutes=11))
+    assert 'type="submit">Sync now</button>' in logs(client, pm)
+
+    close_cut_off_runs()
+
+    cut_off.refresh_from_db()
+    assert cut_off.outcome == SyncOutcome.FAILED
+    assert "its worker was restarted" in logs(client, pm, "?show=problems")
+
+
+def test_sync_now_cannot_be_pressed_while_a_run_waits(client, pm):
+    SyncRun.objects.create(outcome=SyncOutcome.QUEUED, manual=True)
+
+    assert '<button class="btn btn-dark" type="submit" disabled>' in logs(client, pm)

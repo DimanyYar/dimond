@@ -26,7 +26,7 @@ the right; on a phone they stack.
       </span>
       <form method="post" action="{% url 'sync_now' %}" data-busy="Syncing…">
         {% csrf_token %}
-        <button class="btn btn-dark" type="submit"{% if sync.waiting %} aria-disabled="true"{% endif %}>{% if sync.waiting %}Syncing…{% else %}Sync now{% endif %}</button>
+        <button class="btn btn-dark" type="submit"{% if sync.waiting %} disabled{% endif %}>{% if sync.waiting %}Syncing…{% else %}Sync now{% endif %}</button>
       </form>
     </div>
   </header>

@@ -18,6 +18,8 @@ from .models import SyncEvent, SyncOutcome, SyncRun
 
 # How often the worker looks for a Sync now between its regular runs.
 QUEUE_CHECK_SECONDS = 3
+# A run takes seconds. One still "running" after this was cut off: the worker stopped mid-run.
+STUCK_AFTER = timedelta(minutes=10)
 
 # Closed requests are still read for a while, so a task reopened soon after shows up in the
 # log; reading every request ever closed would grow without end.
@@ -39,6 +41,16 @@ def ask_for_sync(pm: User) -> SyncRun:
         raise NotAllowedError
     waiting = SyncRun.objects.select_for_update().filter(outcome=SyncOutcome.QUEUED)
     return waiting.first() or SyncRun.objects.create(outcome=SyncOutcome.QUEUED, manual=True)
+
+
+def close_cut_off_runs() -> int:
+    """At worker start: a run left "running" was cut off when the worker stopped, so it is
+    logged as failed instead of saying "Syncing…" for good."""
+    return SyncRun.objects.filter(outcome=SyncOutcome.RUNNING).update(
+        outcome=SyncOutcome.FAILED,
+        finished_at=timezone.now(),
+        error="The sync stopped before it finished: its worker was restarted.",
+    )
 
 
 def next_queued_run() -> SyncRun | None:
