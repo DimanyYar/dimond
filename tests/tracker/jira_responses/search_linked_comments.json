@@ -1,0 +1,32 @@
+{"startAt": 0, "maxResults": 50, "total": 1, "issues": [
+ {"expand": "operations", "id": "48160", "self": "https://j.shakuro.com/rest/api/2/issue/48160", "key": "FI-2214",
+  "fields": {"summary": "Filter the leads list by source",
+   "issuetype": {"id": "10001", "name": "Story", "subtask": false},
+   "project": {"id": "10512", "key": "FI", "name": "Atlas"},
+   "status": {"id": "10203", "name": "Code review", "statusCategory": {"id": 4, "key": "indeterminate", "name": "In Progress"}},
+   "fixVersions": [],
+   "attachment": [
+    {"self": "https://j.shakuro.com/rest/api/2/attachment/41555", "id": "41555", "filename": "lead-sources.png",
+     "author": {"name": "opetrova@shakuro.com", "key": "JIRAUSER12301", "displayName": "Olga Petrova"},
+     "created": "2026-10-20T10:43:51.120+0200", "size": 167963, "mimeType": "image/png",
+     "content": "https://j.shakuro.com/secure/attachment/41555/lead-sources.png",
+     "thumbnail": "https://j.shakuro.com/secure/thumbnail/41555/_thumb_41555.png"}
+   ],
+   "comment": {"comments": [
+    {"self": "https://j.shakuro.com/rest/api/2/issue/48160/comment/86401", "id": "86401",
+     "author": {"name": "opetrova@shakuro.com", "key": "JIRAUSER12301", "displayName": "Olga Petrova"},
+     "body": "[~dsmirnov@shakuro.com] archived sources are still in the settings table, I can hide them.",
+     "updateAuthor": {"name": "opetrova@shakuro.com", "key": "JIRAUSER12301", "displayName": "Olga Petrova"},
+     "created": "2026-10-13T11:05:02.004+0200", "updated": "2026-10-13T11:05:02.004+0200"},
+    {"self": "https://j.shakuro.com/rest/api/2/issue/48160/comment/86412", "id": "86412",
+     "author": {"name": "opetrova@shakuro.com", "key": "JIRAUSER12301", "displayName": "Olga Petrova"},
+     "body": "#client Which sources should the list show: only the ones you use now, or every source from [CRM settings|https://atlas.example.com/settings/sources], including archived ones?\r\n\r\n !lead-sources.png|thumbnail! \r\n\r\n\r\n!old-filter.png!",
+     "updateAuthor": {"name": "opetrova@shakuro.com", "key": "JIRAUSER12301", "displayName": "Olga Petrova"},
+     "created": "2026-10-20T10:44:10.517+0200", "updated": "2026-10-20T10:52:31.880+0200"},
+    {"self": "https://j.shakuro.com/rest/api/2/issue/48160/comment/86415", "id": "86415",
+     "author": {"name": "dsmirnov", "key": "dsmirnov", "displayName": "Dmitry Smirnov"},
+     "body": "{quote}#client Which sources should the list show?{quote}\r\nMark T. (Atlas) answered via dimond: only the active ones.",
+     "updateAuthor": {"name": "dsmirnov", "key": "dsmirnov", "displayName": "Dmitry Smirnov"},
+     "created": "2026-10-20T11:30:00.000+0200", "updated": "2026-10-20T11:30:00.000+0200"}
+   ], "maxResults": 3, "total": 3, "startAt": 0}}}
+]}

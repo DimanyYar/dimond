@@ -3,14 +3,17 @@ No test here reaches Jira."""
 
 import json
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
 import pytest
 
 from apps.tracker.base import (
+    Comment,
     IssueNotFound,
     ProjectNotFound,
+    TaskFile,
     TrackerCaptcha,
     TrackerForbidden,
     TrackerNotConfigured,
@@ -375,3 +378,104 @@ def test_fix_versions_with_a_release_date_come_soonest_first():
         ("2.15", "2026-10-28"),
         ("2.16", "2026-11-12"),
     ]
+
+
+def comments_of_fi_2214() -> list[Comment]:
+    jira = jira_answering({"search": saved("search_linked_comments.json")}, [])
+    [task] = jira.issues(["FI-2214"])
+    return list(task.comments)
+
+
+def test_the_sync_search_brings_comments_and_files_in_the_same_request():
+    seen: list[httpx.Request] = []
+    jira = jira_answering({"search": saved("search_linked_comments.json")}, seen)
+
+    jira.issues(["FI-2214"])
+
+    assert len(seen) == 1
+    assert seen[0].url.params["fields"].split(",")[-2:] == ["comment", "attachment"]
+
+
+def test_only_a_comment_tagged_client_is_a_question_for_the_client():
+    internal, question, _ = comments_of_fi_2214()
+
+    assert question.asks_the_client
+    assert not internal.asks_the_client
+    assert (question.id, question.author_login, question.author_name) == (
+        "86412",
+        "opetrova@shakuro.com",
+        "Olga Petrova",
+    )
+    assert question.updated == datetime(2026, 10, 20, 8, 52, 31, 880000, tzinfo=UTC)
+
+
+def test_a_question_reads_as_plain_text_with_its_picture_beside_it():
+    _, question, _ = comments_of_fi_2214()
+
+    assert question.text == (
+        "#client Which sources should the list show: only the ones you use now, or every "
+        "source from CRM settings (https://atlas.example.com/settings/sources), including "
+        "archived ones?"
+    )
+    assert [(f.id, f.name, f.content_type, f.size) for f in question.files] == [
+        ("41555", "lead-sources.png", "image/png", 167963)
+    ]
+
+
+def test_a_picture_the_task_no_longer_has_is_reported_missing():
+    _, question, _ = comments_of_fi_2214()
+
+    assert question.missing_files == ("old-filter.png",)
+
+
+def test_a_mention_reads_as_the_persons_login():
+    internal, _, _ = comments_of_fi_2214()
+
+    assert internal.text.startswith("@dsmirnov archived sources")
+
+
+def test_dimonds_own_answer_is_never_a_question_even_quoting_one():
+    *_, answer = comments_of_fi_2214()
+
+    assert answer.own
+    assert not answer.asks_the_client
+    assert answer.text.startswith("#client Which sources should the list show?\nMark T.")
+
+
+@pytest.mark.parametrize(
+    ("text", "asks"),
+    [
+        ("#Client please check the CSV", True),
+        ("Ask them (#client): which CSV?", True),
+        ("Ask them, #client.", True),
+        ("#clients list is in the wiki", False),
+        ("see #client-portal channel", False),
+        ("issue#client", False),
+        ("##client", False),
+    ],
+)
+def test_the_client_tag_is_a_whole_word(text: str, asks: bool):
+    moment = datetime(2026, 10, 20, tzinfo=UTC)
+    comment = Comment("1", "olga", "Olga", text, created=moment, updated=moment)
+
+    assert comment.asks_the_client is asks
+
+
+def test_reads_a_file_the_question_shows():
+    seen: list[httpx.Request] = []
+    file = TaskFile("41555", "lead sources.png", "image/png", 3)
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, content=b"png")
+
+    assert jira_with(handle).file_content(file) == b"png"
+    assert seen[0].url.raw_path == b"/secure/attachment/41555/lead%20sources.png"
+
+
+def test_a_file_deleted_from_the_task_is_a_refusal_the_sync_can_report():
+    file = TaskFile("41555", "lead-sources.png", "image/png", 3)
+    jira = jira_with(lambda request: saved("issue_does_not_exist.json", 404))
+
+    with pytest.raises(TrackerRefused, match="lead-sources.png is gone"):
+        jira.file_content(file)

@@ -2,14 +2,15 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 
-from apps.tracker.base import TrackerError
+from apps.tracker.base import Comment, Issue, TrackerError
 from apps.tracker.connection import current_tracker
 
 
 class Command(BaseCommand):
     help = (
         "Check the tracker chosen in the admin: who dimond signs in as, which projects it sees, "
-        "and optionally one project's issue types and open tasks. Only reads, changes nothing."
+        "and optionally one project's issue types and open tasks, or one task with its comments "
+        "and which of them are questions for the client (#client). Only reads, changes nothing."
     )
 
     def add_arguments(self, parser: CommandParser) -> None:
@@ -47,8 +48,26 @@ class Command(BaseCommand):
             if not found:
                 self.stdout.write("  none")
         if issue:
-            task = tracker.issue(issue)
-            self.stdout.write(
-                f"{task.key}: {task.summary}\n  {task.issue_type} · {task.status}"
-                f"{' (done)' if task.done else ''} · project {task.project_key}\n  {task.url}"
-            )
+            self._task(tracker.issue(issue))
+
+    def _task(self, task: Issue) -> None:
+        self.stdout.write(
+            f"{task.key}: {task.summary}\n  {task.issue_type} · {task.status}"
+            f"{' (done)' if task.done else ''} · project {task.project_key}\n  {task.url}"
+        )
+        self.stdout.write(f"Comments ({len(task.comments)}):")
+        for comment in task.comments:
+            self._comment(comment)
+
+    def _comment(self, comment: Comment) -> None:
+        kind = "question for the client" if comment.asks_the_client else "team only"
+        if comment.own:
+            kind = "written by dimond's account"
+        self.stdout.write(
+            f"  #{comment.id} · {comment.author_name} · {comment.created:%Y-%m-%d %H:%M} · {kind}"
+        )
+        self.stdout.write("    " + comment.text.replace("\n", "\n    "))
+        for file in comment.files:
+            self.stdout.write(f"    file: {file.name} ({file.size} bytes)")
+        for name in comment.missing_files:
+            self.stdout.write(f"    file not found on the task: {name}")

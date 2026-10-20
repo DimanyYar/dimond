@@ -29,3 +29,14 @@ def test_a_key_with_an_odd_digit_is_skipped_and_the_rest_are_still_read():
     issues = MockTracker().issues(["FI-²", "FI-2214"])
 
     assert [i.key for i in issues] == ["FI-2214"]
+
+
+def test_the_demo_task_from_the_mockups_has_one_question_for_the_client_with_a_picture():
+    demo = MockTracker()
+    [task] = demo.issues(["FI-2214"])
+
+    questions = [c for c in task.comments if c.asks_the_client]
+    assert [q.author_name for q in questions] == ["Olga Petrova"]
+    assert len(task.comments) == 2
+    [picture] = questions[0].files
+    assert demo.file_content(picture).startswith(b"\x89PNG")

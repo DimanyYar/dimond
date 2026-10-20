@@ -6,12 +6,16 @@ object with these methods and gets plain values back.
 
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Protocol
 
 # A project key as Jira allows it: FI, ATL, HR2. Checked before a key goes into a query.
 PROJECT_KEY = re.compile(r"[A-Z][A-Z0-9_]+")
 ISSUE_KEY = re.compile(r"[A-Z][A-Z0-9_]+-\d+")
+# The team marks a comment meant for the client with this tag, in plain text: a mention of a
+# user would need a service account, and while the sync signs in as Dmitry every mention of him
+# would reach the client (PRD: Jira sync, team questions).
+CLIENT_TAG = re.compile(r"(?<![\w#])#client(?![\w-])", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -36,6 +40,37 @@ class Release:
 
 
 @dataclass(frozen=True)
+class TaskFile:
+    """A file attached to a task. Comments show a task's files by name."""
+
+    id: str
+    name: str
+    content_type: str
+    size: int
+
+
+@dataclass(frozen=True)
+class Comment:
+    id: str
+    author_login: str
+    author_name: str
+    # Plain text: the tracker's own markup is gone, people mentioned read as @name.
+    text: str
+    created: datetime
+    updated: datetime
+    # The task's files the comment shows or links to.
+    files: tuple[TaskFile, ...] = ()
+    # Pictures or files it shows that the task no longer has, or that live elsewhere.
+    missing_files: tuple[str, ...] = ()
+    # Written by the account dimond signs in as: its own answers, never a question.
+    own: bool = False
+
+    @property
+    def asks_the_client(self) -> bool:
+        return not self.own and CLIENT_TAG.search(self.text) is not None
+
+
+@dataclass(frozen=True)
 class Issue:
     key: str
     summary: str
@@ -46,6 +81,8 @@ class Issue:
     url: str
     # Soonest first.
     releases: tuple[Release, ...] = ()
+    # Oldest first.
+    comments: tuple[Comment, ...] = ()
 
 
 class TrackerError(Exception):
@@ -117,3 +154,8 @@ class Tracker(Protocol):
     def attach_file(self, key: str, name: str, content: bytes, content_type: str) -> None: ...
 
     def add_comment(self, key: str, body: str) -> None: ...
+
+    def file_content(self, file: TaskFile) -> bytes:
+        """What a task's file holds, e.g. a screenshot in a team question. Callers check
+        `file.size` first: this reads the whole file into memory."""
+        ...
