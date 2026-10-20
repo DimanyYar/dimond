@@ -25,6 +25,11 @@ sets some statuses by hand in dimond (Needs your input, Later, Declined).
   moves only once the task is in work.
 - Every run is logged (`SyncRun`, with a `SyncEvent` per change). Runs with nothing to say are
   kept 7 days, the rest a year.
+- Jira rejecting the login pauses the scheduled runs at once (added Oct 20, 2026): Jira Server
+  answers repeated wrong passwords with a captcha that locks the account for people too. The
+  pause keeps a keyed fingerprint of the login in `.env`, never the password, and lifts by
+  itself once that login changes; Sync now always tries. Jira not answering gets one retry two
+  minutes later.
 
 ## Consequences
 

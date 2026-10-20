@@ -8,6 +8,8 @@ from apps.tracker.services import (
     QUEUE_CHECK_SECONDS,
     close_cut_off_runs,
     next_queued_run,
+    seconds_until_next,
+    sync_paused,
     sync_tasks,
 )
 
@@ -27,12 +29,19 @@ class Command(BaseCommand):
             return
         # Only one worker runs, so anything still "running" now is from before it restarted.
         close_cut_off_runs()
-        last = 0.0
+        due, retried = 0.0, False
         while True:
             queued = next_queued_run()
-            if queued is not None or time.monotonic() - last >= every:
-                last = time.monotonic()
-                self._report(sync_tasks(queued))
+            if queued is None and time.monotonic() < due:
+                pass
+            elif queued is None and sync_paused():
+                due, retried = time.monotonic() + every, False
+            else:
+                # Sync now counts as the scheduled run too: the next one waits its turn.
+                run = sync_tasks(queued)
+                self._report(run)
+                wait, retried = seconds_until_next(run, every, retried)
+                due = time.monotonic() + wait
             time.sleep(QUEUE_CHECK_SECONDS)
 
     def _report(self, run: SyncRun) -> None:

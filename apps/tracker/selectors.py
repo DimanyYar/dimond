@@ -17,7 +17,7 @@ from apps.requests.models import CLOSED_STATUSES, JIRA_STATUSES, ClientStatus, R
 
 from .base import TrackerNotConfigured
 from .connection import current_tracker
-from .models import SyncEvent, SyncOutcome, SyncRun
+from .models import SyncEvent, SyncOutcome, SyncRun, TrackerKind, TrackerSettings
 from .services import STUCK_AFTER
 
 RUNS_SHOWN = 50
@@ -97,6 +97,10 @@ class SyncState:
     last: SyncRun | None
     waiting: bool
     attention: int
+    # Why the sync is paused (Jira rejected the login), or empty.
+    paused: str
+    # Paused for a captcha: the fix is signing in to Jira in a browser, not .env.
+    captcha: bool
 
     @property
     def failed(self) -> bool:
@@ -222,6 +226,8 @@ def _tracker_label() -> tuple[str, bool]:
 
 def sync_state(pm: User) -> SyncState:
     tracker, connected = _tracker_label()
+    row = TrackerSettings.load()
+    paused = _paused_reason(row)
     return SyncState(
         tracker=tracker,
         connected=connected,
@@ -231,4 +237,12 @@ def sync_state(pm: User) -> SyncState:
             | Q(outcome=SyncOutcome.RUNNING, started_at__gte=timezone.now() - STUCK_AFTER)
         ).exists(),
         attention=len(needs_attention(pm)),
+        paused=paused,
+        captcha=bool(paused) and row.sync_paused_captcha,
     )
+
+
+def _paused_reason(row: TrackerSettings) -> str:
+    if row.sync_paused_at is None or row.tracker != TrackerKind.JIRA:
+        return ""
+    return row.sync_paused_reason

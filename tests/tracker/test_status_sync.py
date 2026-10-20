@@ -12,7 +12,7 @@ from apps.files.models import Attachment
 from apps.requests import services
 from apps.requests.models import ClientStatus, Request, RequestType, TaskEvent, WhenNeeded
 from apps.requests.selectors import PmReason, pm_reasons, request_page, requests_for
-from apps.tracker.base import Issue, IssueNotFound, TrackerUnreachable
+from apps.tracker.base import Account, Issue, IssueNotFound, TrackerUnreachable
 from apps.tracker.models import SyncEvent, SyncOutcome, SyncRun
 from apps.tracker.services import sync_tasks
 
@@ -28,6 +28,11 @@ class FakeJira:
         self.fails = fails
         self.moved: dict[str, Issue] = {}
         self.asked: list[list[str]] = []
+
+    def account(self) -> Account:
+        if self.fails:
+            raise self.fails
+        return Account("dimond-sync", "dimond sync")
 
     def issue(self, key: str) -> Issue:
         if key in self.moved:
