@@ -14,10 +14,12 @@ from apps.accounts.models import User
 from apps.accounts.selectors import has_clients_page
 from apps.requests.models import CLOSED_STATUSES, Request
 from apps.requests.services import (
+    ReleasesFollowed,
     TaskFollowed,
     TaskLost,
     drop_deleted_task,
     follow_moved_task,
+    follow_releases,
     follow_task,
 )
 
@@ -191,6 +193,9 @@ def _sync_one(run: SyncRun, tracker: Tracker, request: Request, issue: Issue | N
     followed = follow_task(request, issue.status)
     if followed is not None:
         _log(run, followed)
+    planned = follow_releases(request, issue.releases)
+    if planned is not None:
+        _log_releases(run, planned)
 
 
 def _find_lost(tracker: Tracker, request: Request) -> tuple[TaskLost | None, Issue | None]:
@@ -221,6 +226,17 @@ def _log_lost(run: SyncRun, lost: TaskLost) -> None:
         what=lost.what,
         effect=lost.effect,
         needs_attention=lost.needs_attention,
+    )
+
+
+def _log_releases(run: SyncRun, planned: ReleasesFollowed) -> None:
+    shown = planned.shown or "Not set yet"
+    SyncEvent.objects.create(
+        run=run,
+        request=planned.request,
+        task_key=planned.request.jira_key,
+        what=f"Release: {planned.shown}" if planned.shown else "No release date any more",
+        effect=f"The client sees “Planned for: {shown}”.",
     )
 
 

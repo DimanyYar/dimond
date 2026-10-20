@@ -12,7 +12,7 @@ from apps.accounts.models import Role, User
 from apps.files.models import Attachment
 from apps.files.services import attach_files, public_link, removable_files, remove_files
 from apps.files.uploads import CheckedFile
-from apps.tracker.base import Issue, Tracker, TrackerError, TrackerUnreachable
+from apps.tracker.base import Issue, Release, Tracker, TrackerError, TrackerUnreachable
 from apps.tracker.connection import current_tracker
 
 from .models import (
@@ -23,6 +23,7 @@ from .models import (
     ClientStatus,
     InternalNote,
     Message,
+    PlanEvent,
     Request,
     RequestRevision,
     RequestType,
@@ -563,6 +564,31 @@ def follow_task(request: Request, jira_status: str) -> TaskFollowed | None:
         effect=_sync_effect(status_from, status_to, jira_status, target),
         unmapped=target is None,
     )
+
+
+@dataclass(frozen=True)
+class ReleasesFollowed:
+    """The task's release dates changed, for the sync log."""
+
+    request: Request
+    shown: str  # what the client sees now, "" for none
+
+
+@transaction.atomic
+def follow_releases(request: Request, releases: tuple[Release, ...]) -> ReleasesFollowed | None:
+    """Save the task's dated fix versions for "Planned for" on the card. A date that appears or
+    moves gets a line in the thread for the client; one taken away changes the card quietly
+    (PRD: Jira sync). Returns None when nothing changed."""
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    seen = [{"name": r.name, "date": r.release_date.isoformat()} for r in releases]
+    if seen == request.planned_releases:
+        return None
+    shown_before = bool(request.planned_releases)
+    request.planned_releases = seen
+    request.save(update_fields=["planned_releases"])
+    if seen:
+        PlanEvent.objects.create(request=request, releases=seen, moved=shown_before)
+    return ReleasesFollowed(request=request, shown=request.planned_for)
 
 
 def _sync_may_move(current: ClientStatus, target: ClientStatus) -> bool:

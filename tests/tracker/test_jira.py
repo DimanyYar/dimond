@@ -364,3 +364,14 @@ def test_no_linked_tasks_asks_jira_nothing():
 
     assert jira_answering({}, seen).issues([]) == []
     assert seen == []
+
+
+def test_fix_versions_with_a_release_date_come_soonest_first():
+    jira = jira_answering({"search": saved("search_linked_releases.json")}, [])
+
+    [task] = jira.issues(["FI-2214"])
+
+    assert [(r.name, r.release_date.isoformat()) for r in task.releases] == [
+        ("2.15", "2026-10-28"),
+        ("2.16", "2026-11-12"),
+    ]

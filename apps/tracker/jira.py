@@ -7,6 +7,7 @@ its own base URL as http, and a redirect would send the password to wherever it 
 
 import re
 from collections.abc import Callable
+from datetime import date
 from typing import Any
 
 import httpx
@@ -19,6 +20,7 @@ from .base import (
     IssueNotFound,
     Project,
     ProjectNotFound,
+    Release,
     TrackerCaptcha,
     TrackerError,
     TrackerForbidden,
@@ -32,7 +34,7 @@ TIMEOUT_SECONDS = 15
 OPEN_ISSUES_LIMIT = 20
 # Jira 8.13 gives at most 50 tasks per search page unless its admin raised the limit.
 LINKED_BATCH = 50
-ISSUE_FIELDS = "summary,status,issuetype,project"
+ISSUE_FIELDS = "summary,status,issuetype,project,fixVersions"
 # Jira's text search treats these as operators and answers 400 to a stray one; a PM typing
 # "form - duplicates?" means the words, not the operators.
 TEXT_SEARCH_OPERATORS = re.compile(r"[^\w\s]")
@@ -231,6 +233,16 @@ class JiraTracker:
             project_key=fields["project"]["key"],
             done=status["statusCategory"]["key"] == "done",
             url=f"{self.address}/browse/{data['key']}",
+            releases=tuple(
+                sorted(
+                    (
+                        Release(version["name"], date.fromisoformat(version["releaseDate"]))
+                        for version in fields.get("fixVersions", [])
+                        if version.get("releaseDate")
+                    ),
+                    key=lambda release: release.release_date,
+                )
+            ),
         )
 
     def _call[T](

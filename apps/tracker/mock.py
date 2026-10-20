@@ -5,16 +5,32 @@ mockups.
 """
 
 import time
+from datetime import date
 from itertools import count
 
-from .base import Account, Issue, IssueNotFound, Project, ProjectNotFound, TrackerRefused
+from .base import (
+    Account,
+    Issue,
+    IssueNotFound,
+    Project,
+    ProjectNotFound,
+    Release,
+    TrackerRefused,
+)
 
 DEMO_ADDRESS = "https://jira.example.com"
 PROJECTS = [Project("FI", "Atlas"), Project("HF", "Harbor Foods"), Project("NW", "Northwind")]
 ISSUE_TYPES = ["Bug", "Story", "Task"]
 
 
-def _issue(key: str, summary: str, status: str, issue_type: str, done: bool = False) -> Issue:
+def _issue(
+    key: str,
+    summary: str,
+    status: str,
+    issue_type: str,
+    done: bool = False,
+    releases: tuple[Release, ...] = (),
+) -> Issue:
     return Issue(
         key=key,
         summary=summary,
@@ -23,6 +39,7 @@ def _issue(key: str, summary: str, status: str, issue_type: str, done: bool = Fa
         project_key=key.split("-")[0],
         done=done,
         url=f"{DEMO_ADDRESS}/browse/{key}",
+        releases=releases,
     )
 
 
@@ -32,7 +49,13 @@ ISSUES = [
     _issue("FI-2214", "Filter the leads list by source", "Code review", "Story"),
     _issue("FI-2208", "Lead form: validate phone numbers", "In Progress", "Story"),
     _issue("FI-2197", "Export leads to CSV in the background", "To Do", "Story"),
-    _issue("FI-2190", "Lead card: show the source campaign", "on Staging", "Story"),
+    _issue(
+        "FI-2190",
+        "Lead card: show the source campaign",
+        "on Staging",
+        "Story",
+        releases=(Release("2.15", date(2026, 10, 28)),),
+    ),
     _issue("FI-2150", "Leads list: sort by date", "Done", "Story", done=True),
     _issue("NW-14", "Invoice PDF shows the wrong VAT", "To Do", "Bug"),
 ]
