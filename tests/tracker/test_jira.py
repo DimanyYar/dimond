@@ -461,6 +461,7 @@ def test_dimonds_answer_quoting_a_question_is_not_a_question():
         ("see #client-portal channel", False),
         ("issue#client", False),
         ("##client", False),
+        ("Guide (https://example.com/#client)", False),
     ],
 )
 def test_the_client_tag_is_a_whole_word(text: str, asks: bool):
@@ -493,6 +494,7 @@ def test_a_file_deleted_from_the_task_is_a_refusal_the_sync_can_report():
         ("bq. #client Which sources?\nOnly the active ones.", False),
         ("{quote}#client Which sources?{quote}\n#client And the order?", True),
         ("{quote}#client Which sources?", False),
+        ("See [Guide|https://example.com/#client]", False),
     ],
 )
 def test_the_tag_counts_only_outside_quotes(body: str, asks: bool):

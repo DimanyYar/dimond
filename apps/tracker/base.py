@@ -15,7 +15,8 @@ ISSUE_KEY = re.compile(r"[A-Z][A-Z0-9_]+-\d+")
 # The team marks a comment meant for the client with this tag, in plain text: a mention of a
 # user would need a service account, and while the sync signs in as Dmitry every mention of him
 # would reach the client (PRD: Jira sync, team questions).
-CLIENT_TAG = re.compile(r"(?<![\w#])#client(?![\w-])", re.IGNORECASE)
+# Not after "/": that is a link's address ending in #client, not the tag.
+CLIENT_TAG = re.compile(r"(?<![\w#/])#client(?![\w-])", re.IGNORECASE)
 
 
 def tags_the_client(text: str) -> bool:
