@@ -87,6 +87,12 @@ class Tracker(Protocol):
 
     def issue(self, key: str) -> Issue: ...
 
+    def issues(self, keys: list[str]) -> list[Issue]:
+        """The tasks behind these keys as they are now, for the status sync. A deleted task,
+        or one the account cannot see, is left out; a task moved to another project comes
+        back under its new key."""
+        ...
+
     def create_issue(
         self, project_key: str, issue_type: str, summary: str, description: str, labels: list[str]
     ) -> Issue: ...

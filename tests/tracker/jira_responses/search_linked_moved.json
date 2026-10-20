@@ -1,0 +1,7 @@
+{"startAt": 0, "maxResults": 50, "total": 1, "issues": [
+ {"expand": "operations", "id": "48150", "self": "https://j.shakuro.com/rest/api/2/issue/48150", "key": "NW-90",
+  "fields": {"summary": "Lead form: block disposable emails",
+   "issuetype": {"id": "10001", "name": "Story", "subtask": false},
+   "project": {"id": "10530", "key": "NW", "name": "Northwind"},
+   "status": {"id": "3", "name": "In Progress", "statusCategory": {"id": 4, "key": "indeterminate", "name": "In Progress"}}}}
+]}

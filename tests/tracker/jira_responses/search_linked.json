@@ -1,0 +1,12 @@
+{"startAt": 0, "maxResults": 50, "total": 2, "warningMessages": ["An issue with key 'FI-2207' does not exist for field 'key'."], "issues": [
+ {"expand": "operations", "id": "48160", "self": "https://j.shakuro.com/rest/api/2/issue/48160", "key": "FI-2214",
+  "fields": {"summary": "Filter the leads list by source",
+   "issuetype": {"id": "10001", "name": "Story", "subtask": false},
+   "project": {"id": "10512", "key": "FI", "name": "Atlas"},
+   "status": {"id": "10203", "name": "Code review", "statusCategory": {"id": 4, "key": "indeterminate", "name": "In Progress"}}}},
+ {"expand": "operations", "id": "48004", "self": "https://j.shakuro.com/rest/api/2/issue/48004", "key": "FI-2150",
+  "fields": {"summary": "Leads list: sort by date",
+   "issuetype": {"id": "10001", "name": "Story", "subtask": false},
+   "project": {"id": "10512", "key": "FI", "name": "Atlas"},
+   "status": {"id": "10001", "name": "Done", "statusCategory": {"id": 3, "key": "done", "name": "Done"}}}}
+]}

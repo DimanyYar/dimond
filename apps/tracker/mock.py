@@ -41,7 +41,9 @@ ISSUES = [
 # New demo tasks are not stored, but their keys are saved on requests, which must stay unique
 # across restarts: numbering starts from the second the process started, so a restart begins
 # above every key the previous run gave out.
-_new_numbers = count(int(time.time()) % 1_000_000 + 10_000)
+# Demo tasks in ISSUES are numbered below this, so a higher number is always one the demo made.
+DEMO_MADE_FROM = 10_000
+_new_numbers = count(int(time.time()) % 1_000_000 + DEMO_MADE_FROM)
 
 
 class MockTracker:
@@ -73,7 +75,23 @@ class MockTracker:
         for issue in ISSUES:
             if issue.key == key:
                 return issue
+        # Tasks the demo made are not stored (the sync runs in another process anyway), so
+        # their number is what vouches for them; they stay in To Do for good.
+        project_key, _, number = key.partition("-")
+        # isdigit() alone lets "²" through, which int() then refuses.
+        is_number = number.isascii() and number.isdecimal()
+        if self._has_project(project_key) and is_number and int(number) >= DEMO_MADE_FROM:
+            return _issue(key, "A task made in the demo", "To Do", "Task")
         raise IssueNotFound(key)
+
+    def issues(self, keys: list[str]) -> list[Issue]:
+        found = []
+        for key in keys:
+            try:
+                found.append(self.issue(key))
+            except IssueNotFound:
+                continue
+        return found
 
     def create_issue(
         self, project_key: str, issue_type: str, summary: str, description: str, labels: list[str]
@@ -85,7 +103,7 @@ class MockTracker:
 
     def attach_file(self, key: str, name: str, content: bytes, content_type: str) -> None:
         """The demo keeps no files: a known key is enough to say it went well."""
-        if key.split("-")[0] not in {project.key for project in PROJECTS}:
+        if not self._has_project(key.split("-")[0]):
             raise IssueNotFound(key)
 
     def add_comment(self, key: str, body: str) -> None:
@@ -93,5 +111,8 @@ class MockTracker:
         self.issue(key)
 
     def _check_project(self, key: str) -> None:
-        if key not in {project.key for project in PROJECTS}:
+        if not self._has_project(key):
             raise ProjectNotFound(key)
+
+    def _has_project(self, key: str) -> bool:
+        return key in {project.key for project in PROJECTS}
