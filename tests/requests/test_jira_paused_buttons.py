@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import Company, User
-from apps.requests import services
+from apps.requests import selectors, services
 from apps.requests.models import Request, RequestType, WhenNeeded
 from apps.tracker.connection import login_fingerprint
 from apps.tracker.models import TrackerKind, TrackerSettings
@@ -69,6 +69,16 @@ def test_creating_or_linking_by_a_sent_form_is_refused_too(client, pm, request_,
     assert (create.status_code, link.status_code) == (403, 403)
     request_.refresh_from_db()
     assert request_.jira_key == ""
+
+
+def test_the_services_and_the_task_list_hold_back_too(pm, request_, paused):
+    with pytest.raises(services.NotAllowedError):
+        services.create_jira_task(
+            pm, request_, issue_type="Story", summary="Filter", description="", reply=""
+        )
+    with pytest.raises(services.NotAllowedError):
+        services.link_jira_task(pm, request_, "FI-2214", "")
+    assert selectors.tasks_to_link(pm, request_, "") == []
 
 
 def test_a_fixed_login_brings_the_button_back(client, pm, request_, paused, settings):
