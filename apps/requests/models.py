@@ -333,6 +333,10 @@ class Message(models.Model):
     asks_for_input = models.BooleanField(
         default=False, help_text="The PM's question that moved the request to Needs your input."
     )
+    answers_team = models.BooleanField(
+        default=False,
+        help_text="The client's answer to the team's open questions, sent with “Send answer”.",
+    )
     team_comment_id = models.CharField(
         max_length=32,
         blank=True,

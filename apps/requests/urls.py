@@ -9,6 +9,7 @@ urlpatterns = [
     path("requests/new/voice/", views.new_voice_request, name="new_voice_request"),
     path("requests/<int:pk>/", views.request_detail, name="request_detail"),
     path("requests/<int:pk>/edit/", views.request_edit, name="request_edit"),
+    path("requests/<int:pk>/answer/", views.request_answer, name="request_answer"),
     path("requests/<int:pk>/withdraw/", views.request_withdraw, name="request_withdraw"),
     path(
         "requests/<int:pk>/withdrawal/",

@@ -45,6 +45,7 @@ from .models import (
 )
 from .selectors import (
     can_add_note,
+    can_answer_team,
     can_ask_for_input,
     can_ask_to_withdraw,
     can_bring_back,
@@ -58,6 +59,8 @@ from .selectors import (
     can_post_message,
     can_unlink_task,
     can_withdraw_now,
+    open_team_questions,
+    status_before_question,
 )
 
 
@@ -212,8 +215,9 @@ def post_message(
     long as the thread is open, whatever the status (PRD: editing a request and attachments).
 
     With `ask_for_input` the PM's message becomes a question: the request moves to
-    "Needs your input". Any client's reply to it hands the request back to the PM as Received
-    (PRD: the client answers "Needs info" and the request returns to the PM by itself).
+    "Needs your input". Any client's reply to it hands the request back to the PM in the status
+    it had before, Received (PRD: the client answers "Needs info" and the request returns to
+    the PM by itself).
     """
     # Locked and re-read so a reply and a status change at the same moment see one status.
     request = Request.objects.select_for_update().get(pk=request.pk)
@@ -227,8 +231,27 @@ def post_message(
     attach_files(request, author, files, message=message)
     if ask_for_input:
         _set_status(request, ClientStatus.NEEDS_INPUT, author)
-    elif author.role == Role.CLIENT and request.status == ClientStatus.NEEDS_INPUT:
-        _set_status(request, ClientStatus.RECEIVED, author)
+    elif (
+        author.role == Role.CLIENT
+        and request.status == ClientStatus.NEEDS_INPUT
+        and not open_team_questions(request)
+    ):
+        # A message to Dimon does not answer the team: that answer has its own form, since
+        # only it goes to Jira.
+        _set_status(request, status_before_question(request), author)
+    return message
+
+
+@transaction.atomic
+def answer_team(client: User, request: Request, text: str) -> Message:
+    """The client's "Send answer" under the team's question. One answer covers every open
+    question, and the request goes back to where it was when the team asked (PRD: Jira sync,
+    team questions)."""
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    if not can_answer_team(client, request):
+        raise NotAllowedError
+    message = Message.objects.create(request=request, author=client, text=text, answers_team=True)
+    _set_status(request, status_before_question(request), client)
     return message
 
 
