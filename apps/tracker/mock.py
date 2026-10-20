@@ -75,6 +75,7 @@ FI_2214_COMMENTS = (
         created=datetime(2026, 10, 20, 8, 44, tzinfo=UTC),
         updated=datetime(2026, 10, 20, 8, 44, tzinfo=UTC),
         files=(SOURCES_SCREENSHOT,),
+        asks_the_client=True,
     ),
 )
 

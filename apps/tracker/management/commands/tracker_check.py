@@ -61,8 +61,6 @@ class Command(BaseCommand):
 
     def _comment(self, comment: Comment) -> None:
         kind = "question for the client" if comment.asks_the_client else "team only"
-        if comment.own:
-            kind = "written by dimond's account"
         self.stdout.write(
             f"  #{comment.id} · {comment.author_name} · {comment.created:%Y-%m-%d %H:%M} · {kind}"
         )

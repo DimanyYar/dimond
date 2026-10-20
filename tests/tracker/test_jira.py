@@ -20,6 +20,7 @@ from apps.tracker.base import (
     TrackerRefused,
     TrackerSignInFailed,
     TrackerUnreachable,
+    tags_the_client,
 )
 from apps.tracker.jira import JiraTracker
 
@@ -434,10 +435,18 @@ def test_a_mention_reads_as_the_persons_login():
     assert internal.text.startswith("@dsmirnov archived sources")
 
 
-def test_dimonds_own_answer_is_never_a_question_even_quoting_one():
+def test_a_question_written_from_the_sync_account_still_asks_the_client():
+    # While the sync signs in as Dmitry, his own #client comments are questions too.
+    jira = jira_answering({"search": saved("search_linked_comments.json")}, [])
+    jira.username = "opetrova@shakuro.com"
+    [task] = jira.issues(["FI-2214"])
+
+    assert task.comments[1].asks_the_client
+
+
+def test_dimonds_answer_quoting_a_question_is_not_a_question():
     *_, answer = comments_of_fi_2214()
 
-    assert answer.own
     assert not answer.asks_the_client
     assert answer.text.startswith("#client Which sources should the list show?\nMark T.")
 
@@ -455,10 +464,7 @@ def test_dimonds_own_answer_is_never_a_question_even_quoting_one():
     ],
 )
 def test_the_client_tag_is_a_whole_word(text: str, asks: bool):
-    moment = datetime(2026, 10, 20, tzinfo=UTC)
-    comment = Comment("1", "olga", "Olga", text, created=moment, updated=moment)
-
-    assert comment.asks_the_client is asks
+    assert tags_the_client(text) is asks
 
 
 def test_reads_a_file_the_question_shows():
@@ -479,3 +485,21 @@ def test_a_file_deleted_from_the_task_is_a_refusal_the_sync_can_report():
 
     with pytest.raises(TrackerRefused, match="lead-sources.png is gone"):
         jira.file_content(file)
+
+
+@pytest.mark.parametrize(
+    ("body", "asks"),
+    [
+        ("bq. #client Which sources?\nOnly the active ones.", False),
+        ("{quote}#client Which sources?{quote}\n#client And the order?", True),
+        ("{quote}#client Which sources?", False),
+    ],
+)
+def test_the_tag_counts_only_outside_quotes(body: str, asks: bool):
+    search = json.loads((RESPONSES / "search_linked_comments.json").read_text())
+    search["issues"][0]["fields"]["comment"]["comments"][0]["body"] = body
+    jira = jira_answering({"search": httpx.Response(200, json=search)}, [])
+
+    [task] = jira.issues(["FI-2214"])
+
+    assert task.comments[0].asks_the_client is asks

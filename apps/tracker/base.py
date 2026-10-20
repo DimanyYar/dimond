@@ -18,6 +18,13 @@ ISSUE_KEY = re.compile(r"[A-Z][A-Z0-9_]+-\d+")
 CLIENT_TAG = re.compile(r"(?<![\w#])#client(?![\w-])", re.IGNORECASE)
 
 
+def tags_the_client(text: str) -> bool:
+    """Text outside quotes only: dimond's answers quote the question, tag included, and are
+    written by the same account as Dmitry's own questions, so the author cannot tell them
+    apart."""
+    return CLIENT_TAG.search(text) is not None
+
+
 @dataclass(frozen=True)
 class Account:
     login: str
@@ -62,12 +69,8 @@ class Comment:
     files: tuple[TaskFile, ...] = ()
     # Pictures or files it shows that the task no longer has, or that live elsewhere.
     missing_files: tuple[str, ...] = ()
-    # Written by the account dimond signs in as: its own answers, never a question.
-    own: bool = False
-
-    @property
-    def asks_the_client(self) -> bool:
-        return not self.own and CLIENT_TAG.search(self.text) is not None
+    # A question from the team for the client: the client tag outside quotes.
+    asks_the_client: bool = False
 
 
 @dataclass(frozen=True)

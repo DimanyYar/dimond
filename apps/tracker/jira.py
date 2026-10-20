@@ -31,6 +31,7 @@ from .base import (
     TrackerRefused,
     TrackerSignInFailed,
     TrackerUnreachable,
+    tags_the_client,
 )
 
 TIMEOUT_SECONDS = 15
@@ -53,6 +54,8 @@ PICTURE = re.compile(r"!([^!\s|][^!|\n]*?)(?:\|[^!\n]*)?!")
 FILE_LINK = re.compile(r"\[\^([^\]\n]+)\]")
 MENTION = re.compile(r"\[~([^\]\n]+)\]")
 LINK = re.compile(r"\[([^\]|\n]+)\|([^\]\n]+)\]")
+# Quoted text, whole: {quote}…{quote} and "bq." lines.
+QUOTED = re.compile(r"\{quote\}.*?(?:\{quote\}|\Z)|^bq\. .*$", re.DOTALL | re.MULTILINE)
 BLOCK_MACRO = re.compile(r"\{(?:quote|code|noformat|panel|color)(?::[^}\n]*)?\}")
 EXTRA_BLANK_LINES = re.compile(r"\n{3,}")
 
@@ -295,7 +298,7 @@ class JiraTracker:
                     updated=datetime.fromisoformat(item["updated"]),
                     files=tuple(files[name] for name in shown if name in files),
                     missing_files=tuple(name for name in shown if name not in files),
-                    own=login.casefold() == self.username.casefold(),
+                    asks_the_client=tags_the_client(QUOTED.sub("", item["body"])),
                 )
             )
         return tuple(comments)
