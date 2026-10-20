@@ -12,7 +12,7 @@ from apps.accounts.models import Role, User
 from apps.files.models import Attachment
 from apps.files.services import attach_files, public_link, removable_files, remove_files
 from apps.files.uploads import CheckedFile
-from apps.tracker.base import Issue, Tracker, TrackerError, TrackerUnreachable
+from apps.tracker.base import Issue, Release, Tracker, TrackerError, TrackerUnreachable
 from apps.tracker.connection import current_tracker
 
 from .models import (
@@ -23,6 +23,7 @@ from .models import (
     ClientStatus,
     InternalNote,
     Message,
+    PlanEvent,
     Request,
     RequestRevision,
     RequestType,
@@ -447,8 +448,10 @@ def _plan_with_task(pm: User, request: Request, task: Issue, reply: str) -> Requ
     """The request now follows this task: its key on the card, "Planned · FI-2301" in the
     thread, the PM's reply if written, and it leaves the PM's Needs you."""
     request.jira_key, request.jira_url, request.jira_status = task.key, task.url, task.status
-    # A new task replaces one the sync lost (deleted, or moved to another client's project).
+    # A new task replaces one the sync lost (deleted, or moved to another client's project);
+    # its release dates come with the next sync.
     request.lost_jira_key = request.jira_moved_to = ""
+    request.planned_releases = []
     try:
         # Two PMs linking the same task at the same moment both pass the check above; the
         # unique key lets one through, and the other hears why instead of seeing an error page.
@@ -460,6 +463,7 @@ def _plan_with_task(pm: User, request: Request, task: Issue, reply: str) -> Requ
                     "jira_status",
                     "lost_jira_key",
                     "jira_moved_to",
+                    "planned_releases",
                     "updated_at",
                 ]
             )
@@ -565,6 +569,34 @@ def follow_task(request: Request, jira_status: str) -> TaskFollowed | None:
     )
 
 
+@dataclass(frozen=True)
+class ReleasesFollowed:
+    """The task's release dates changed, for the sync log."""
+
+    request: Request
+    shown: str  # what the client sees now, "" for none
+
+
+@transaction.atomic
+def follow_releases(request: Request, releases: tuple[Release, ...]) -> ReleasesFollowed | None:
+    """Save the task's dated fix versions for "Planned for" on the card. A date that appears or
+    moves gets a line in the thread for the client; one taken away changes the card quietly
+    (PRD: Jira sync). Returns None when nothing changed."""
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    seen = [{"name": r.name, "date": r.release_date.isoformat()} for r in releases]
+    previous = request.planned_releases
+    if seen == previous:
+        return None
+    before = {release["name"]: release["date"] for release in previous}
+    # Only a date that is new or different is news; one version taken off the list is not.
+    news = any(before.get(release["name"]) != release["date"] for release in seen)
+    request.planned_releases = seen
+    request.save(update_fields=["planned_releases"])
+    if news:
+        PlanEvent.objects.create(request=request, releases=seen, moved=bool(previous))
+    return ReleasesFollowed(request=request, shown=request.planned_for)
+
+
 def _sync_may_move(current: ClientStatus, target: ClientStatus) -> bool:
     if current in CLOSED_STATUSES or current == ClientStatus.NEEDS_INPUT:
         # Closed stays closed, and a question to the client waits for their answer.
@@ -619,7 +651,11 @@ def drop_deleted_task(request: Request) -> TaskLost:
     key = request.jira_key
     status = ClientStatus(request.status).label
     request.lost_jira_key, request.jira_key, request.jira_url, request.jira_status = key, "", "", ""
-    request.save(update_fields=["lost_jira_key", "jira_key", "jira_url", "jira_status"])
+    # The task's release dates went with it.
+    request.planned_releases = []
+    request.save(
+        update_fields=["lost_jira_key", "jira_key", "jira_url", "jira_status", "planned_releases"]
+    )
     TaskEvent.objects.create(request=request, kind=TaskEventKind.DELETED, task_key=key)
     return TaskLost(
         request=request,
@@ -655,7 +691,8 @@ def follow_moved_task(request: Request, task: Issue) -> TaskLost:
             needs_attention=False,
         )
     request.jira_moved_to = task.key
-    request.save(update_fields=["jira_moved_to"])
+    request.planned_releases = []
+    request.save(update_fields=["jira_moved_to", "planned_releases"])
     TaskEvent.objects.create(
         request=request, kind=TaskEventKind.MOVED_AWAY, task_key=old, new_key=task.key
     )
@@ -688,5 +725,8 @@ def unlink_task(pm: User, request: Request) -> Request:
         actor=pm,
     )
     request.jira_key = request.jira_url = request.jira_status = request.jira_moved_to = ""
-    request.save(update_fields=["jira_key", "jira_url", "jira_status", "jira_moved_to"])
+    request.planned_releases = []
+    request.save(
+        update_fields=["jira_key", "jira_url", "jira_status", "jira_moved_to", "planned_releases"]
+    )
     return request

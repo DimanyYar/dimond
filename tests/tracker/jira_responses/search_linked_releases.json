@@ -1,0 +1,12 @@
+{"startAt": 0, "maxResults": 50, "total": 1, "issues": [
+ {"expand": "operations", "id": "48160", "self": "https://j.shakuro.com/rest/api/2/issue/48160", "key": "FI-2214",
+  "fields": {"summary": "Filter the leads list by source",
+   "issuetype": {"id": "10001", "name": "Story", "subtask": false},
+   "project": {"id": "10512", "key": "FI", "name": "Atlas"},
+   "status": {"id": "10203", "name": "Code review", "statusCategory": {"id": 4, "key": "indeterminate", "name": "In Progress"}},
+   "fixVersions": [
+    {"self": "https://j.shakuro.com/rest/api/2/version/20113", "id": "20113", "name": "2.16", "archived": false, "released": false, "releaseDate": "2026-11-12"},
+    {"self": "https://j.shakuro.com/rest/api/2/version/20140", "id": "20140", "name": "Backlog grooming", "archived": false, "released": false},
+    {"self": "https://j.shakuro.com/rest/api/2/version/20101", "id": "20101", "name": "2.15", "archived": false, "released": true, "releaseDate": "2026-10-28"}
+   ]}}
+]}

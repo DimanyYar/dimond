@@ -6,6 +6,7 @@ object with these methods and gets plain values back.
 
 import re
 from dataclasses import dataclass
+from datetime import date
 from typing import Protocol
 
 # A project key as Jira allows it: FI, ATL, HR2. Checked before a key goes into a query.
@@ -26,6 +27,15 @@ class Project:
 
 
 @dataclass(frozen=True)
+class Release:
+    """A fix version of a task that has a release date; versions without one tell the client
+    nothing yet, so the adapters leave them out."""
+
+    name: str
+    release_date: date
+
+
+@dataclass(frozen=True)
 class Issue:
     key: str
     summary: str
@@ -34,6 +44,8 @@ class Issue:
     project_key: str
     done: bool
     url: str
+    # Soonest first.
+    releases: tuple[Release, ...] = ()
 
 
 class TrackerError(Exception):

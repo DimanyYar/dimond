@@ -1,3 +1,4 @@
+from datetime import date
 from typing import NamedTuple
 
 from django.db import models
@@ -151,6 +152,12 @@ class Request(models.Model):
         blank=True,
         help_text="The task's status in Jira as the last sync saw it, e.g. Code review.",
     )
+    planned_releases = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="The task's fix versions that have a release date, soonest first, as the "
+        'last sync saw them: [{"name": "2.15", "date": "2026-10-28"}].',
+    )
     lost_jira_key = models.CharField(
         max_length=32,
         blank=True,
@@ -191,6 +198,11 @@ class Request(models.Model):
         return reverse("request_detail", args=[self.pk])
 
     @property
+    def planned_for(self) -> str:
+        """ "2.15 · Oct 28, 2.16 · Nov 12", or empty while no fix version has a date."""
+        return releases_text(self.planned_releases)
+
+    @property
     def key(self) -> str:
         """The number clients and the PM use for a request, like a Jira key."""
         return f"DMN-{self.pk}"
@@ -223,6 +235,34 @@ class StatusEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.from_status or 'new'} → {self.to_status}"
+
+
+def releases_text(releases: list[dict[str, str]]) -> str:
+    return ", ".join(
+        f"{release['name']} · {date.fromisoformat(release['date']):%b} "
+        f"{date.fromisoformat(release['date']).day}"
+        for release in releases
+    )
+
+
+class PlanEvent(models.Model):
+    """The release date reached the client, or moved: a line in the thread for both roles.
+    A release date taken away makes no line (PRD: Jira sync)."""
+
+    request = models.ForeignKey(Request, on_delete=models.PROTECT, related_name="plan_events")
+    releases = models.JSONField(help_text="As on Request.planned_releases at that moment.")
+    moved = models.BooleanField(help_text="A date was already shown before this one.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+    def __str__(self) -> str:
+        return self.text
+
+    @property
+    def text(self) -> str:
+        return f"{'Moved to' if self.moved else 'Planned for'} {releases_text(self.releases)}"
 
 
 class TaskEventKind(models.TextChoices):

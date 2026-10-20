@@ -746,6 +746,7 @@ def _thread(request: Request, request_edits: list[Edit], viewer: User) -> list[T
     if viewer.role != Role.PM:
         tasks = tasks.filter(kind=TaskEventKind.LINKED)
     task_lines = [ThreadEntry(at=t.created_at, event=t.text) for t in tasks]
+    task_lines += [ThreadEntry(at=p.created_at, event=p.text) for p in request.plan_events.all()]
     # An edit gets a line too, so the PM notices that the request they read has changed.
     edited = [ThreadEntry(at=e.at, event=f"{e.editor} edited the request") for e in request_edits]
     withdrawals = []
