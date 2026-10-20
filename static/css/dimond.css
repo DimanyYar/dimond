@@ -33,6 +33,7 @@
   --accent-text: #b33a00;
   --info: #03b2cb;
   --info-soft: #eefafc;
+  --info-line: #b7e6ee;
   --success-soft: #e3f7ea;
   --success-text: #0a6b2c;
   --error: #c41c1c;
@@ -1870,6 +1871,22 @@ kbd {
 .message-pm {
   border-color: var(--surface-2);
   background: var(--surface-2);
+}
+
+.message-team {
+  border-color: var(--info-line);
+  background: var(--info-soft);
+}
+
+.message-team .avatar {
+  background: var(--info);
+  color: var(--ink);
+}
+
+.message-files-not-shown {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
 }
 
 .message:target {

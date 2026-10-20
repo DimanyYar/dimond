@@ -3,29 +3,38 @@ ADR 0010, 0019)."""
 
 from datetime import datetime, timedelta
 
+from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.accounts.selectors import has_clients_page
-from apps.requests.models import CLOSED_STATUSES, Request
+from apps.files.uploads import MAX_VIDEO_SIZE, CheckedFile, check_upload
+from apps.requests.models import CLOSED_STATUSES, ClientStatus, Message, Request
 from apps.requests.services import (
+    QuestionFollowed,
     ReleasesFollowed,
     TaskFollowed,
     TaskLost,
+    add_team_question,
     drop_deleted_task,
+    edit_team_question,
     follow_moved_task,
     follow_releases,
     follow_task,
 )
 
 from .base import (
+    Comment,
     Issue,
     IssueNotFound,
     Tracker,
     TrackerCaptcha,
     TrackerError,
+    TrackerForbidden,
+    TrackerRefused,
     TrackerSignInFailed,
     TrackerUnreachable,
 )
@@ -49,6 +58,8 @@ CLOSED_WATCH = timedelta(days=30)
 # Quiet runs say only "nothing happened": a week of them is enough to see the sync is alive.
 KEEP_QUIET_RUNS = timedelta(days=7)
 KEEP_RUNS = timedelta(days=365)
+# The start of a team question quoted in the log; the thread has the rest.
+QUOTE_LENGTH = 120
 
 
 class NotAllowedError(Exception):
@@ -186,6 +197,79 @@ def _sync_one(run: SyncRun, tracker: Tracker, request: Request, issue: Issue | N
     planned = follow_releases(request, issue.releases)
     if planned is not None:
         _log_releases(run, planned)
+    _follow_questions(run, tracker, request, issue)
+
+
+def _follow_questions(run: SyncRun, tracker: Tracker, request: Request, issue: Issue) -> None:
+    """Comments tagged #client become questions in the request's thread, once each; an edit
+    in Jira rewords the question (PRD: Jira sync, team questions)."""
+    known = dict(
+        Message.objects.filter(request=request)
+        .exclude(team_comment_id="")
+        .values_list("team_comment_id", "team_edited_at")
+    )
+    for comment in issue.comments:
+        if not comment.asks_the_client:
+            continue
+        if comment.id in known:
+            if known[comment.id] != comment.updated:
+                _log_question(run, edit_team_question(request, comment))
+            continue
+        files, not_shown = _question_files(tracker, comment)
+        _log_question(run, add_team_question(request, comment, files, not_shown))
+
+
+def _question_files(tracker: Tracker, comment: Comment) -> tuple[list[CheckedFile], list[str]]:
+    """The question's files, checked like a client's upload, and the names of those the client
+    will not see. Jira not answering stops the run before the question is saved, so the next
+    run brings it whole."""
+    files: list[CheckedFile] = []
+    not_shown = list(comment.missing_files)
+    for file in comment.files:
+        if file.size > MAX_VIDEO_SIZE:
+            not_shown.append(file.name)
+            continue
+        try:
+            content = tracker.file_content(file)
+            files.append(check_upload(SimpleUploadedFile(file.name, content, file.content_type)))
+        except (TrackerRefused, TrackerForbidden, ValidationError):
+            not_shown.append(file.name)
+    return files, not_shown
+
+
+def _log_question(run: SyncRun, followed: QuestionFollowed) -> None:
+    request, message = followed.request, followed.message
+    if followed.edited:
+        what, effect = "Question edited in Jira", "The client reads the new wording."
+    else:
+        what = "Question for the client · #client"
+        before = followed.status_from
+        if before == ClientStatus.NEEDS_INPUT:
+            moved = "it already waited for an answer"
+        else:
+            moved = f"{before.label} → Needs your input"
+        quote = (
+            message.text if len(message.text) <= QUOTE_LENGTH else message.text[:QUOTE_LENGTH] + "…"
+        )
+        effect = (
+            f"{message.team_author} asked: “{quote}” Shown to {request.company} in "
+            f"{request.key}; {moved}."
+        )
+        if message.files_not_shown:
+            effect += f" Not shown to the client: {', '.join(message.files_not_shown)}."
+    SyncEvent.objects.create(
+        run=run,
+        request=request,
+        task_key=request.jira_key,
+        what=what,
+        effect=_fit(effect, SyncEvent._meta.get_field("effect").max_length),
+    )
+
+
+def _fit(text: str, limit: int | None) -> str:
+    if limit is None or len(text) <= limit:
+        return text
+    return text[: limit - 1] + "…"
 
 
 def _find_lost(tracker: Tracker, request: Request) -> tuple[TaskLost | None, Issue | None]:

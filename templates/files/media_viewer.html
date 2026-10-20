@@ -80,9 +80,9 @@ header from the chosen thumbnail.{% endcomment %}
       {% for file in files %}
         <button type="button" class="viewer-thumb" aria-label="{{ file.name }}" aria-current="false" data-viewer-thumb
                 data-id="{{ file.id }}" data-src="{{ file.get_absolute_url }}" data-download="{{ file.get_absolute_url }}?download"
-                data-kind="{{ file.kind }}" data-name="{{ file.name }}" data-by="{{ file.uploaded_by }}"
+                data-kind="{{ file.kind }}" data-name="{{ file.name }}" data-by="{{ file.uploaded_by|default:'Team' }}"
                 data-when="{{ file.created_at|date:'M j, H:i' }}"
-                data-meta="{{ file.uploaded_by }} · {{ file.created_at|date:'M j, H:i' }} · {{ file.size|filesizeformat }}">
+                data-meta="{{ file.uploaded_by|default:'Team' }} · {{ file.created_at|date:'M j, H:i' }} · {{ file.size|filesizeformat }}">
           {% if file.preview_url %}<img src="{{ file.preview_url }}" alt="" loading="lazy">
           {% elif file.kind == "image" %}<img src="{{ file.get_absolute_url }}" alt="" loading="lazy">
           {% elif file.kind == "video" %}<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" fill="currentColor"/></svg>

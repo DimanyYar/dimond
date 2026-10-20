@@ -87,6 +87,19 @@
       {% if entry.message %}
         {% with m=entry.message %}
         {% if m == page.first_new %}<p class="new-line" id="new" role="separator">{{ page.new_count }} new since you last opened it</p>{% endif %}
+        {% if m.from_team %}
+        <article id="message-{{ m.pk }}" class="message message-team">
+          <div class="message-head">
+            <span class="avatar" aria-hidden="true">T</span>
+            <strong>Team</strong>
+            <span class="muted">asked in Jira</span>
+            <time class="muted" datetime="{{ m.created_at|date:'c' }}">{{ m.created_at|date:"M j, H:i" }}</time>
+          </div>
+          <p class="message-text">{{ m.text }}</p>
+          {% with files=m.attachments.all %}{% if files %}{% include "files/file_list.html" with small=True %}{% endif %}{% endwith %}
+          {% if m.files_not_shown %}<p class="message-files-not-shown">{% if m.files_not_shown|length == 1 %}A file from the team couldn’t be shown here{% else %}{{ m.files_not_shown|length }} files from the team couldn’t be shown here{% endif %}: {{ m.files_not_shown|join:", " }}. {% if is_client %}Ask Dimon if you need it.{% else %}Open the task in Jira to see it.{% endif %}</p>{% endif %}
+        </article>
+        {% else %}
         <article id="message-{{ m.pk }}" class="message {% if m.author.role == 'pm' %}message-pm{% else %}message-client{% endif %}">
           <div class="message-head">
             <span class="avatar" aria-hidden="true">{{ m.author|stringformat:"s"|first|upper }}</span>
@@ -97,6 +110,7 @@
           {% if m.text %}<p class="message-text">{{ m.text }}</p>{% endif %}
           {% with files=m.attachments.all %}{% if files %}{% include "files/file_list.html" with small=True %}{% endif %}{% endwith %}
         </article>
+        {% endif %}
         {% endwith %}
       {% elif entry.note %}
         {% with n=entry.note %}
@@ -291,7 +305,7 @@
               <span class="files-row-picture">{% include "files/file_tile.html" with beside_name=True %}</span>
               <span class="files-row-text">
                 <a class="file-name" {% include "files/open_attrs.html" %}>{{ file.name }}</a>
-                <span class="hint">{{ file.uploaded_by }} · <time datetime="{{ file.created_at|date:'c' }}">{{ file.created_at|date:"M j, H:i" }}</time> · {{ file.size|filesizeformat }}</span>
+                <span class="hint">{{ file.uploaded_by|default:"Team" }} · <time datetime="{{ file.created_at|date:'c' }}">{{ file.created_at|date:"M j, H:i" }}</time> · {{ file.size|filesizeformat }}</span>
                 {% if not is_client and file.public_state %}
                   <span class="hint public-link">
                     {% if file.public_state == "open" %}<a href="{{ file.public_url }}" target="_blank" rel="noopener noreferrer">Public link</a> · plays while the request is open
