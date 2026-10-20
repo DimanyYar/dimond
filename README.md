@@ -37,7 +37,7 @@ The `previews` container draws the small pictures on file tiles a few seconds af
 (ADR 0013); its log is `docker compose logs -f previews`. Without it, tiles say "preview soon".
 
 The `sync` container brings Jira task statuses back to requests every 15 minutes (ADR 0019); its
-log is `docker compose logs -f sync`, and every run is listed on the PM's Logs page. To sync right
+log is `docker compose logs -f sync`, and every finished run is listed on the PM's Logs page. To sync right
 away: `docker compose exec web python manage.py sync_tracker`.
 
 Stop with `Ctrl+C`; `docker compose down` removes the containers (data stays in a volume).
