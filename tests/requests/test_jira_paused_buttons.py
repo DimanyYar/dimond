@@ -60,6 +60,17 @@ def test_the_window_does_not_open_by_its_address_either(client, pm, request_, pa
     )
 
 
+def test_creating_or_linking_by_a_sent_form_is_refused_too(client, pm, request_, paused):
+    client.force_login(pm)
+
+    create = client.post(reverse("request_jira_task", args=[request_.pk]), {})
+    link = client.post(reverse("request_link_jira_task", args=[request_.pk]), {"key": "FI-2214"})
+
+    assert (create.status_code, link.status_code) == (403, 403)
+    request_.refresh_from_db()
+    assert request_.jira_key == ""
+
+
 def test_a_fixed_login_brings_the_button_back(client, pm, request_, paused, settings):
     settings.TRACKER_JIRA_PASSWORD = "right"
     client.force_login(pm)
