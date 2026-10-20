@@ -240,13 +240,20 @@ class MyRequestsFilter(forms.Form):
 
 
 class AnswerForm(forms.Form):
-    """The client's answer under the team's question: text only, as in the mockup."""
+    """The client's answer under the team's question, with files if any (decided Oct 21,
+    2026): they go to the Jira task with it."""
 
-    answer = forms.CharField(
-        max_length=5000,
-        widget=forms.Textarea,
-        error_messages={"required": "Write your answer."},
-    )
+    answer = forms.CharField(max_length=5000, widget=forms.Textarea, required=False)
+    attachments = AttachmentsField()
+
+    def clean(self) -> dict[str, Any]:
+        super().clean()
+        data = self.cleaned_data
+        has_files = data.get("attachments") or "attachments" in self.errors
+        # A screenshot alone answers "which screen?" well enough.
+        if not data.get("answer") and not has_files:
+            self.add_error("answer", "Write your answer or attach a file.")
+        return data
 
 
 class MessageForm(forms.Form):

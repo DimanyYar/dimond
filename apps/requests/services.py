@@ -243,31 +243,41 @@ def post_message(
     return message
 
 
-def answer_team(client: User, request: Request, text: str) -> Message:
+def answer_team(
+    client: User, request: Request, text: str, files: Sequence[CheckedFile] = ()
+) -> Message:
     """The client's "Send answer" under the team's question. One answer covers every open
     question, the request goes back to where it was when the team asked, and the answer goes
     to the Jira task as a comment straight away (PRD: Jira sync, team questions).
 
     The answer is saved before Jira is asked, so Jira failing never loses it: the PM sees why
     it did not get there and sends it again."""
-    message = _save_answer(client, request, text)
+    message = _save_answer(client, request, text, files)
     pass_answer_to_jira(message, sender=client)
     return message
 
 
 @transaction.atomic
-def _save_answer(client: User, request: Request, text: str) -> Message:
+def _save_answer(
+    client: User, request: Request, text: str, files: Sequence[CheckedFile]
+) -> Message:
     request = Request.objects.select_for_update().get(pk=request.pk)
     if not can_answer_team(client, request):
         raise NotAllowedError
     message = Message.objects.create(request=request, author=client, text=text, answers_team=True)
+    attach_files(request, client, files, message=message)
     _set_status(request, status_before_question(request), client)
     return message
 
 
 def pass_answer_to_jira(answer: Message, sender: User) -> Message:
     """Add the client's answer to the request's task, quoting the questions and mentioning who
-    asked. Records the comment's id, or why it did not get there."""
+    asked. Its files go as everywhere else in Jira (PRD: attachments to Jira): pictures, PDFs
+    and text uploaded to the task, video and voice as public links. Records the comment's id,
+    or why it did not get there.
+
+    The files go first and the comment only once they all did: Send again then repeats the
+    whole answer, at worst uploading a file Jira already took a second time."""
     request = answer.request
     error = ""
     if not request.jira_key:
@@ -276,20 +286,35 @@ def pass_answer_to_jira(answer: Message, sender: User) -> Message:
         # Another try would spend one more of Jira's password attempts (ADR 0019).
         error = "Jira rejected dimond's login and the sync is paused. See Logs."
     else:
-        try:
-            answer.jira_comment_id = current_tracker().add_comment(
-                request.jira_key, answer_comment(answer, sender)
-            )
-        except TrackerUnreachable as error_from_jira:
-            error = (
-                f"{error_from_jira} The comment may have reached {request.jira_key} anyway: "
-                "check the task before sending it again."
-            )
-        except TrackerError as error_from_jira:
-            error = str(error_from_jira)
+        error = _send_answer(current_tracker(), answer, sender)
     answer.jira_error = error
     answer.save(update_fields=["jira_comment_id", "jira_error"])
     return answer
+
+
+def _send_answer(tracker: Tracker, answer: Message, sender: User) -> str:
+    """Uploads the files, then adds the comment. Returns why it stopped, or "" when it all
+    got there."""
+    key = answer.request.jira_key
+    sending = "the comment"
+    try:
+        for file in answer.attachments.all():
+            if file.kind in ("video", "audio"):
+                continue
+            sending = file.name
+            with file.file.open("rb") as stored:
+                content = stored.read()
+            tracker.attach_file(key, file.name, content, file.content_type)
+        sending = "the comment"
+        answer.jira_comment_id = tracker.add_comment(key, answer_comment(answer, sender))
+    except TrackerUnreachable as error:
+        return (
+            f"{sending}: {error} It may have reached {key} anyway: check the task before "
+            "sending it again."
+        )
+    except (TrackerError, OSError) as error:
+        return f"{sending}: {error}"
+    return ""
 
 
 # Jira's wiki markup reads these as links, mentions, macros, pictures and table cells; a
@@ -315,7 +340,9 @@ def answer_comment(answer: Message, sender: User) -> str:
     logins = dict.fromkeys(q.team_author_login for q in questions if q.team_author_login)
     mentions = " ".join(f"[~{login}]" for login in logins)
     lines.append(f"{mentions} {answer.author} ({request.company}) answered via dimond:".strip())
-    lines.append(_jira_text(answer.text))
+    if answer.text:
+        lines.append(_jira_text(answer.text))
+    lines += [_jira_file(file) for file in answer.attachments.all()]
     lines.append(f"[{request.key}|{settings.SITE_URL}{request.get_absolute_url()}]")
     return "\n".join(lines)
 
@@ -444,6 +471,14 @@ def _attach(tracker: Tracker, pm: User, request: Request, file: Attachment) -> b
         )
         return False
     return True
+
+
+def _jira_file(file: Attachment) -> str:
+    """A file of the answer in its comment: shown or linked once uploaded, or a public link
+    that plays video and voice without signing in."""
+    if file.kind in ("video", "audio"):
+        return f"[{_link_text(file.name)}|{public_link(file)}]"
+    return _attachment_markup(file)
 
 
 def _link_text(name: str) -> str:
