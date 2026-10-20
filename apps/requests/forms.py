@@ -239,6 +239,16 @@ class MyRequestsFilter(forms.Form):
         return [RequestType(value) for value in self.cleaned_data.get("type") or []]
 
 
+class AnswerForm(forms.Form):
+    """The client's answer under the team's question: text only, as in the mockup."""
+
+    answer = forms.CharField(
+        max_length=5000,
+        widget=forms.Textarea,
+        error_messages={"required": "Write your answer."},
+    )
+
+
 class MessageForm(forms.Form):
     # The PM's switch under the thread: a reply the client reads, or a note only the PM reads.
     kind = forms.ChoiceField(

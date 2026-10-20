@@ -14,6 +14,7 @@ from . import selectors, services
 from .forms import (
     TYPE_COPY,
     WHEN_NEEDED_COPY,
+    AnswerForm,
     DeclineForm,
     EditRequestForm,
     JiraTaskForm,
@@ -154,6 +155,7 @@ def _render_card(
     decline_form: DeclineForm | None = None,
     jira_form: JiraTaskForm | None = None,
     link_form: LinkJiraTaskForm | None = None,
+    answer_form: AnswerForm | None = None,
     status: int = 200,
 ) -> HttpResponse:
     """The card with whichever of its forms was just sent, errors and all."""
@@ -164,6 +166,7 @@ def _render_card(
         "reattach": bool(form and form.errors and request.FILES),
         "withdraw_form": withdraw_form or WithdrawForm(reason_required=page.can_ask_to_withdraw),
         "decline_form": decline_form or DeclineForm(),
+        "answer_form": answer_form or AnswerForm(),
         "jira_form": jira_form,
         "link": _link_panel(request, page, link_form) if link_form else None,
         # Picks the client's or the PM's navigation and words.
@@ -221,6 +224,21 @@ def request_detail(request: HttpRequest, pk: int) -> HttpResponse:
             ask_for_input=form.cleaned_data["ask_for_input"],
             files=form.cleaned_data["attachments"],
         )
+    except services.NotAllowedError:
+        raise PermissionDenied from None
+    return redirect(f"{page.request.get_absolute_url()}#message-{message.pk}")
+
+
+@require_POST
+@login_required
+def request_answer(request: HttpRequest, pk: int) -> HttpResponse:
+    """The client's "Send answer" to the team's questions from Jira."""
+    page = _card_page(request, pk)
+    form = AnswerForm(request.POST)
+    if not form.is_valid():
+        return _render_card(request, page, answer_form=form, status=422)
+    try:
+        message = services.answer_team(page.viewer, page.request, form.cleaned_data["answer"])
     except services.NotAllowedError:
         raise PermissionDenied from None
     return redirect(f"{page.request.get_absolute_url()}#message-{message.pk}")

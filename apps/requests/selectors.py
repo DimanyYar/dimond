@@ -825,7 +825,7 @@ def progress(request: Request, since: datetime) -> Progress:
     if request.status == ClientStatus.WITHDRAWN:
         return Progress([], 0, since, "Withdrawn by the client. Any reason given is in the thread.")
     waiting = request.status == ClientStatus.NEEDS_INPUT
-    current = PROGRESS_STEPS.index(ClientStatus.RECEIVED if waiting else request.status)
+    current = PROGRESS_STEPS.index(_step_now(request))
     steps = []
     for i, status in enumerate(PROGRESS_STEPS):
         name = ClientStatus(status).label
@@ -834,11 +834,25 @@ def progress(request: Request, since: datetime) -> Progress:
         elif i > current:
             state = "next"
         elif waiting:
-            state, name = "waiting", f"{name} · needs your input"
+            state, name = "waiting", f"{name} · {_waiting_note(request)}"
         else:
             state = "current"
         steps.append(ProgressStep(name, state))
     return Progress(steps, current + 1, since)
+
+
+def _step_now(request: Request) -> ClientStatus:
+    """The step the work is on. A question can come at any step, so a waiting request stays
+    where the work stopped; one asked before planning, or reopened by a question, is back at
+    Received."""
+    if request.status != ClientStatus.NEEDS_INPUT:
+        return ClientStatus(request.status)
+    before = status_before_question(request)
+    return before if before in PROGRESS_STEPS else ClientStatus.RECEIVED
+
+
+def _waiting_note(request: Request) -> str:
+    return "waiting for your answer" if request.jira_key else "needs your input"
 
 
 def _open_question(request: Request) -> Message | None:
@@ -850,7 +864,39 @@ def _open_question(request: Request) -> Message | None:
     """
     if request.status != ClientStatus.NEEDS_INPUT:
         return None
+    team = open_team_questions(request)
+    if team:
+        return team[-1]
     return request.messages.filter(asks_for_input=True).last()
+
+
+def open_team_questions(request: Request) -> list[Message]:
+    """The team's questions from Jira since the client last sent an answer, oldest first. One
+    answer covers them all: if something is missing, the team asks again (PRD: Jira sync,
+    team questions). Takes a request the caller may already see."""
+    answered = request.messages.filter(answers_team=True).order_by("-created_at", "-pk").first()
+    questions = request.messages.exclude(team_comment_id="")
+    if answered is not None:
+        questions = questions.filter(created_at__gt=answered.created_at)
+    return list(questions)
+
+
+def status_before_question(request: Request) -> ClientStatus:
+    """Where the request was when the PM or the team asked: an answer brings it back there
+    rather than walking it through other statuses (PRD: Jira sync, team questions)."""
+    asked = request.status_events.filter(to_status=ClientStatus.NEEDS_INPUT).last()
+    if asked is None or not asked.from_status:
+        return ClientStatus.RECEIVED
+    return ClientStatus(asked.from_status)
+
+
+def can_answer_team(user: User, request: Request) -> bool:
+    """Anyone at the client's company answers the team's open questions."""
+    return (
+        _is_company_client(user, request)
+        and request.status == ClientStatus.NEEDS_INPUT
+        and bool(open_team_questions(request))
+    )
 
 
 @dataclass(frozen=True)
@@ -874,6 +920,8 @@ class RequestPage:
     edits: list[Edit]
     progress: Progress
     question: Message | None
+    # The team's latest open question, if any: the answer form sits under it.
+    can_answer_team: bool
     can_post: bool
     can_ask: bool
     can_edit: bool
@@ -935,6 +983,7 @@ def request_page(user: User, pk: int) -> RequestPage:
         edits=request_edits,
         progress=progress(request, since),
         question=_open_question(request),
+        can_answer_team=can_answer_team(user, request),
         can_post=can_post_message(user, request),
         can_ask=can_ask_for_input(user, request),
         can_edit=can_edit_request(user, request),
