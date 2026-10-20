@@ -19,6 +19,7 @@ from .base import (
     IssueNotFound,
     Project,
     ProjectNotFound,
+    TrackerCaptcha,
     TrackerError,
     TrackerForbidden,
     TrackerNotConfigured,
@@ -270,7 +271,7 @@ class JiraTracker:
 
     def _forbidden(self, response: httpx.Response) -> TrackerError:
         if "CAPTCHA" in response.headers.get("X-Authentication-Denied-Reason", ""):
-            return TrackerSignInFailed(
+            return TrackerCaptcha(
                 f"Jira asks {self.username!r} for a captcha after wrong passwords. Sign in to "
                 "Jira in a browser once as this user, then try again."
             )

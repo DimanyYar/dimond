@@ -27,6 +27,11 @@ class TrackerSettings(models.Model):
         "the account behind a captcha. It resumes once the login in .env changes.",
     )
     sync_paused_reason = models.TextField(blank=True, help_text="What Jira said.")
+    sync_paused_captcha = models.BooleanField(
+        default=False,
+        help_text="Jira wants a captcha: the password may be right, a person signs in to Jira "
+        "in a browser once, then Sync now tries again.",
+    )
     sync_paused_login = models.CharField(
         max_length=64,
         blank=True,

@@ -4,9 +4,15 @@ captcha; when Jira does not answer it tries once more two minutes later (PRD: Ji
 import pytest
 from django.urls import reverse
 
-from apps.tracker.base import Issue, TrackerSignInFailed, TrackerUnreachable
+from apps.tracker.base import Issue, TrackerCaptcha, TrackerSignInFailed, TrackerUnreachable
 from apps.tracker.models import SyncOutcome, SyncRun, TrackerKind, TrackerSettings
-from apps.tracker.services import RETRY_SECONDS, seconds_until_next, sync_paused, sync_tasks
+from apps.tracker.services import (
+    RETRY_SECONDS,
+    STILL_PAUSED,
+    seconds_until_next,
+    sync_paused,
+    sync_tasks,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -71,13 +77,62 @@ def test_choosing_the_demo_tracker_lifts_the_pause(jira):
     assert not sync_paused()
 
 
-def test_a_run_that_reaches_jira_lifts_the_pause(jira):
+def sync_now() -> SyncRun:
+    return sync_tasks(SyncRun.objects.create(outcome=SyncOutcome.QUEUED, manual=True))
+
+
+def test_sync_now_does_not_retry_a_wrong_password_nobody_changed(jira):
     sync_tasks()
+    assert jira.asked == 1
+
+    run = sync_now()
+
+    assert jira.asked == 1
+    assert run.error == STILL_PAUSED
+    assert sync_paused()
+
+
+def test_sync_now_tries_again_once_the_login_changed(jira, settings):
+    sync_tasks()
+    settings.TRACKER_JIRA_PASSWORD = "new-password"
     jira.fails = None
 
-    sync_tasks(SyncRun.objects.create(outcome=SyncOutcome.QUEUED, manual=True))
+    run = sync_now()
 
+    assert run.outcome == SyncOutcome.SUCCEEDED
     assert TrackerSettings.load().sync_paused_at is None
+
+
+def test_after_a_captcha_sync_now_tries_with_the_same_login(jira):
+    jira.fails = TrackerCaptcha("Jira asks 'dsmirnov' for a captcha after wrong passwords.")
+    sync_tasks()
+    assert TrackerSettings.load().sync_paused_captcha
+    # The PM signed in to Jira in a browser and solved the captcha.
+    jira.fails = None
+
+    run = sync_now()
+
+    assert jira.asked == 2
+    assert run.outcome == SyncOutcome.SUCCEEDED
+    assert TrackerSettings.load().sync_paused_at is None
+
+
+def test_while_a_captcha_waits_the_scheduled_runs_stay_paused(jira):
+    jira.fails = TrackerCaptcha("Jira asks 'dsmirnov' for a captcha after wrong passwords.")
+    sync_tasks()
+
+    assert sync_paused()
+
+
+def test_the_captcha_banner_sends_the_pm_to_jira_in_a_browser(jira, client, pm):
+    jira.fails = TrackerCaptcha("Jira asks 'dsmirnov' for a captcha after wrong passwords.")
+    sync_tasks()
+    client.force_login(pm)
+
+    page = client.get(reverse("logs")).content.decode()
+
+    assert "Once you have signed in to Jira in a browser, press Sync now." in page
+    assert "Fix the login in" not in page
 
 
 def test_no_answer_from_jira_is_retried_once_two_minutes_later(jira):

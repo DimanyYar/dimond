@@ -52,6 +52,11 @@ class TrackerSignInFailed(TrackerError):
     pass
 
 
+class TrackerCaptcha(TrackerSignInFailed):
+    """Too many wrong passwords: Jira wants a captcha, which only a person in a browser can
+    solve. The password may be right by now."""
+
+
 class TrackerForbidden(TrackerError):
     pass
 

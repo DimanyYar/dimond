@@ -11,6 +11,7 @@ import pytest
 from apps.tracker.base import (
     IssueNotFound,
     ProjectNotFound,
+    TrackerCaptcha,
     TrackerForbidden,
     TrackerNotConfigured,
     TrackerRefused,
@@ -129,7 +130,8 @@ def test_captcha_after_wrong_passwords_is_explained():
         )
     )
 
-    with pytest.raises(TrackerSignInFailed, match="captcha"):
+    # A captcha is a failed sign-in of its own kind: the password may be right by now.
+    with pytest.raises(TrackerCaptcha, match="captcha"):
         jira.account()
 
 

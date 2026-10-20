@@ -34,7 +34,11 @@ the right; on a phone they stack.
 
   {% if sync.paused %}
     <div class="banner banner-error" role="alert">
-      <span><strong>Jira sync is paused.</strong> {{ sync.paused }} dimond stopped trying so that Jira does not lock the account. Fix the login in <code>.env</code> and restart dimond: the sync resumes by itself. Sync now tries once right away.</span>
+      {% if sync.captcha %}
+        <span><strong>Jira sync is paused.</strong> {{ sync.paused }} Jira does not take the password from dimond until then, even a right one. Once you have signed in to Jira in a browser, press Sync now.</span>
+      {% else %}
+        <span><strong>Jira sync is paused.</strong> {{ sync.paused }} dimond stopped trying so that Jira does not lock the account behind a captcha. Fix the login in <code>.env</code> and restart dimond: the sync resumes by itself. Until then Sync now does not try either.</span>
+      {% endif %}
     </div>
   {% endif %}
 

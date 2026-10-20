@@ -21,7 +21,14 @@ from apps.requests.services import (
     follow_task,
 )
 
-from .base import Issue, IssueNotFound, Tracker, TrackerError, TrackerSignInFailed
+from .base import (
+    Issue,
+    IssueNotFound,
+    Tracker,
+    TrackerCaptcha,
+    TrackerError,
+    TrackerSignInFailed,
+)
 from .connection import current_tracker
 from .models import SyncEvent, SyncOutcome, SyncRun, TrackerKind, TrackerSettings
 
@@ -31,6 +38,10 @@ QUEUE_CHECK_SECONDS = 3
 STUCK_AFTER = timedelta(minutes=10)
 # Jira did not answer: one more try this soon, then back to the usual interval.
 RETRY_SECONDS = 120
+STILL_PAUSED = (
+    "Still paused: the login in .env has not changed since Jira rejected it, so dimond did not "
+    "try again. Another wrong try brings Jira closer to locking the account."
+)
 
 # Closed requests are still read for a while, so a task reopened soon after shows up in the
 # log; reading every request ever closed would grow without end.
@@ -61,7 +72,7 @@ def _login_fingerprint() -> str:
     return hmac.new(settings.SECRET_KEY.encode(), login.encode(), hashlib.sha256).hexdigest()
 
 
-def _pause(reason: str) -> None:
+def _pause(reason: str, captcha: bool) -> None:
     """Jira rejected the login. Every further try with the same password counts as another
     wrong one, and Jira Server then asks the account for a captcha, which breaks it for
     people too: so the scheduled runs stop at once (PRD: Jira sync)."""
@@ -69,13 +80,14 @@ def _pause(reason: str) -> None:
     TrackerSettings.objects.filter(pk=1).update(
         sync_paused_at=timezone.now(),
         sync_paused_reason=reason,
+        sync_paused_captcha=captcha,
         sync_paused_login=_login_fingerprint(),
     )
 
 
 def _resume() -> None:
     TrackerSettings.objects.filter(pk=1).exclude(sync_paused_at=None).update(
-        sync_paused_at=None, sync_paused_reason="", sync_paused_login=""
+        sync_paused_at=None, sync_paused_reason="", sync_paused_captcha=False, sync_paused_login=""
     )
 
 
@@ -89,6 +101,13 @@ def sync_paused() -> bool:
         _resume()
         return False
     return True
+
+
+def _login_known_wrong() -> bool:
+    """Paused for a wrong password that nobody changed yet: trying it again, even from Sync now,
+    is one more wrong password for Jira to count. After a captcha the password may be right,
+    and Sync now is how the PM tries once they signed in to Jira in a browser."""
+    return sync_paused() and not TrackerSettings.load().sync_paused_captcha
 
 
 def seconds_until_next(run: SyncRun, every: int, retried: bool) -> tuple[int, bool]:
@@ -130,11 +149,13 @@ def sync_tasks(queued: SyncRun | None = None) -> SyncRun:
         .filter(jira_moved_to="")
         .filter(~Q(status__in=CLOSED_STATUSES) | Q(updated_at__gte=now - CLOSED_WATCH))
     )
+    if _login_known_wrong():
+        return _finish(run, SyncOutcome.FAILED, error=STILL_PAUSED)
     try:
         tracker = current_tracker()
         issues = tracker.issues([request.jira_key for request in linked])
     except TrackerSignInFailed as error:
-        _pause(str(error))
+        _pause(str(error), captcha=isinstance(error, TrackerCaptcha))
         return _finish(run, SyncOutcome.FAILED, error=str(error))
     except TrackerError as error:
         return _finish(run, SyncOutcome.FAILED, error=str(error))
