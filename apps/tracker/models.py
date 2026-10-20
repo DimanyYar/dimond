@@ -41,3 +41,49 @@ class TrackerSettings(models.Model):
     def load(cls) -> "TrackerSettings":
         settings, _ = cls.objects.get_or_create(pk=1)
         return settings
+
+
+class SyncOutcome(models.TextChoices):
+    RUNNING = "running", "Running"
+    SUCCEEDED = "succeeded", "Succeeded"
+    PROBLEMS = "problems", "Finished with problems"
+    FAILED = "failed", "Failed"
+
+
+class SyncRun(models.Model):
+    """One pass of the Jira sync, kept for the sync log (PRD: Jira sync)."""
+
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    outcome = models.CharField(
+        max_length=20, choices=SyncOutcome.choices, default=SyncOutcome.RUNNING
+    )
+    checked = models.PositiveIntegerField(default=0, help_text="Linked tasks read from Jira.")
+    error = models.TextField(blank=True, help_text="Why the run failed, as the tracker said.")
+
+    class Meta:
+        ordering = ["-started_at", "-pk"]
+
+    def __str__(self) -> str:
+        return f"Sync {self.started_at:%Y-%m-%d %H:%M} · {self.get_outcome_display()}"
+
+
+class SyncEvent(models.Model):
+    """Something a sync run noticed about one linked task."""
+
+    run = models.ForeignKey(SyncRun, on_delete=models.CASCADE, related_name="events")
+    request = models.ForeignKey(
+        "requests.Request", on_delete=models.CASCADE, related_name="sync_events"
+    )
+    task_key = models.CharField(max_length=32)
+    what = models.CharField(max_length=300, help_text="What changed in Jira.")
+    effect = models.CharField(max_length=300, help_text="What it meant for the client.")
+    needs_attention = models.BooleanField(
+        default=False, help_text="A problem the PM should look at, e.g. an unmapped status."
+    )
+
+    class Meta:
+        ordering = ["pk"]
+
+    def __str__(self) -> str:
+        return f"{self.task_key}: {self.what}"

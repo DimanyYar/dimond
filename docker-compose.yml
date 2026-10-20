@@ -75,5 +75,20 @@ services:
       db:
         condition: service_healthy
 
+  # Brings Jira task statuses back to requests every 15 minutes (ADR 0019). Its log is the
+  # sync log in the admin; `docker compose logs -f sync` shows one line per run.
+  sync:
+    build: .
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+    command: python manage.py sync_tracker --every 900
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:
