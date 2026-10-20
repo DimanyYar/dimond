@@ -1,8 +1,11 @@
 """The Jira sync: every linked task's status comes back to its request (PRD: Jira sync;
 ADR 0010, 0019)."""
 
+import hashlib
+import hmac
 from datetime import datetime, timedelta
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -18,14 +21,16 @@ from apps.requests.services import (
     follow_task,
 )
 
-from .base import Issue, IssueNotFound, Tracker, TrackerError
+from .base import Issue, IssueNotFound, Tracker, TrackerError, TrackerSignInFailed
 from .connection import current_tracker
-from .models import SyncEvent, SyncOutcome, SyncRun
+from .models import SyncEvent, SyncOutcome, SyncRun, TrackerKind, TrackerSettings
 
 # How often the worker looks for a Sync now between its regular runs.
 QUEUE_CHECK_SECONDS = 3
 # A run takes seconds. One still "running" after this was cut off: the worker stopped mid-run.
 STUCK_AFTER = timedelta(minutes=10)
+# Jira did not answer: one more try this soon, then back to the usual interval.
+RETRY_SECONDS = 120
 
 # Closed requests are still read for a while, so a task reopened soon after shows up in the
 # log; reading every request ever closed would grow without end.
@@ -47,6 +52,52 @@ def ask_for_sync(pm: User) -> SyncRun:
         raise NotAllowedError
     waiting = SyncRun.objects.select_for_update().filter(outcome=SyncOutcome.QUEUED)
     return waiting.first() or SyncRun.objects.create(outcome=SyncOutcome.QUEUED, manual=True)
+
+
+def _login_fingerprint() -> str:
+    login = "\n".join(
+        [settings.TRACKER_JIRA_URL, settings.TRACKER_JIRA_USERNAME, settings.TRACKER_JIRA_PASSWORD]
+    )
+    return hmac.new(settings.SECRET_KEY.encode(), login.encode(), hashlib.sha256).hexdigest()
+
+
+def _pause(reason: str) -> None:
+    """Jira rejected the login. Every further try with the same password counts as another
+    wrong one, and Jira Server then asks the account for a captcha, which breaks it for
+    people too: so the scheduled runs stop at once (PRD: Jira sync)."""
+    TrackerSettings.load()
+    TrackerSettings.objects.filter(pk=1).update(
+        sync_paused_at=timezone.now(),
+        sync_paused_reason=reason,
+        sync_paused_login=_login_fingerprint(),
+    )
+
+
+def _resume() -> None:
+    TrackerSettings.objects.filter(pk=1).exclude(sync_paused_at=None).update(
+        sync_paused_at=None, sync_paused_reason="", sync_paused_login=""
+    )
+
+
+def sync_paused() -> bool:
+    """Whether the scheduled runs wait. The pause lifts by itself once the Jira login in .env
+    is not the one Jira rejected, or once another tracker is chosen; Sync now always tries."""
+    row = TrackerSettings.load()
+    if row.sync_paused_at is None:
+        return False
+    if row.tracker != TrackerKind.JIRA or row.sync_paused_login != _login_fingerprint():
+        _resume()
+        return False
+    return True
+
+
+def seconds_until_next(run: SyncRun, every: int, retried: bool) -> tuple[int, bool]:
+    """When the worker's next scheduled run is due after `run`, and whether that one is the
+    retry. Jira not answering gets one retry two minutes later; a rejected login none: the
+    sync is paused."""
+    if run.outcome == SyncOutcome.FAILED and not retried and not sync_paused():
+        return RETRY_SECONDS, True
+    return every, False
 
 
 def close_cut_off_runs() -> int:
@@ -82,8 +133,12 @@ def sync_tasks(queued: SyncRun | None = None) -> SyncRun:
     try:
         tracker = current_tracker()
         issues = tracker.issues([request.jira_key for request in linked])
+    except TrackerSignInFailed as error:
+        _pause(str(error))
+        return _finish(run, SyncOutcome.FAILED, error=str(error))
     except TrackerError as error:
         return _finish(run, SyncOutcome.FAILED, error=str(error))
+    _resume()
     by_key = {issue.key: issue for issue in issues}
     for request in linked:
         _sync_one(run, tracker, request, by_key.get(request.jira_key))

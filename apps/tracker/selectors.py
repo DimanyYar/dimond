@@ -17,7 +17,7 @@ from apps.requests.models import CLOSED_STATUSES, JIRA_STATUSES, ClientStatus, R
 
 from .base import TrackerNotConfigured
 from .connection import current_tracker
-from .models import SyncEvent, SyncOutcome, SyncRun
+from .models import SyncEvent, SyncOutcome, SyncRun, TrackerKind, TrackerSettings
 from .services import STUCK_AFTER
 
 RUNS_SHOWN = 50
@@ -97,6 +97,8 @@ class SyncState:
     last: SyncRun | None
     waiting: bool
     attention: int
+    # Why the sync is paused (Jira rejected the login), or empty.
+    paused: str
 
     @property
     def failed(self) -> bool:
@@ -231,4 +233,12 @@ def sync_state(pm: User) -> SyncState:
             | Q(outcome=SyncOutcome.RUNNING, started_at__gte=timezone.now() - STUCK_AFTER)
         ).exists(),
         attention=len(needs_attention(pm)),
+        paused=_paused_reason(),
     )
+
+
+def _paused_reason() -> str:
+    row = TrackerSettings.load()
+    if row.sync_paused_at is None or row.tracker != TrackerKind.JIRA:
+        return ""
+    return row.sync_paused_reason

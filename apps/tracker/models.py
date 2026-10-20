@@ -20,6 +20,19 @@ class TrackerSettings(models.Model):
         help_text="Where dimond reads and creates tasks. Jira needs TRACKER_JIRA_URL, "
         "TRACKER_JIRA_USERNAME and TRACKER_JIRA_PASSWORD in .env.",
     )
+    sync_paused_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Jira rejected the login and the sync stopped trying, so Jira does not lock "
+        "the account behind a captcha. It resumes once the login in .env changes.",
+    )
+    sync_paused_reason = models.TextField(blank=True, help_text="What Jira said.")
+    sync_paused_login = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="A fingerprint of the Jira login in .env when the sync paused, never the "
+        "password itself: a different one means someone fixed it.",
+    )
     clients_see_jira_links = models.BooleanField(
         default=False,
         help_text="Clients always see the task key on their request. On: the key opens the task "

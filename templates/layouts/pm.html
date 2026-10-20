@@ -10,7 +10,7 @@ context processor: the Logs badge and the "Jira synced" line.
   <a href="{% url 'logs' %}"{% if request.resolver_match.url_name == "logs" %} aria-current="page"{% endif %}>Logs{% if sync.attention %} <span class="nav-badge" aria-label="{{ sync.attention }} need attention">{{ sync.attention }}</span>{% endif %}</a>
 {% endblock %}
 {% block sidebar_footer %}
-  <a class="sync-line{% if sync.failed %} sync-line-bad{% endif %}" href="{% url 'logs' %}">{% if sync.failed %}Jira sync failed {{ sync.last_ago }}{% elif sync.last %}Jira synced {{ sync.last_ago }}{% else %}Jira not synced yet{% endif %}</a>
+  <a class="sync-line{% if sync.failed or sync.paused %} sync-line-bad{% endif %}" href="{% url 'logs' %}">{% if sync.paused %}Jira sync paused: login rejected{% elif sync.failed %}Jira sync failed {{ sync.last_ago }}{% elif sync.last %}Jira synced {{ sync.last_ago }}{% else %}Jira not synced yet{% endif %}</a>
   <span>{{ user.name|default:user.email }} · PM</span>
   {% include "accounts/sign_out_button.html" %}
 {% endblock %}
