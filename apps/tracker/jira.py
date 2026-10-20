@@ -7,8 +7,9 @@ its own base URL as http, and a redirect would send the password to wherever it 
 
 import re
 from collections.abc import Callable
-from datetime import date
+from datetime import date, datetime
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -16,11 +17,13 @@ from .base import (
     ISSUE_KEY,
     PROJECT_KEY,
     Account,
+    Comment,
     Issue,
     IssueNotFound,
     Project,
     ProjectNotFound,
     Release,
+    TaskFile,
     TrackerCaptcha,
     TrackerError,
     TrackerForbidden,
@@ -28,19 +31,33 @@ from .base import (
     TrackerRefused,
     TrackerSignInFailed,
     TrackerUnreachable,
+    tags_the_client,
 )
 
 TIMEOUT_SECONDS = 15
 OPEN_ISSUES_LIMIT = 20
 # Jira 8.13 gives at most 50 tasks per search page unless its admin raised the limit.
 LINKED_BATCH = 50
-ISSUE_FIELDS = "summary,status,issuetype,project,fixVersions"
+# Comments and files come with the search: Jira 8.13 returns every comment of every task in
+# it (checked on j.shakuro.com, Oct 20, 2026: tasks with up to 36 comments came whole), so team
+# questions cost no extra request.
+ISSUE_FIELDS = "summary,status,issuetype,project,fixVersions,comment,attachment"
 # Jira's text search treats these as operators and answers 400 to a stray one; a PM typing
 # "form - duplicates?" means the words, not the operators.
 TEXT_SEARCH_OPERATORS = re.compile(r"[^\w\s]")
 # Jira Software keeps an epic's required short name in a custom field whose number differs
 # from one Jira to another; its type is what identifies it.
 EPIC_NAME_TYPE = "com.pyxis.greenhopper.jira:gh-epic-label"
+
+# Jira's wiki markup in comment bodies, read into plain text for the client.
+PICTURE = re.compile(r"!([^!\s|][^!|\n]*?)(?:\|[^!\n]*)?!")
+FILE_LINK = re.compile(r"\[\^([^\]\n]+)\]")
+MENTION = re.compile(r"\[~([^\]\n]+)\]")
+LINK = re.compile(r"\[([^\]|\n]+)\|([^\]\n]+)\]")
+# Quoted text, whole: {quote}…{quote} and "bq." lines.
+QUOTED = re.compile(r"\{quote\}.*?(?:\{quote\}|\Z)|^bq\. .*$", re.DOTALL | re.MULTILINE)
+BLOCK_MACRO = re.compile(r"\{(?:quote|code|noformat|panel|color)(?::[^}\n]*)?\}")
+EXTRA_BLANK_LINES = re.compile(r"\n{3,}")
 
 
 class JiraTracker:
@@ -178,6 +195,16 @@ class JiraTracker:
             missing=IssueNotFound(key),
         )
 
+    def file_content(self, file: TaskFile) -> bytes:
+        try:
+            response = self._client.get(
+                f"{self.address}/secure/attachment/{quote(file.id)}/{quote(file.name)}"
+            )
+        except httpx.TransportError as error:
+            raise TrackerUnreachable(f"Jira at {self.address} did not answer: {error}") from error
+        self._raise_for_answer(response, "attachment", TrackerRefused(f"{file.name} is gone."))
+        return response.content
+
     def _epic_name_fields(self) -> list[str]:
         return self._call(
             "field",
@@ -243,7 +270,38 @@ class JiraTracker:
                     key=lambda release: release.release_date,
                 )
             ),
+            comments=self._comments(fields),
         )
+
+    def _comments(self, fields: Any) -> tuple[Comment, ...]:
+        files = {
+            item["filename"]: TaskFile(
+                id=str(item["id"]),
+                name=item["filename"],
+                content_type=item.get("mimeType", ""),
+                size=int(item["size"]),
+            )
+            for item in fields.get("attachment", [])
+        }
+        comments = []
+        for item in fields.get("comment", {}).get("comments", []):
+            text, shown = _plain_text(item["body"])
+            author = item.get("author", {})
+            login = author.get("name", "")
+            comments.append(
+                Comment(
+                    id=str(item["id"]),
+                    author_login=login,
+                    author_name=author.get("displayName", login),
+                    text=text,
+                    created=datetime.fromisoformat(item["created"]),
+                    updated=datetime.fromisoformat(item["updated"]),
+                    files=tuple(files[name] for name in shown if name in files),
+                    missing_files=tuple(name for name in shown if name not in files),
+                    asks_the_client=tags_the_client(QUOTED.sub("", item["body"])),
+                )
+            )
+        return tuple(comments)
 
     def _call[T](
         self,
@@ -312,6 +370,28 @@ class JiraTracker:
             raise TrackerRefused("Jira said the file is larger than its attachment limit.")
         if response.is_error:
             raise TrackerUnreachable(f"Jira answered {response.status_code} to {path}.")
+
+
+def _plain_text(body: str) -> tuple[str, list[str]]:
+    """A comment as the client reads it, and the names of the files it shows, in order.
+    Pictures and file links become the files beside the text; [~login] reads as @login, a
+    link as its words and address."""
+    shown: list[str] = []
+
+    def file(match: re.Match[str]) -> str:
+        name = match.group(1).strip()
+        if name not in shown:
+            shown.append(name)
+        return ""
+
+    text = body.replace("\r\n", "\n")
+    text = PICTURE.sub(file, text)
+    text = FILE_LINK.sub(file, text)
+    text = MENTION.sub(lambda m: "@" + m.group(1).split("@")[0], text)
+    text = LINK.sub(lambda m: f"{m.group(1)} ({m.group(2)})", text)
+    text = BLOCK_MACRO.sub("", text)
+    text = "\n".join(line.rstrip() for line in text.split("\n"))
+    return EXTRA_BLANK_LINES.sub("\n\n", text).strip(), shown
 
 
 def _jira_complaints(response: httpx.Response) -> str:

@@ -4,17 +4,20 @@ Tests, local development and the public demo use it, so it holds the same Atlas 
 mockups.
 """
 
+import base64
 import time
-from datetime import date
+from datetime import UTC, date, datetime
 from itertools import count
 
 from .base import (
     Account,
+    Comment,
     Issue,
     IssueNotFound,
     Project,
     ProjectNotFound,
     Release,
+    TaskFile,
     TrackerRefused,
 )
 
@@ -30,6 +33,7 @@ def _issue(
     issue_type: str,
     done: bool = False,
     releases: tuple[Release, ...] = (),
+    comments: tuple[Comment, ...] = (),
 ) -> Issue:
     return Issue(
         key=key,
@@ -40,13 +44,52 @@ def _issue(
         done=done,
         url=f"{DEMO_ADDRESS}/browse/{key}",
         releases=releases,
+        comments=comments,
     )
+
+
+# A one-pixel PNG: the demo's screenshot, small but a real picture for the upload checks.
+DEMO_PICTURE = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+)
+SOURCES_SCREENSHOT = TaskFile("90001", "lead-sources.png", "image/png", len(DEMO_PICTURE))
+FILES = {SOURCES_SCREENSHOT.id: DEMO_PICTURE}
+
+# The team question from the mockups (RequestCardTeamAsk) and an internal note that must never
+# reach the client.
+FI_2214_COMMENTS = (
+    Comment(
+        id="70001",
+        author_login="olga.p",
+        author_name="Olga Petrova",
+        text="@dsmirnov archived sources are still in the settings table, I can hide them.",
+        created=datetime(2026, 10, 13, 9, 5, tzinfo=UTC),
+        updated=datetime(2026, 10, 13, 9, 5, tzinfo=UTC),
+    ),
+    Comment(
+        id="70002",
+        author_login="olga.p",
+        author_name="Olga Petrova",
+        text="#client Which sources should the list show: only the ones you use now, or every "
+        "source from CRM settings, including archived ones?",
+        created=datetime(2026, 10, 20, 8, 44, tzinfo=UTC),
+        updated=datetime(2026, 10, 20, 8, 44, tzinfo=UTC),
+        files=(SOURCES_SCREENSHOT,),
+        asks_the_client=True,
+    ),
+)
 
 
 # Newest first, as Jira lists them.
 ISSUES = [
     _issue("FI-2231", "Web form: leads created twice on submit", "To Do", "Bug"),
-    _issue("FI-2214", "Filter the leads list by source", "Code review", "Story"),
+    _issue(
+        "FI-2214",
+        "Filter the leads list by source",
+        "Code review",
+        "Story",
+        comments=FI_2214_COMMENTS,
+    ),
     _issue("FI-2208", "Lead form: validate phone numbers", "In Progress", "Story"),
     _issue("FI-2197", "Export leads to CSV in the background", "To Do", "Story"),
     _issue(
@@ -132,6 +175,11 @@ class MockTracker:
     def add_comment(self, key: str, body: str) -> None:
         """The demo keeps no comments: a known task is enough to say it went well."""
         self.issue(key)
+
+    def file_content(self, file: TaskFile) -> bytes:
+        if file.id not in FILES:
+            raise TrackerRefused(f"{file.name} is gone.")
+        return FILES[file.id]
 
     def _check_project(self, key: str) -> None:
         if not self._has_project(key):

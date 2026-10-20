@@ -63,7 +63,8 @@ docker compose exec web python manage.py tracker_check --project FI
 ```
 
 It only reads: who dimond signs in as, the projects it sees, a project's issue types and open
-tasks (ADR 0017).
+tasks (ADR 0017). `--issue FI-2214` shows one task with its comments and marks the ones tagged
+`#client`, the team's questions for the client.
 
 ## Run the checks
 

@@ -89,6 +89,16 @@ def test_tracker_check_lists_projects_and_open_tasks(capsys):
     assert "FI-2150" not in out  # done tasks are not offered
 
 
+def test_tracker_check_shows_a_tasks_comments_and_which_ask_the_client(capsys):
+    call_command("tracker_check", "--issue", "FI-2214")
+
+    out = capsys.readouterr().out
+    assert "Comments (2):" in out
+    assert "#70001 · Olga Petrova · 2026-10-13 09:05 · team only" in out
+    assert "#70002 · Olga Petrova · 2026-10-20 08:44 · question for the client" in out
+    assert "file: lead-sources.png" in out
+
+
 def test_tracker_check_explains_a_missing_task():
     with pytest.raises(CommandError, match="There is no task FI-1"):
         call_command("tracker_check", "--issue", "FI-1")
