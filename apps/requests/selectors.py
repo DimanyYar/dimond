@@ -109,6 +109,7 @@ class PmReason(models.TextChoices):
     status). In the order the PM sees them: an ask to withdraw first."""
 
     WITHDRAW = "withdraw", "Asks to withdraw"
+    TASK_LOST = "task_lost", "Task deleted"
     REPLIED = "replied", "Client replied"
     NEW = "new", "New"
 
@@ -232,6 +233,11 @@ def with_pm_reason(requests: QuerySet[Request]) -> QuerySet[Request]:
         pm_reason=Case(
             # A request the Jira sync closed while an ask was pending has nothing left to decide.
             When(open_request & Exists(pending_ask), then=Value(PmReason.WITHDRAW)),
+            # The sync unlinked a task deleted in Jira: the PM links another or declines.
+            When(
+                open_request & Q(jira_key="") & ~Q(lost_jira_key=""),
+                then=Value(PmReason.TASK_LOST),
+            ),
             When(
                 open_request & Q(last_author=Role.CLIENT) & unhandled,
                 then=Value(PmReason.REPLIED),
@@ -552,13 +558,22 @@ JIRA_TASK_STATUSES = (ClientStatus.RECEIVED, ClientStatus.NEEDS_INPUT, ClientSta
 
 
 def can_create_jira_task(user: User, request: Request) -> bool:
-    """Create Jira task, in the client's own project (PRD: PM buttons; tracker and settings)."""
-    return (
-        _is_owner_pm(user, request)
-        and not request.jira_key
-        and request.status in JIRA_TASK_STATUSES
-        and bool(request.company.jira_project)
+    """Create Jira task, in the client's own project (PRD: PM buttons; tracker and settings).
+    Also once the sync lost the request's task, whatever the status: the PM links another."""
+    if not _is_owner_pm(user, request) or not request.company.jira_project:
+        return False
+    if request.status in CLOSED_STATUSES:
+        return False
+    if request.jira_moved_to:
+        return True
+    return not request.jira_key and (
+        request.status in JIRA_TASK_STATUSES or bool(request.lost_jira_key)
     )
+
+
+def can_unlink_task(user: User, request: Request) -> bool:
+    """Unlink is only for a task Jira moved into another client's project (PRD: Jira sync)."""
+    return _is_owner_pm(user, request) and bool(request.jira_moved_to)
 
 
 def needs_jira_project(user: User, request: Request) -> bool:

@@ -1565,6 +1565,7 @@ kbd {
 .reason-withdraw { background: var(--ink); color: #ffffff; }
 .reason-replied { background: #ffd9c4; }
 .reason-new { background: var(--surface); border: 1px solid var(--hairline-strong); }
+.reason-task_lost { background: var(--error-soft); color: var(--error); }
 
 .needs-you-row-head {
   display: flex;
@@ -5939,6 +5940,13 @@ details[open] .run-chevron {
 .attention-title {
   font-weight: 600;
   text-decoration: none;
+}
+
+.attention-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--space-1);
 }
 
 .mapping {

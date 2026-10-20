@@ -211,3 +211,37 @@ def test_sync_now_cannot_be_pressed_while_a_run_waits(client, pm):
     SyncRun.objects.create(outcome=SyncOutcome.QUEUED, manual=True)
 
     assert '<button class="btn btn-dark" type="submit" disabled>' in logs(client, pm)
+
+
+def test_a_deleted_task_needs_attention_until_another_is_linked(client, pm, anna):
+    request = linked(anna, "FI-2207")
+    Request.objects.filter(pk=request.pk).update(jira_key="", lost_jira_key="FI-2207")
+
+    page = logs(client, pm)
+
+    assert "FI-2207 not found in Jira" in page
+    assert "Link another task or decline the request." in page
+
+
+def test_a_task_moved_to_another_client_offers_link_another_or_unlink(client, pm, anna):
+    request = linked(anna, "FI-2207")
+    Request.objects.filter(pk=request.pk).update(jira_moved_to="NW-90")
+
+    page = logs(client, pm)
+
+    assert "FI-2207 moved to NW-90" in page
+    assert "Link another task" in page
+    client.post(reverse("request_unlink_task", args=[request.pk]))
+    request.refresh_from_db()
+    assert (request.jira_key, request.jira_moved_to) == ("", "")
+    assert "FI-2207 moved to NW-90" not in logs(client, pm)
+
+
+def test_a_client_cannot_unlink_a_task(client, anna):
+    request = linked(anna, "FI-2207")
+    Request.objects.filter(pk=request.pk).update(jira_moved_to="NW-90")
+    client.force_login(anna)
+
+    assert client.post(reverse("request_unlink_task", args=[request.pk])).status_code == 403
+    request.refresh_from_db()
+    assert request.jira_key == "FI-2207"

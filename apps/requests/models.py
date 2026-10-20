@@ -151,6 +151,18 @@ class Request(models.Model):
         blank=True,
         help_text="The task's status in Jira as the last sync saw it, e.g. Code review.",
     )
+    lost_jira_key = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="The task this request followed until it was deleted in Jira; the sync "
+        "unlinked it. Cleared when the PM links another task.",
+    )
+    jira_moved_to = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="Jira moved the task into another client's project under this key; the sync "
+        "stopped following it until the PM links another task or unlinks it.",
+    )
     pm_handled_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -315,7 +327,14 @@ class InternalNote(models.Model):
     note). Notes stay in dimond and are never sent to Jira either."""
 
     request = models.ForeignKey(Request, on_delete=models.PROTECT, related_name="notes")
-    author = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
+    author = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text="Empty when dimond wrote it, e.g. the sync telling the PM a task is gone.",
+    )
     text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 

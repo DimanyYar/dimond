@@ -103,7 +103,7 @@
         <article id="note-{{ n.pk }}" class="message message-note">
           <div class="message-head">
             <strong>Internal note</strong>
-            <span class="muted">{{ n.author }}</span>
+            <span class="muted">{{ n.author|default:"dimond" }}</span>
             <time class="muted" datetime="{{ n.created_at|date:'c' }}">{{ n.created_at|date:"M j, H:i" }}</time>
           </div>
           <p class="message-text">{{ n.text }}</p>

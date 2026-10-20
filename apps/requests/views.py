@@ -299,6 +299,21 @@ def request_decline(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect(page.request.get_absolute_url())
 
 
+@require_POST
+@login_required
+def request_unlink_task(request: HttpRequest, pk: int) -> HttpResponse:
+    """Unlink, from Logs: the PM lets go of a task Jira moved into another client's project."""
+    page = _card_page(request, pk)
+    try:
+        services.unlink_task(page.viewer, page.request)
+    except services.NotAllowedError:
+        raise PermissionDenied from None
+    messages.success(
+        request, f"Unlinked. {page.request.key} keeps its status; link another task or decline it."
+    )
+    return redirect("logs")
+
+
 @require_http_methods(["GET", "POST"])
 @login_required
 def request_jira_task(request: HttpRequest, pk: int) -> HttpResponse:

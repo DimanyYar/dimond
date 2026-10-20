@@ -96,6 +96,15 @@ the right; on a phone they stack.
             <div class="attention-item">
               <a class="attention-title" href="{{ item.request.get_absolute_url }}">{{ item.title }}</a>
               <span class="muted">{{ item.detail }}</span>
+              {% if item.moved %}
+                <span class="attention-actions">
+                  <a class="btn btn-small" href="{{ item.request.get_absolute_url }}">Link another task</a>
+                  <form method="post" action="{% url 'request_unlink_task' item.request.pk %}">
+                    {% csrf_token %}
+                    <button class="btn btn-small" type="submit">Unlink</button>
+                  </form>
+                </span>
+              {% endif %}
             </div>
           {% endfor %}
         </section>
