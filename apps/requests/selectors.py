@@ -652,6 +652,12 @@ def can_add_note(user: User, request: Request) -> bool:
     return _is_owner_pm(user, request) and request.status not in CLOSED_STATUSES
 
 
+def can_send_to_jira(user: User, request: Request) -> bool:
+    """The PM sends a message of the thread, theirs or the client's, to the request's task, or
+    sends again an answer that did not get there (PRD: Jira sync, team questions)."""
+    return _is_owner_pm(user, request) and bool(request.jira_key)
+
+
 def can_mark_handled(user: User, request: Request) -> bool:
     """ "No reply needed" exists only while the client's reply waits for the PM."""
     return _pm_reason_of(user, request) == PmReason.REPLIED
@@ -948,6 +954,7 @@ class RequestPage:
     question: Message | None
     # The team's latest open question, if any: the answer form sits under it.
     can_answer_team: bool
+    can_send_to_jira: bool
     can_post: bool
     can_ask: bool
     can_edit: bool
@@ -1010,6 +1017,7 @@ def request_page(user: User, pk: int) -> RequestPage:
         progress=progress(request, since),
         question=_open_question(request),
         can_answer_team=can_answer_team(user, request),
+        can_send_to_jira=can_send_to_jira(user, request),
         can_post=can_post_message(user, request),
         can_ask=can_ask_for_input(user, request),
         can_edit=can_edit_request(user, request),

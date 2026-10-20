@@ -58,6 +58,7 @@ from .selectors import (
     can_mark_handled,
     can_move_to_later,
     can_post_message,
+    can_send_to_jira,
     can_unlink_task,
     can_withdraw_now,
     open_team_questions,
@@ -254,7 +255,7 @@ def answer_team(
     The answer is saved before Jira is asked, so Jira failing never loses it: the PM sees why
     it did not get there and sends it again."""
     message = _save_answer(client, request, text, files)
-    pass_answer_to_jira(message, sender=client)
+    _pass_to_jira(message, sender=client)
     return message
 
 
@@ -271,17 +272,28 @@ def _save_answer(
     return message
 
 
-def pass_answer_to_jira(answer: Message, sender: User) -> Message:
-    """Add the client's answer to the request's task, quoting the questions and mentioning who
-    asked. Its files go as everywhere else in Jira (PRD: attachments to Jira): pictures, PDFs
-    and text uploaded to the task, video and voice as public links. Records the comment's id,
-    or why it did not get there.
+def send_to_jira(pm: User, message: Message) -> Message:
+    """The PM's "Send to Jira" on a message of the thread, theirs or the client's, and "Send
+    again" on an answer to the team that did not get there (PRD: Jira sync, team questions).
+    A message already in Jira is not sent twice; the team's own questions came from there."""
+    if not can_send_to_jira(pm, message.request) or message.jira_comment_id:
+        raise NotAllowedError
+    return _pass_to_jira(message, sender=pm)
+
+
+def _pass_to_jira(message: Message, sender: User) -> Message:
+    """Add the message to the request's task as a comment. Its files go as everywhere else in
+    Jira (PRD: attachments to Jira): pictures, PDFs and text uploaded to the task, video and
+    voice as public links. Records the comment's id and when, or why it did not get there.
 
     The files go first and the comment once Jira has answered for each. A file Jira refuses for
     good (over its size limit, say) is left out and named in the comment, and the PM gets a
-    note to attach it by hand, as when a task is created; Send again then skips it and the
+    note to attach it by hand, as when a task is created; sending again then skips it and the
     files already in Jira."""
-    request = answer.request
+    request, author = message.request, message.author
+    if author is None:
+        # The team's own question: it came from Jira.
+        raise NotAllowedError
     error = ""
     if not request.jira_key:
         error = "The request has no Jira task now."
@@ -289,25 +301,32 @@ def pass_answer_to_jira(answer: Message, sender: User) -> Message:
         # Another try would spend one more of Jira's password attempts (ADR 0019).
         error = "Jira rejected dimond's login and the sync is paused. See Logs."
     else:
-        error = _send_answer(current_tracker(), answer, sender)
-    answer.jira_error = error
-    answer.save(update_fields=["jira_comment_id", "jira_error"])
-    return answer
+        error = _send(current_tracker(), message, author, sender)
+    message.jira_error = error
+    message.jira_sent_at = None if error else timezone.now()
+    message.save(update_fields=["jira_comment_id", "jira_error", "jira_sent_at"])
+    return message
 
 
-def _send_answer(tracker: Tracker, answer: Message, sender: User) -> str:
-    """Uploads the files, then adds the comment. Returns why it stopped, or "" when it all
-    got there."""
-    key = answer.request.jira_key
+def _send(tracker: Tracker, message: Message, author: User, sender: User) -> str:
+    """Uploads the files, then adds the comment, written once Jira has answered for each file
+    so it can name the ones Jira refused. Returns why it stopped, or "" when it all got
+    there."""
+    key = message.request.jira_key
     sending = "the comment"
     try:
-        for file in answer.attachments.filter(jira_copy=JiraCopy.NONE):
+        for file in message.attachments.filter(jira_copy=JiraCopy.NONE):
             if file.kind in ("video", "audio"):
                 continue
             sending = file.name
-            _upload_answer_file(tracker, answer, file, sender)
+            _upload(tracker, message, file, sender)
         sending = "the comment"
-        answer.jira_comment_id = tracker.add_comment(key, answer_comment(answer, sender))
+        body = (
+            answer_comment(message, sender)
+            if message.answers_team
+            else _message_comment(message, author, sender)
+        )
+        message.jira_comment_id = tracker.add_comment(key, body)
     except TrackerUnreachable as error:
         return (
             f"{sending}: {error} It may have reached {key} anyway: check the task before "
@@ -318,18 +337,20 @@ def _send_answer(tracker: Tracker, answer: Message, sender: User) -> str:
     return ""
 
 
-def _upload_answer_file(tracker: Tracker, answer: Message, file: Attachment, sender: User) -> None:
+def _upload(tracker: Tracker, message: Message, file: Attachment, sender: User) -> None:
+    key = message.request.jira_key
     with file.file.open("rb") as stored:
         content = stored.read()
     try:
-        tracker.attach_file(answer.request.jira_key, file.name, content, file.content_type)
+        tracker.attach_file(key, file.name, content, file.content_type)
     except TrackerRefused as error:
         file.jira_copy = JiraCopy.REFUSED
+        what = "the answer" if message.answers_team else "the message"
         InternalNote.objects.create(
-            request=answer.request,
+            request=message.request,
             author=sender if sender.role == Role.PM else None,
-            text=f"Couldn't attach {file.name} from the answer to {answer.request.jira_key}: "
-            f"{error} Attach it in Jira by hand.",
+            text=f"Couldn't attach {file.name} from {what} to {key}: {error} "
+            "Attach it in Jira by hand.",
         )
     else:
         file.jira_copy = JiraCopy.UPLOADED
@@ -359,11 +380,25 @@ def answer_comment(answer: Message, sender: User) -> str:
     logins = dict.fromkeys(q.team_author_login for q in questions if q.team_author_login)
     mentions = " ".join(f"[~{login}]" for login in logins)
     lines.append(f"{mentions} {answer.author} ({request.company}) answered via dimond:".strip())
-    if answer.text:
-        lines.append(_jira_text(answer.text))
-    lines += [_jira_file(file) for file in answer.attachments.all()]
+    return "\n".join(lines + _text_and_files(answer))
+
+
+def _message_comment(message: Message, author: User, sender: User) -> str:
+    """A thread message the PM sends to the task: who wrote it, and who sent it there when it
+    is the client's (decided Oct 21, 2026)."""
+    if author.role == Role.PM:
+        signed = f"{author} (PM) via dimond:"
+    else:
+        signed = f"{author} ({author.company}) via dimond, sent by {sender}:"
+    return "\n".join([signed, *_text_and_files(message)])
+
+
+def _text_and_files(message: Message) -> list[str]:
+    request = message.request
+    lines = [_jira_text(message.text)] if message.text else []
+    lines += [_jira_file(file) for file in message.attachments.all()]
     lines.append(f"[{request.key}|{settings.SITE_URL}{request.get_absolute_url()}]")
-    return "\n".join(lines)
+    return lines
 
 
 @transaction.atomic
@@ -493,7 +528,7 @@ def _attach(tracker: Tracker, pm: User, request: Request, file: Attachment) -> b
 
 
 def _jira_file(file: Attachment) -> str:
-    """A file of the answer in its comment: shown or linked once uploaded, or a public link
+    """A file of the message in its comment: shown or linked once uploaded, or a public link
     that plays video and voice without signing in."""
     if file.kind in ("video", "audio"):
         return f"[{_link_text(file.name)}|{public_link(file)}]"

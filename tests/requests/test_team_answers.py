@@ -450,7 +450,7 @@ def test_a_file_jira_refuses_for_good_is_left_out_and_the_pm_attaches_it_by_hand
     assert pm_reasons(requests_for(pm))[request.pk] == "replied"
 
 
-def test_sending_again_skips_the_files_jira_already_has(jira, anna):
+def test_sending_again_skips_the_files_jira_already_has(jira, anna, pm):
     request = linked(anna)
     jira.ask("Which screens?")
     jira.refuses = TrackerUnreachable("Jira did not answer.")
@@ -460,7 +460,7 @@ def test_sending_again_skips_the_files_jira_already_has(jira, anna):
     assert len(jira.uploaded) == 2
     jira.refuses = None
 
-    services.pass_answer_to_jira(answer, sender=anna)
+    services.send_to_jira(pm, answer)
 
     assert len(jira.uploaded) == 2
     answer.refresh_from_db()
@@ -491,3 +491,117 @@ def test_the_answer_form_has_its_own_files_picker(client, jira, anna):
 
     assert 'id="answer-f-files"' in page
     assert 'id="f-files"' in page
+
+
+def send_url(request: Request, message) -> str:
+    return reverse("request_send_to_jira", args=[request.pk, message.pk])
+
+
+def test_the_pm_sends_a_clients_message_to_jira_signed_by_both(client, jira, anna, pm):
+    request = linked(anna)
+    message = services.post_message(anna, request, "The date filter must keep working too.")
+    client.force_login(pm)
+
+    response = client.post(send_url(request, message))
+
+    assert response.status_code == 302
+    [(key, body)] = jira.added
+    assert key == "FI-2214"
+    assert body.startswith(
+        "Anna K. (Atlas) via dimond, sent by Dmitry:\nThe date filter must keep working too."
+    )
+    message.refresh_from_db()
+    assert message.jira_sent_at is not None
+    page = client.get(request.get_absolute_url()).content.decode()
+    assert "Sent to FI-2214 ·" in page
+    assert send_url(request, message) not in page
+
+
+def test_the_pm_sends_their_own_message_to_jira(client, jira, anna, pm):
+    request = linked(anna)
+    message = services.post_message(pm, request, "Atlas wants it by Friday.")
+    client.force_login(pm)
+
+    client.post(send_url(request, message))
+
+    assert jira.added[0][1].startswith("Dmitry (PM) via dimond:\nAtlas wants it by Friday.")
+
+
+def test_send_again_delivers_an_answer_jira_did_not_take(client, jira, anna, pm):
+    request = linked(anna)
+    jira.ask("Which sources?")
+    jira.refuses = TrackerUnreachable("Jira did not answer.")
+    answer = services.answer_team(anna, request, "Only active ones.")
+    jira.refuses = None
+    client.force_login(pm)
+    assert "Send again" in client.get(request.get_absolute_url()).content.decode()
+
+    client.post(send_url(request, answer))
+
+    answer.refresh_from_db()
+    assert (answer.jira_error, answer.jira_comment_id) == ("", "91")
+    assert "{quote}Which sources?{quote}" in jira.added[0][1]
+    assert pm_reasons(requests_for(pm))[request.pk] == "replied"
+
+
+def test_a_message_already_in_jira_is_not_sent_twice(client, jira, anna, pm):
+    request = linked(anna)
+    message = services.post_message(anna, request, "One more thing.")
+    client.force_login(pm)
+    client.post(send_url(request, message))
+
+    response = client.post(send_url(request, message))
+
+    assert response.status_code == 403
+    assert len(jira.added) == 1
+
+
+def test_the_teams_own_question_is_never_sent_back_to_jira(client, jira, anna, pm):
+    request = linked(anna)
+    jira.ask("Which sources?")
+    question = request.messages.get()
+    client.force_login(pm)
+
+    response = client.post(send_url(request, question))
+
+    assert response.status_code == 403
+    assert jira.added == []
+
+
+def test_the_client_has_no_send_to_jira(client, jira, anna):
+    request = linked(anna)
+    message = services.post_message(anna, request, "One more thing.")
+    client.force_login(anna)
+
+    page = client.get(request.get_absolute_url()).content.decode()
+    response = client.post(send_url(request, message))
+
+    assert "Send to Jira" not in page
+    assert response.status_code == 403
+
+
+def test_without_a_task_there_is_nothing_to_send_to(client, anna, pm):
+    request = services.create_request(
+        anna, RequestType.BUG, "Duplicate leads", "Context", WhenNeeded.HOTFIX, link="https://a.b"
+    )
+    message = services.post_message(anna, request, "Here is a link.")
+    client.force_login(pm)
+
+    page = client.get(request.get_absolute_url()).content.decode()
+    response = client.post(send_url(request, message))
+
+    assert "Send to Jira" not in page
+    assert response.status_code == 403
+
+
+def test_send_to_jira_names_a_file_jira_refused_in_the_comment(client, jira, anna, pm):
+    request = linked(anna)
+    message = services.post_message(anna, request, "Here it is.", files=[checked("big.png", PNG)])
+    jira.refuses_files = TrackerRefused("Jira said the file is larger than its attachment limit.")
+    client.force_login(pm)
+
+    client.post(send_url(request, message))
+
+    body = jira.added[0][1]
+    assert "big.png (Jira didn't take this file; it is in the request)" in body
+    assert request.notes.get().text.startswith("Couldn't attach big.png from the message")

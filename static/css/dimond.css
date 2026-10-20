@@ -1918,8 +1918,58 @@ kbd {
   color: var(--muted);
 }
 
-.jira-note-failed {
+.jira-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--error-soft);
+}
+
+.jira-failed span {
+  flex: 1 1 260px;
+  font-size: 13px;
+  line-height: 1.45;
   color: var(--error);
+}
+
+.jira-failed form {
+  margin: 0;
+}
+
+/* Send to Jira shows on hover or focus; a phone has no hover, so it is always there. */
+.to-jira {
+  margin: 0;
+  opacity: 0;
+}
+
+.message:hover .to-jira,
+.message:focus-within .to-jira {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .to-jira {
+    opacity: 1;
+  }
+}
+
+.to-jira-button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
 }
 
 .message-files-not-shown {
