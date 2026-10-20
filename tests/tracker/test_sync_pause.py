@@ -4,7 +4,13 @@ captcha; when Jira does not answer it tries once more two minutes later (PRD: Ji
 import pytest
 from django.urls import reverse
 
-from apps.tracker.base import Issue, TrackerCaptcha, TrackerSignInFailed, TrackerUnreachable
+from apps.tracker.base import (
+    Issue,
+    TrackerCaptcha,
+    TrackerRefused,
+    TrackerSignInFailed,
+    TrackerUnreachable,
+)
 from apps.tracker.models import SyncOutcome, SyncRun, TrackerKind, TrackerSettings
 from apps.tracker.services import (
     RETRY_SECONDS,
@@ -20,15 +26,28 @@ EVERY = 900
 
 
 class Jira:
+    """Counts what reaches "Jira": `issues` with keys, and `account` (who dimond signs in as)."""
+
     def __init__(self, fails: Exception | None = None) -> None:
         self.fails = fails
         self.asked = 0
 
+    def account(self) -> None:
+        self._ask()
+
     def issues(self, keys: list[str]) -> list[Issue]:
+        if keys:
+            self._ask()
+        return []
+
+    def issue(self, key: str) -> Issue:
+        self._ask()
+        raise AssertionError("not reached in these tests")
+
+    def _ask(self) -> None:
         self.asked += 1
         if self.fails:
             raise self.fails
-        return []
 
 
 @pytest.fixture
@@ -167,3 +186,51 @@ def test_the_pm_sees_the_pause_on_logs_and_in_the_sidebar(jira, client, pm):
     assert "Jira sync is paused." in page
     assert "Jira did not accept the login" in page
     assert "Jira sync paused: login rejected" in page
+
+
+def test_with_no_linked_tasks_the_login_is_still_checked_before_the_pause_lifts(jira):
+    jira.fails = TrackerCaptcha("Jira asks 'dsmirnov' for a captcha after wrong passwords.")
+    sync_tasks()
+
+    still = sync_now()
+
+    assert jira.asked == 2
+    assert still.outcome == SyncOutcome.FAILED
+    assert sync_paused()
+
+
+def test_only_jira_not_answering_is_retried_soon(jira):
+    jira.fails = TrackerRefused("Jira said no: the search is malformed.")
+
+    run = sync_tasks()
+
+    assert seconds_until_next(run, EVERY, retried=False) == (EVERY, False)
+
+
+def test_a_rejected_login_while_asking_about_a_missing_task_pauses_the_sync(jira, monkeypatch, pm):
+    from apps.accounts.models import Company, User
+    from apps.requests.models import ClientStatus, Request, RequestType, WhenNeeded
+    from apps.requests.services import create_request
+
+    atlas = Company.objects.create(name="Atlas", owner=pm, jira_project="FI")
+    anna = User.objects.create_user("anna@atlas.test", company=atlas, name="Anna K.")
+    request = create_request(
+        anna, RequestType.BUG, "Leads", "Context", WhenNeeded.HOTFIX, link="https://x.test"
+    )
+    Request.objects.filter(pk=request.pk).update(jira_key="FI-2207", status=ClientStatus.PLANNED)
+
+    class SearchWorksIssueRejected(Jira):
+        def issues(self, keys: list[str]) -> list[Issue]:
+            return []
+
+        def issue(self, key: str) -> Issue:
+            raise TrackerSignInFailed("Jira did not accept the login 'dimond-sync'.")
+
+    monkeypatch.setattr("apps.tracker.services.current_tracker", SearchWorksIssueRejected)
+
+    run = sync_tasks()
+
+    assert run.outcome == SyncOutcome.FAILED
+    assert sync_paused()
+    request.refresh_from_db()
+    assert request.jira_key == "FI-2207"

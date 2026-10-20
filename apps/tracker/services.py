@@ -28,6 +28,7 @@ from .base import (
     TrackerCaptcha,
     TrackerError,
     TrackerSignInFailed,
+    TrackerUnreachable,
 )
 from .connection import current_tracker
 from .models import SyncEvent, SyncOutcome, SyncRun, TrackerKind, TrackerSettings
@@ -114,7 +115,7 @@ def seconds_until_next(run: SyncRun, every: int, retried: bool) -> tuple[int, bo
     """When the worker's next scheduled run is due after `run`, and whether that one is the
     retry. Jira not answering gets one retry two minutes later; a rejected login none: the
     sync is paused."""
-    if run.outcome == SyncOutcome.FAILED and not retried and not sync_paused():
+    if run.jira_silent and not retried and not sync_paused():
         return RETRY_SECONDS, True
     return every, False
 
@@ -153,16 +154,20 @@ def sync_tasks(queued: SyncRun | None = None) -> SyncRun:
         return _finish(run, SyncOutcome.FAILED, error=STILL_PAUSED)
     try:
         tracker = current_tracker()
+        if not linked:
+            # Nothing to read, but the login is still worth knowing: it is what lifts a pause.
+            tracker.account()
         issues = tracker.issues([request.jira_key for request in linked])
+        by_key = {issue.key: issue for issue in issues}
+        for request in linked:
+            _sync_one(run, tracker, request, by_key.get(request.jira_key))
     except TrackerSignInFailed as error:
         _pause(str(error), captcha=isinstance(error, TrackerCaptcha))
         return _finish(run, SyncOutcome.FAILED, error=str(error))
     except TrackerError as error:
-        return _finish(run, SyncOutcome.FAILED, error=str(error))
+        silent = isinstance(error, TrackerUnreachable)
+        return _finish(run, SyncOutcome.FAILED, error=str(error), jira_silent=silent)
     _resume()
-    by_key = {issue.key: issue for issue in issues}
-    for request in linked:
-        _sync_one(run, tracker, request, by_key.get(request.jira_key))
     problems = run.events.filter(needs_attention=True).exists()
     outcome = SyncOutcome.PROBLEMS if problems else SyncOutcome.SUCCEEDED
     return _finish(run, outcome, checked=len(issues))
@@ -197,6 +202,9 @@ def _find_lost(tracker: Tracker, request: Request) -> tuple[TaskLost | None, Iss
         moved = tracker.issue(request.jira_key)
     except IssueNotFound:
         return drop_deleted_task(request), None
+    except TrackerSignInFailed:
+        # The whole run stops and pauses: another try would be one more wrong password.
+        raise
     except TrackerError:
         return None, None
     if moved.key == request.jira_key:
@@ -235,10 +243,16 @@ def _log(run: SyncRun, followed: TaskFollowed) -> None:
     )
 
 
-def _finish(run: SyncRun, outcome: SyncOutcome, checked: int = 0, error: str = "") -> SyncRun:
-    run.outcome, run.checked, run.error = outcome, checked, error
+def _finish(
+    run: SyncRun,
+    outcome: SyncOutcome,
+    checked: int = 0,
+    error: str = "",
+    jira_silent: bool = False,
+) -> SyncRun:
+    run.outcome, run.checked, run.error, run.jira_silent = outcome, checked, error, jira_silent
     run.finished_at = timezone.now()
-    run.save(update_fields=["outcome", "checked", "error", "finished_at"])
+    run.save(update_fields=["outcome", "checked", "error", "jira_silent", "finished_at"])
     _forget_old_runs(run.finished_at)
     return run
 

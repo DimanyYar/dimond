@@ -32,16 +32,16 @@ class Command(BaseCommand):
         due, retried = 0.0, False
         while True:
             queued = next_queued_run()
-            if queued is not None:
-                self._report(sync_tasks(queued))
-            elif time.monotonic() >= due:
-                if sync_paused():
-                    due, retried = time.monotonic() + every, False
-                else:
-                    run = sync_tasks()
-                    self._report(run)
-                    wait, retried = seconds_until_next(run, every, retried)
-                    due = time.monotonic() + wait
+            if queued is None and time.monotonic() < due:
+                pass
+            elif queued is None and sync_paused():
+                due, retried = time.monotonic() + every, False
+            else:
+                # Sync now counts as the scheduled run too: the next one waits its turn.
+                run = sync_tasks(queued)
+                self._report(run)
+                wait, retried = seconds_until_next(run, every, retried)
+                due = time.monotonic() + wait
             time.sleep(QUEUE_CHECK_SECONDS)
 
     def _report(self, run: SyncRun) -> None:

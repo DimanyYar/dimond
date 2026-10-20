@@ -80,6 +80,11 @@ class SyncRun(models.Model):
     manual = models.BooleanField(default=False, help_text="Asked for with Sync now.")
     checked = models.PositiveIntegerField(default=0, help_text="Linked tasks read from Jira.")
     error = models.TextField(blank=True, help_text="Why the run failed, as the tracker said.")
+    jira_silent = models.BooleanField(
+        default=False,
+        help_text="Failed because Jira did not answer (a timeout or a server error): worth one "
+        "more try soon, unlike a refusal.",
+    )
 
     class Meta:
         ordering = ["-started_at", "-pk"]
