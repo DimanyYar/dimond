@@ -10,7 +10,7 @@ from apps.accounts.models import Company, User
 from apps.requests import services
 from apps.requests.models import ClientStatus, Request, RequestType, WhenNeeded
 from apps.requests.selectors import request_page
-from apps.tracker.base import Release
+from apps.tracker.base import Issue, Release
 
 pytestmark = pytest.mark.django_db
 
@@ -108,3 +108,43 @@ def test_the_demo_sync_brings_a_release_date(client, anna, pm):
     assert request.status == ClientStatus.READY_TO_CHECK
     assert request.planned_for == "2.15 · Oct 28"
     assert "Planned for 2.15 · Oct 28" in lines(anna, request)
+
+
+def test_one_version_taken_off_the_list_is_no_news(anna, request_):
+    services.follow_releases(request_, (V215, V216))
+
+    services.follow_releases(request_, (V215,))
+
+    request_.refresh_from_db()
+    assert request_.planned_for == "2.15 · Oct 28"
+    assert not any(line.startswith("Moved") for line in lines(anna, request_))
+
+
+def test_the_dates_go_with_a_task_that_is_gone(client, anna, request_):
+    services.follow_releases(request_, (V215,))
+
+    services.drop_deleted_task(request_)
+
+    request_.refresh_from_db()
+    assert request_.planned_releases == []
+    assert "Planned for</dt>" not in card(client, anna, request_)
+
+
+def test_a_task_moved_to_another_client_takes_its_dates_and_the_row(client, anna, request_):
+    services.follow_releases(request_, (V215,))
+
+    services.follow_moved_task(request_, Issue("NW-90", "", "To Do", "Story", "NW", False, ""))
+
+    request_.refresh_from_db()
+    assert request_.planned_releases == []
+    assert "Planned for</dt>" not in card(client, anna, request_)
+
+
+def test_a_new_task_starts_without_the_old_tasks_dates(anna, pm, request_):
+    services.follow_releases(request_, (V215,))
+    services.drop_deleted_task(request_)
+
+    services.link_jira_task(pm, request_, "FI-2208", "")
+
+    request_.refresh_from_db()
+    assert request_.planned_releases == []

@@ -313,7 +313,7 @@
     {% endif %}
     <dl class="facts">
       <div><dt>{% if is_client %}You asked for{% else %}Client asked for{% endif %}</dt><dd>{{ r.get_when_needed_display }}</dd></div>
-      {% if r.jira_key or r.planned_releases %}<div><dt>Planned for</dt><dd>{{ r.planned_for|default:"Not set yet" }}</dd></div>{% endif %}
+      {% if r.jira_key and not r.jira_moved_to %}<div><dt>Planned for</dt><dd>{{ r.planned_for|default:"Not set yet" }}</dd></div>{% endif %}
       <div><dt>Request ID</dt><dd>{{ r.key }}</dd></div>
       {% if r.jira_key %}<div><dt>Jira task</dt><dd>{% if page.shows_jira_link %}<a href="{{ r.jira_url }}" target="_blank" rel="noopener noreferrer">{{ r.jira_key }} ↗</a>{% else %}{{ r.jira_key }}{% endif %}</dd></div>{% endif %}
       {% if r.link %}<div><dt>Link</dt><dd><a href="{{ r.link }}" target="_blank" rel="noopener noreferrer">{{ r.link }}</a></dd></div>{% endif %}
