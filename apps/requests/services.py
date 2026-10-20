@@ -22,7 +22,7 @@ from apps.tracker.base import (
     TrackerError,
     TrackerUnreachable,
 )
-from apps.tracker.connection import current_tracker
+from apps.tracker.connection import current_tracker, jira_login_paused
 
 from .models import (
     CLOSED_STATUSES,
@@ -60,6 +60,7 @@ from .selectors import (
     can_unlink_task,
     can_withdraw_now,
     open_team_questions,
+    questions_answered_by,
     status_before_question,
 )
 
@@ -242,17 +243,83 @@ def post_message(
     return message
 
 
-@transaction.atomic
 def answer_team(client: User, request: Request, text: str) -> Message:
     """The client's "Send answer" under the team's question. One answer covers every open
-    question, and the request goes back to where it was when the team asked (PRD: Jira sync,
-    team questions)."""
+    question, the request goes back to where it was when the team asked, and the answer goes
+    to the Jira task as a comment straight away (PRD: Jira sync, team questions).
+
+    The answer is saved before Jira is asked, so Jira failing never loses it: the PM sees why
+    it did not get there and sends it again."""
+    message = _save_answer(client, request, text)
+    pass_answer_to_jira(message)
+    return message
+
+
+@transaction.atomic
+def _save_answer(client: User, request: Request, text: str) -> Message:
     request = Request.objects.select_for_update().get(pk=request.pk)
     if not can_answer_team(client, request):
         raise NotAllowedError
     message = Message.objects.create(request=request, author=client, text=text, answers_team=True)
     _set_status(request, status_before_question(request), client)
     return message
+
+
+def pass_answer_to_jira(answer: Message) -> Message:
+    """Add the client's answer to the request's task, quoting the questions and mentioning who
+    asked. Records the comment's id, or why it did not get there."""
+    request = answer.request
+    error = ""
+    if not request.jira_key:
+        error = "The request has no Jira task now."
+    elif jira_login_paused():
+        # Another try would spend one more of Jira's password attempts (ADR 0019).
+        error = "Jira rejected dimond's login and the sync is paused. See Logs."
+    else:
+        try:
+            answer.jira_comment_id = current_tracker().add_comment(
+                request.jira_key, answer_comment(answer)
+            )
+        except TrackerUnreachable as error_from_jira:
+            error = (
+                f"{error_from_jira} The comment may have reached {request.jira_key} anyway: "
+                "check the task before sending it again."
+            )
+        except TrackerError as error_from_jira:
+            error = str(error_from_jira)
+    answer.jira_error = error
+    answer.save(update_fields=["jira_comment_id", "jira_error"])
+    return answer
+
+
+# Jira's wiki markup reads these as links, mentions, macros, pictures and table cells; a
+# client's words are text, and must not mention people or make a new #client question. A
+# backslash goes as its character code: in Jira a doubled backslash is a line break (checked on
+# j.shakuro.com, Oct 20, 2026).
+JIRA_MARKUP = re.compile(r"([\[\]{}!|])")
+CLIENT_TAG_TYPED = re.compile(r"#(client)", re.IGNORECASE)
+
+
+def _jira_text(text: str) -> str:
+    text = text.replace("\\", "&#92;")
+    return CLIENT_TAG_TYPED.sub(r"\\#\1", JIRA_MARKUP.sub(r"\\\1", text))
+
+
+def answer_comment(answer: Message) -> str:
+    """The answer in Jira's markup: each question quoted (the #client tag inside a quote is
+    never read as a new question), who asked mentioned, then the answer and where it came
+    from."""
+    request = answer.request
+    questions = questions_answered_by(answer)
+    lines = [f"{{quote}}{_jira_text(q.text)}{{quote}}" for q in questions]
+    logins = dict.fromkeys(q.team_author_login for q in questions if q.team_author_login)
+    mentions = " ".join(f"[~{login}]" for login in logins)
+    author = answer.author
+    company = author.company if author is not None else request.company
+    lines.append(f"{mentions} {author} ({company}) answered via dimond:".strip())
+    lines.append(_jira_text(answer.text))
+    lines.append(f"[{request.key}|{settings.SITE_URL}{request.get_absolute_url()}]")
+    return "\n".join(lines)
 
 
 @transaction.atomic
@@ -698,6 +765,7 @@ def add_team_question(
         text=_question_text(comment),
         team_comment_id=comment.id,
         team_author=comment.author_name,
+        team_author_login=comment.author_login,
         team_edited_at=comment.updated,
         files_not_shown=list(files_not_shown),
     )

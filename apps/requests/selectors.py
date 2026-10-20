@@ -111,6 +111,7 @@ class PmReason(models.TextChoices):
 
     WITHDRAW = "withdraw", "Asks to withdraw"
     TASK_LOST = "task_lost", "Task deleted"
+    NOT_SENT = "not_sent", "Not sent to Jira"
     REPLIED = "replied", "Client replied"
     NEW = "new", "New"
 
@@ -233,6 +234,9 @@ def with_pm_reason(requests: QuerySet[Request]) -> QuerySet[Request]:
     unhandled = Q(pm_handled_at__isnull=True) | Q(last_message_at__gt=F("pm_handled_at"))
     pending_ask = WithdrawalRequest.objects.filter(request=OuterRef("pk"), confirmed__isnull=True)
     pm_wrote = Message.objects.filter(request=OuterRef("pk"), author__role=Role.PM)
+    not_sent = Message.objects.filter(request=OuterRef("pk"), answers_team=True).exclude(
+        jira_error=""
+    )
     open_request = ~Q(status__in=CLOSED_STATUSES)
     return requests.alias(last_author=last_author_role, last_message_at=last_message_at).annotate(
         pm_reason=Case(
@@ -243,6 +247,9 @@ def with_pm_reason(requests: QuerySet[Request]) -> QuerySet[Request]:
                 open_request & Q(jira_key="") & ~Q(lost_jira_key=""),
                 then=Value(PmReason.TASK_LOST),
             ),
+            # Stays until the PM sends it again, even on a request the answer closed (PRD:
+            # Jira sync, team questions).
+            When(Exists(not_sent), then=Value(PmReason.NOT_SENT)),
             When(
                 open_request & Q(last_author=Role.CLIENT) & unhandled,
                 then=Value(PmReason.REPLIED),
@@ -879,6 +886,22 @@ def open_team_questions(request: Request) -> list[Message]:
     if answered is not None:
         questions = questions.filter(created_at__gt=answered.created_at)
     return list(questions)
+
+
+def questions_answered_by(answer: Message) -> list[Message]:
+    """The team questions one answer covers: those asked since the answer before it."""
+    earlier = (
+        Message.objects.filter(
+            request=answer.request_id, answers_team=True, created_at__lt=answer.created_at
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    questions = Message.objects.filter(request=answer.request_id, created_at__lte=answer.created_at)
+    questions = questions.exclude(team_comment_id="")
+    if earlier is not None:
+        questions = questions.filter(created_at__gt=earlier.created_at)
+    return list(questions.order_by("created_at", "pk"))
 
 
 def status_before_question(request: Request) -> ClientStatus:

@@ -185,12 +185,12 @@ class JiraTracker:
             missing=IssueNotFound(key),
         )
 
-    def add_comment(self, key: str, body: str) -> None:
+    def add_comment(self, key: str, body: str) -> str:
         if not ISSUE_KEY.fullmatch(key):
             raise IssueNotFound(key)
-        self._call(
+        return self._call(
             f"issue/{key}/comment",
-            lambda data: None,
+            lambda data: str(data["id"]),
             body={"body": body},
             missing=IssueNotFound(key),
         )

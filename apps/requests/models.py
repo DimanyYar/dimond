@@ -346,6 +346,18 @@ class Message(models.Model):
     team_author = models.CharField(
         max_length=200, blank=True, help_text="Who asked in Jira. The thread says “Team”."
     )
+    team_author_login = models.CharField(
+        max_length=200, blank=True, help_text="Their Jira login: the answer mentions them."
+    )
+    jira_comment_id = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="The comment this answer became in the Jira task, once it got there.",
+    )
+    jira_error = models.TextField(
+        blank=True,
+        help_text="Why the answer did not reach Jira. The PM sees it and sends it again.",
+    )
     team_edited_at = models.DateTimeField(
         null=True, blank=True, help_text="When the comment last changed in Jira."
     )
