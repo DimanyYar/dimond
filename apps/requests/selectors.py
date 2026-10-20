@@ -47,6 +47,7 @@ from .models import (
     RequestType,
     RequestVisit,
     StatusEvent,
+    TaskEventKind,
     WithdrawalRequest,
 )
 
@@ -726,9 +727,9 @@ def _edits(request: Request) -> list[Edit]:
 
 
 def _event_entry(event: StatusEvent) -> ThreadEntry:
+    # The task's key has its own line ("Linked to FI-2301"), which keeps it even after the
+    # task is unlinked.
     text = STATUS_EVENT_TEXT[ClientStatus(event.to_status)]
-    if event.to_status == ClientStatus.PLANNED and event.request.jira_key:
-        text = f"{text} · {event.request.jira_key}"
     if event.to_status == ClientStatus.RECEIVED and event.from_status:
         text = "Back with Dimon"
     return ThreadEntry(at=event.created_at, event=text, status=event.to_status)
@@ -744,6 +745,10 @@ def _thread(request: Request, request_edits: list[Edit], viewer: User) -> list[T
         )
     ]
     events = [_event_entry(e) for e in request.status_events.select_related("request")]
+    tasks = request.task_events.select_related("actor")
+    if viewer.role != Role.PM:
+        tasks = tasks.filter(kind=TaskEventKind.LINKED)
+    task_lines = [ThreadEntry(at=t.created_at, event=t.text) for t in tasks]
     # An edit gets a line too, so the PM notices that the request they read has changed.
     edited = [ThreadEntry(at=e.at, event=f"{e.editor} edited the request") for e in request_edits]
     withdrawals = []
@@ -762,7 +767,7 @@ def _thread(request: Request, request_edits: list[Edit], viewer: User) -> list[T
     # A message comes before a status change made at the same moment: the PM's question
     # first, then "Waiting for your input".
     return sorted(
-        messages + notes + events + edited + withdrawals,
+        messages + notes + events + task_lines + edited + withdrawals,
         key=lambda entry: (entry.at, entry.message is None and entry.note is None),
     )
 

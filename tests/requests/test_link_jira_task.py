@@ -77,7 +77,7 @@ def test_pm_links_a_task_and_the_request_is_planned(client, pm, anna):
     assert request.jira_url == "https://jira.example.com/browse/FI-2208"
     assert request.messages.get().text == "It's already on our list."
     client.force_login(anna)
-    assert "Planned · FI-2208" in client.get(request.get_absolute_url()).content.decode()
+    assert "Linked to FI-2208" in client.get(request.get_absolute_url()).content.decode()
 
 
 def test_a_task_of_another_project_cannot_be_linked(client, pm, anna):

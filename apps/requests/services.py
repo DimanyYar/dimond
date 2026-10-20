@@ -28,6 +28,8 @@ from .models import (
     RequestType,
     RequestVisit,
     StatusEvent,
+    TaskEvent,
+    TaskEventKind,
     WhenNeeded,
     WithdrawalRequest,
 )
@@ -464,6 +466,9 @@ def _plan_with_task(pm: User, request: Request, task: Issue, reply: str) -> Requ
     except IntegrityError:
         raise TaskNotLinkable(f"{task.key} already belongs to another request.") from None
     _set_status(request, ClientStatus.PLANNED, pm)
+    TaskEvent.objects.create(
+        request=request, kind=TaskEventKind.LINKED, task_key=task.key, actor=pm
+    )
     if reply:
         Message.objects.create(request=request, author=pm, text=reply)
     _mark_handled_so_far(request)
@@ -608,20 +613,14 @@ class TaskLost:
 @transaction.atomic
 def drop_deleted_task(request: Request) -> TaskLost:
     """The task is gone from Jira (deleted, or dimond's account no longer sees it): the sync
-    unlinks it, keeps the client's status, and tells the PM in a note; the request waits in
+    unlinks it, keeps the client's status, and tells the PM in the thread; the request waits in
     the PM's Needs you as "Task deleted" until they link another task or decline it."""
     request = Request.objects.select_for_update().get(pk=request.pk)
     key = request.jira_key
     status = ClientStatus(request.status).label
     request.lost_jira_key, request.jira_key, request.jira_url, request.jira_status = key, "", "", ""
     request.save(update_fields=["lost_jira_key", "jira_key", "jira_url", "jira_status"])
-    InternalNote.objects.create(
-        request=request,
-        author=None,
-        text=f"{key} is gone from Jira: it was deleted, or dimond’s Jira account can no longer "
-        f"see it. dimond unlinked it; the client still sees “{status}”. Link another task or "
-        "decline the request.",
-    )
+    TaskEvent.objects.create(request=request, kind=TaskEventKind.DELETED, task_key=key)
     return TaskLost(
         request=request,
         task_key=key,
@@ -644,6 +643,9 @@ def follow_moved_task(request: Request, task: Issue) -> TaskLost:
     if own_project and not Request.objects.filter(jira_key=task.key).exists():
         request.jira_key, request.jira_url = task.key, task.url
         request.save(update_fields=["jira_key", "jira_url"])
+        TaskEvent.objects.create(
+            request=request, kind=TaskEventKind.MOVED, task_key=old, new_key=task.key
+        )
         return TaskLost(
             request=request,
             task_key=task.key,
@@ -653,6 +655,9 @@ def follow_moved_task(request: Request, task: Issue) -> TaskLost:
         )
     request.jira_moved_to = task.key
     request.save(update_fields=["jira_moved_to"])
+    TaskEvent.objects.create(
+        request=request, kind=TaskEventKind.MOVED_AWAY, task_key=old, new_key=task.key
+    )
     return TaskLost(
         request=request,
         task_key=old,
@@ -670,11 +675,12 @@ def unlink_task(pm: User, request: Request) -> Request:
     request = Request.objects.select_for_update().get(pk=request.pk)
     if not can_unlink_task(pm, request):
         raise NotAllowedError
-    InternalNote.objects.create(
+    TaskEvent.objects.create(
         request=request,
-        author=pm,
-        text=f"Unlinked {request.jira_key}: Jira moved it to {request.jira_moved_to}, another "
-        "client’s project.",
+        kind=TaskEventKind.UNLINKED,
+        task_key=request.jira_key,
+        new_key=request.jira_moved_to,
+        actor=pm,
     )
     request.jira_key = request.jira_url = request.jira_status = request.jira_moved_to = ""
     request.save(update_fields=["jira_key", "jira_url", "jira_status", "jira_moved_to"])
