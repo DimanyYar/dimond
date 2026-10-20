@@ -317,6 +317,14 @@ def test_a_deleted_task_is_left_out_instead_of_failing_the_whole_search():
     assert seen[0].url.params["validateQuery"] == "false"
 
 
+def test_a_task_moved_to_another_project_comes_back_under_its_new_key():
+    jira = jira_answering({"search": saved("search_linked_moved.json")}, [])
+
+    [moved] = jira.issues(["FI-2207"])
+
+    assert (moved.key, moved.project_key, moved.status) == ("NW-90", "NW", "In Progress")
+
+
 def test_many_linked_tasks_are_read_fifty_per_search():
     seen: list[httpx.Request] = []
     jira = jira_answering({"search": saved("search_linked.json")}, seen)
