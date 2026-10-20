@@ -23,3 +23,9 @@ def test_a_task_the_demo_created_is_still_found_and_stays_to_do():
 
 def test_a_large_number_in_a_project_the_demo_does_not_have_is_not_a_task():
     assert MockTracker().issues(["HR-50000"]) == []
+
+
+def test_a_key_with_an_odd_digit_is_skipped_and_the_rest_are_still_read():
+    issues = MockTracker().issues(["FI-²", "FI-2214"])
+
+    assert [i.key for i in issues] == ["FI-2214"]

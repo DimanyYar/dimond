@@ -120,19 +120,7 @@ class JiraTracker:
         checked = [key for key in keys if ISSUE_KEY.fullmatch(key)]
         found: list[Issue] = []
         for start in range(0, len(checked), LINKED_BATCH):
-            batch = checked[start : start + LINKED_BATCH]
-            found += self._call(
-                "search",
-                lambda data: [self._issue(item) for item in data["issues"]],
-                {
-                    "jql": f"key in ({','.join(batch)})",
-                    "fields": ISSUE_FIELDS,
-                    "maxResults": LINKED_BATCH,
-                    # With validation on, one deleted task's key makes Jira refuse the whole
-                    # search; without it Jira just leaves that task out.
-                    "validateQuery": "false",
-                },
-            )
+            found += self._all_pages(f"key in ({','.join(checked[start : start + LINKED_BATCH])})")
         return found
 
     def create_issue(
@@ -203,6 +191,28 @@ class JiraTracker:
         except IssueNotFound:
             return []
         return [found] if found.project_key == project_key and not found.done else []
+
+    def _all_pages(self, jql: str) -> list[Issue]:
+        """A Jira admin can cap search pages below what we ask for, so pages are read until
+        Jira has given every task it counted."""
+        found: list[Issue] = []
+        while True:
+            total, page = self._call(
+                "search",
+                lambda data: (int(data["total"]), [self._issue(item) for item in data["issues"]]),
+                {
+                    "jql": jql,
+                    "fields": ISSUE_FIELDS,
+                    "startAt": len(found),
+                    "maxResults": LINKED_BATCH,
+                    # With validation on, one deleted task's key makes Jira refuse the whole
+                    # search; without it Jira just leaves that task out.
+                    "validateQuery": "false",
+                },
+            )
+            found += page
+            if not page or len(found) >= total:
+                return found
 
     def _checked_project(self, key: str) -> str:
         if not PROJECT_KEY.fullmatch(key):

@@ -1,0 +1,7 @@
+{"startAt": 1, "maxResults": 1, "total": 2, "issues": [
+ {"expand": "operations", "id": "48004", "self": "https://j.shakuro.com/rest/api/2/issue/48004", "key": "FI-2150",
+  "fields": {"summary": "Leads list: sort by date",
+   "issuetype": {"id": "10001", "name": "Story", "subtask": false},
+   "project": {"id": "10512", "key": "FI", "name": "Atlas"},
+   "status": {"id": "10001", "name": "Done", "statusCategory": {"id": 3, "key": "done", "name": "Done"}}}}
+]}

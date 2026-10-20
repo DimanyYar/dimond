@@ -326,6 +326,20 @@ def test_many_linked_tasks_are_read_fifty_per_search():
     assert [len(r.url.params["jql"].split(",")) for r in seen] == [50, 50, 20]
 
 
+def test_all_pages_are_read_when_jira_gives_fewer_tasks_per_page_than_asked():
+    seen: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        page = int(request.url.params["startAt"]) + 1
+        return saved(f"search_linked_page_{page}.json")
+
+    issues = jira_with(handle).issues(["FI-2214", "FI-2150"])
+
+    assert [i.key for i in issues] == ["FI-2214", "FI-2150"]
+    assert [r.url.params["startAt"] for r in seen] == ["0", "1"]
+
+
 def test_a_malformed_key_never_goes_into_the_search():
     seen: list[httpx.Request] = []
     jira = jira_answering({"search": saved("search_linked.json")}, seen)

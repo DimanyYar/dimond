@@ -78,7 +78,9 @@ class MockTracker:
         # Tasks the demo made are not stored (the sync runs in another process anyway), so
         # their number is what vouches for them; they stay in To Do for good.
         project_key, _, number = key.partition("-")
-        if self._has_project(project_key) and number.isdigit() and int(number) >= DEMO_MADE_FROM:
+        # isdigit() alone lets "²" through, which int() then refuses.
+        is_number = number.isascii() and number.isdecimal()
+        if self._has_project(project_key) and is_number and int(number) >= DEMO_MADE_FROM:
             return _issue(key, "A task made in the demo", "To Do", "Task")
         raise IssueNotFound(key)
 
