@@ -1,4 +1,5 @@
 from collections.abc import Collection, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
@@ -15,7 +16,10 @@ from apps.tracker.base import Issue, Tracker, TrackerError, TrackerUnreachable
 from apps.tracker.connection import current_tracker
 
 from .models import (
+    CLOSED_STATUSES,
+    JIRA_STATUSES,
     REQUEST_FIELDS,
+    TASK_PROGRESS,
     ClientStatus,
     InternalNote,
     Message,
@@ -439,12 +443,12 @@ def _comment_with_files(
 def _plan_with_task(pm: User, request: Request, task: Issue, reply: str) -> Request:
     """The request now follows this task: its key on the card, "Planned · FI-2301" in the
     thread, the PM's reply if written, and it leaves the PM's Needs you."""
-    request.jira_key, request.jira_url = task.key, task.url
+    request.jira_key, request.jira_url, request.jira_status = task.key, task.url, task.status
     try:
         # Two PMs linking the same task at the same moment both pass the check above; the
         # unique key lets one through, and the other hears why instead of seeing an error page.
         with transaction.atomic():
-            request.save(update_fields=["jira_key", "jira_url", "updated_at"])
+            request.save(update_fields=["jira_key", "jira_url", "jira_status", "updated_at"])
     except IntegrityError:
         raise TaskNotLinkable(f"{task.key} already belongs to another request.") from None
     _set_status(request, ClientStatus.PLANNED, pm)
@@ -501,3 +505,78 @@ def add_note(pm: User, request: Request, text: str) -> InternalNote:
     note = InternalNote.objects.create(request=request, author=pm, text=text.strip())
     _mark_handled_so_far(request)
     return note
+
+
+@dataclass(frozen=True)
+class TaskFollowed:
+    """What one sync did to one request, for the sync log."""
+
+    request: Request
+    jira_from: str
+    jira_to: str
+    status_from: ClientStatus
+    status_to: ClientStatus
+    effect: str
+    unmapped: bool
+
+
+@transaction.atomic
+def follow_task(request: Request, jira_status: str) -> TaskFollowed | None:
+    """The Jira sync's step for one request: save the task's status and move the client's
+    status after it where the PRD allows (PRD: Jira sync). Returns None when nothing changed,
+    so a run with no news logs nothing."""
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    status_from = ClientStatus(request.status)
+    jira_from = request.jira_status
+    target = JIRA_STATUSES.get(jira_status)
+    if target is not None and _sync_may_move(status_from, target):
+        request = _set_status(request, target, None)
+    if jira_from != jira_status:
+        request.jira_status = jira_status
+        request.save(update_fields=["jira_status"])
+    status_to = ClientStatus(request.status)
+    if jira_from == jira_status and status_from == status_to:
+        return None
+    return TaskFollowed(
+        request=request,
+        jira_from=jira_from,
+        jira_to=jira_status,
+        status_from=status_from,
+        status_to=status_to,
+        effect=_sync_effect(status_from, status_to, jira_status, target),
+        unmapped=target is None,
+    )
+
+
+def _sync_may_move(current: ClientStatus, target: ClientStatus) -> bool:
+    if current in CLOSED_STATUSES or current == ClientStatus.NEEDS_INPUT:
+        # Closed stays closed, and a question to the client waits for their answer.
+        return False
+    if current == ClientStatus.RECEIVED:
+        # Only a request whose client has just answered a question has a task and Received.
+        return True
+    if current == ClientStatus.LATER:
+        # Parked by the PM: it comes out once the team takes the task into work.
+        return TASK_PROGRESS.index(target) > TASK_PROGRESS.index(ClientStatus.PLANNED)
+    return TASK_PROGRESS.index(target) > TASK_PROGRESS.index(current)
+
+
+def _sync_effect(
+    before: ClientStatus, after: ClientStatus, jira_status: str, target: ClientStatus | None
+) -> str:
+    if before != after:
+        closed = " The request is closed." if after in CLOSED_STATUSES else ""
+        return f"Client status: {before.label} → {after.label}.{closed}"
+    if target is None:
+        return f"“{jira_status}” isn't mapped, so the client keeps “{before.label}”."
+    if before == ClientStatus.DONE and target != ClientStatus.DONE:
+        return "Reopened in Jira; the request stays closed."
+    if before in CLOSED_STATUSES:
+        return f"The request is {before.label.lower()} in dimond; Jira goes its own way."
+    if before == ClientStatus.NEEDS_INPUT:
+        return "Waits for the client's answer first."
+    if before == ClientStatus.LATER:
+        return "Stays in Later until the team takes the task into work."
+    if target != before:
+        return f"Went back in Jira; the client keeps seeing “{before.label}”."
+    return f"The client still sees “{before.label}”."

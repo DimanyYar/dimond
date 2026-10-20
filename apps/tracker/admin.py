@@ -5,7 +5,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 
 from .connection import jira_is_configured
-from .models import TrackerKind, TrackerSettings
+from .models import SyncEvent, SyncRun, TrackerKind, TrackerSettings
 
 
 class TrackerSettingsForm(forms.ModelForm):
@@ -50,4 +50,30 @@ class TrackerSettingsAdmin(admin.ModelAdmin):
     def has_delete_permission(
         self, request: HttpRequest, obj: TrackerSettings | None = None
     ) -> bool:
+        return False
+
+
+class SyncEventInline(admin.TabularInline):
+    model = SyncEvent
+    fields = readonly_fields = ("task_key", "request", "what", "effect", "needs_attention")
+    extra = 0
+    can_delete = False
+
+    def has_add_permission(self, request: HttpRequest, obj: SyncRun | None = None) -> bool:
+        return False
+
+
+@admin.register(SyncRun)
+class SyncRunAdmin(admin.ModelAdmin):
+    """The sync log until the Logs page (#16c): read-only, written by the sync alone."""
+
+    list_display = ["started_at", "outcome", "checked", "error"]
+    list_filter = ["outcome"]
+    fields = readonly_fields = ("started_at", "finished_at", "outcome", "checked", "error")
+    inlines = [SyncEventInline]
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_change_permission(self, request: HttpRequest, obj: SyncRun | None = None) -> bool:
         return False

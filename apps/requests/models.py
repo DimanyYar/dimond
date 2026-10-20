@@ -69,6 +69,28 @@ IN_WORK_STATUSES = (
     ClientStatus.IN_PROGRESS,
     ClientStatus.READY_TO_CHECK,
 )
+# What the client sees for each status of the Jira task (PRD: statuses and Jira mapping). One
+# table for every project: Shakuro's workflows share these names. Any other status leaves the
+# client's status as it is and shows up in the sync log.
+JIRA_STATUSES = {
+    "To Do": ClientStatus.PLANNED,
+    "In Progress": ClientStatus.IN_PROGRESS,
+    "Code review": ClientStatus.IN_PROGRESS,
+    "Test Ready": ClientStatus.IN_PROGRESS,
+    "Staging Ready": ClientStatus.IN_PROGRESS,
+    "on Staging": ClientStatus.READY_TO_CHECK,
+    "Production Ready": ClientStatus.READY_TO_CHECK,
+    "on Production": ClientStatus.DONE,
+    "Done": ClientStatus.DONE,
+}
+# The statuses the sync sets, in the order work goes. The client's status only moves forward
+# along it: a task sent back from staging to development is noise to the client.
+TASK_PROGRESS = (
+    ClientStatus.PLANNED,
+    ClientStatus.IN_PROGRESS,
+    ClientStatus.READY_TO_CHECK,
+    ClientStatus.DONE,
+)
 
 
 class BoardColumn(NamedTuple):
@@ -124,6 +146,11 @@ class Request(models.Model):
         max_length=32, blank=True, help_text="The Jira task made from this request, e.g. FI-2301."
     )
     jira_url = models.URLField(max_length=500, blank=True)
+    jira_status = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="The task's status in Jira as the last sync saw it, e.g. Code review.",
+    )
     pm_handled_at = models.DateTimeField(
         null=True,
         blank=True,
