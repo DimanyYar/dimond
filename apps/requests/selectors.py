@@ -47,6 +47,7 @@ from .models import (
     RequestType,
     RequestVisit,
     StatusEvent,
+    TaskEventKind,
     WithdrawalRequest,
 )
 
@@ -109,6 +110,7 @@ class PmReason(models.TextChoices):
     status). In the order the PM sees them: an ask to withdraw first."""
 
     WITHDRAW = "withdraw", "Asks to withdraw"
+    TASK_LOST = "task_lost", "Task deleted"
     REPLIED = "replied", "Client replied"
     NEW = "new", "New"
 
@@ -232,6 +234,11 @@ def with_pm_reason(requests: QuerySet[Request]) -> QuerySet[Request]:
         pm_reason=Case(
             # A request the Jira sync closed while an ask was pending has nothing left to decide.
             When(open_request & Exists(pending_ask), then=Value(PmReason.WITHDRAW)),
+            # The sync unlinked a task deleted in Jira: the PM links another or declines.
+            When(
+                open_request & Q(jira_key="") & ~Q(lost_jira_key=""),
+                then=Value(PmReason.TASK_LOST),
+            ),
             When(
                 open_request & Q(last_author=Role.CLIENT) & unhandled,
                 then=Value(PmReason.REPLIED),
@@ -552,13 +559,19 @@ JIRA_TASK_STATUSES = (ClientStatus.RECEIVED, ClientStatus.NEEDS_INPUT, ClientSta
 
 
 def can_create_jira_task(user: User, request: Request) -> bool:
-    """Create Jira task, in the client's own project (PRD: PM buttons; tracker and settings)."""
-    return (
-        _is_owner_pm(user, request)
-        and not request.jira_key
-        and request.status in JIRA_TASK_STATUSES
-        and bool(request.company.jira_project)
-    )
+    """Create Jira task, in the client's own project (PRD: PM buttons; tracker and settings),
+    for any open request without a task. Past Planned that only happens once its task was
+    lost (deleted, unlinked); a task moved to another client's project may be replaced too."""
+    if not _is_owner_pm(user, request) or not request.company.jira_project:
+        return False
+    if request.status in CLOSED_STATUSES:
+        return False
+    return not request.jira_key or bool(request.jira_moved_to)
+
+
+def can_unlink_task(user: User, request: Request) -> bool:
+    """Unlink is only for a task Jira moved into another client's project (PRD: Jira sync)."""
+    return _is_owner_pm(user, request) and bool(request.jira_moved_to)
 
 
 def needs_jira_project(user: User, request: Request) -> bool:
@@ -711,9 +724,9 @@ def _edits(request: Request) -> list[Edit]:
 
 
 def _event_entry(event: StatusEvent) -> ThreadEntry:
+    # The task's key has its own line ("Linked to FI-2301"), which keeps it even after the
+    # task is unlinked.
     text = STATUS_EVENT_TEXT[ClientStatus(event.to_status)]
-    if event.to_status == ClientStatus.PLANNED and event.request.jira_key:
-        text = f"{text} · {event.request.jira_key}"
     if event.to_status == ClientStatus.RECEIVED and event.from_status:
         text = "Back with Dimon"
     return ThreadEntry(at=event.created_at, event=text, status=event.to_status)
@@ -729,6 +742,10 @@ def _thread(request: Request, request_edits: list[Edit], viewer: User) -> list[T
         )
     ]
     events = [_event_entry(e) for e in request.status_events.select_related("request")]
+    tasks = request.task_events.select_related("actor")
+    if viewer.role != Role.PM:
+        tasks = tasks.filter(kind=TaskEventKind.LINKED)
+    task_lines = [ThreadEntry(at=t.created_at, event=t.text) for t in tasks]
     # An edit gets a line too, so the PM notices that the request they read has changed.
     edited = [ThreadEntry(at=e.at, event=f"{e.editor} edited the request") for e in request_edits]
     withdrawals = []
@@ -747,7 +764,7 @@ def _thread(request: Request, request_edits: list[Edit], viewer: User) -> list[T
     # A message comes before a status change made at the same moment: the PM's question
     # first, then "Waiting for your input".
     return sorted(
-        messages + notes + events + edited + withdrawals,
+        messages + notes + events + task_lines + edited + withdrawals,
         key=lambda entry: (entry.at, entry.message is None and entry.note is None),
     )
 

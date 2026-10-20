@@ -28,6 +28,8 @@ from .models import (
     RequestType,
     RequestVisit,
     StatusEvent,
+    TaskEvent,
+    TaskEventKind,
     WhenNeeded,
     WithdrawalRequest,
 )
@@ -44,6 +46,7 @@ from .selectors import (
     can_mark_handled,
     can_move_to_later,
     can_post_message,
+    can_unlink_task,
     can_withdraw_now,
 )
 
@@ -444,14 +447,28 @@ def _plan_with_task(pm: User, request: Request, task: Issue, reply: str) -> Requ
     """The request now follows this task: its key on the card, "Planned · FI-2301" in the
     thread, the PM's reply if written, and it leaves the PM's Needs you."""
     request.jira_key, request.jira_url, request.jira_status = task.key, task.url, task.status
+    # A new task replaces one the sync lost (deleted, or moved to another client's project).
+    request.lost_jira_key = request.jira_moved_to = ""
     try:
         # Two PMs linking the same task at the same moment both pass the check above; the
         # unique key lets one through, and the other hears why instead of seeing an error page.
         with transaction.atomic():
-            request.save(update_fields=["jira_key", "jira_url", "jira_status", "updated_at"])
+            request.save(
+                update_fields=[
+                    "jira_key",
+                    "jira_url",
+                    "jira_status",
+                    "lost_jira_key",
+                    "jira_moved_to",
+                    "updated_at",
+                ]
+            )
     except IntegrityError:
         raise TaskNotLinkable(f"{task.key} already belongs to another request.") from None
     _set_status(request, ClientStatus.PLANNED, pm)
+    TaskEvent.objects.create(
+        request=request, kind=TaskEventKind.LINKED, task_key=task.key, actor=pm
+    )
     if reply:
         Message.objects.create(request=request, author=pm, text=reply)
     _mark_handled_so_far(request)
@@ -580,3 +597,96 @@ def _sync_effect(
     if target != before:
         return f"Went back in Jira; the client keeps seeing “{before.label}”."
     return f"The client still sees “{before.label}”."
+
+
+@dataclass(frozen=True)
+class TaskLost:
+    """The sync could not follow a request's task any more, for the sync log."""
+
+    request: Request
+    task_key: str
+    what: str
+    effect: str
+    needs_attention: bool
+
+
+@transaction.atomic
+def drop_deleted_task(request: Request) -> TaskLost:
+    """The task is gone from Jira (deleted, or dimond's account no longer sees it): the sync
+    unlinks it, keeps the client's status, and tells the PM in the thread; the request waits in
+    the PM's Needs you as "Task deleted" until they link another task or decline it."""
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    key = request.jira_key
+    status = ClientStatus(request.status).label
+    request.lost_jira_key, request.jira_key, request.jira_url, request.jira_status = key, "", "", ""
+    request.save(update_fields=["lost_jira_key", "jira_key", "jira_url", "jira_status"])
+    TaskEvent.objects.create(request=request, kind=TaskEventKind.DELETED, task_key=key)
+    return TaskLost(
+        request=request,
+        task_key=key,
+        what="Not found in Jira",
+        effect=f"Deleted, or dimond’s account can’t see it. Unlinked; the client keeps seeing "
+        f"“{status}”.",
+        needs_attention=True,
+    )
+
+
+@transaction.atomic
+def follow_moved_task(request: Request, task: Issue) -> TaskLost:
+    """Jira moved the task and answers under its new key. Into the client's own project the
+    request follows the new key quietly; into another client's project the sync stops: that
+    task is no longer this client's work (PRD: Jira sync)."""
+    request = Request.objects.select_for_update().select_related("company").get(pk=request.pk)
+    old = request.jira_key
+    status = ClientStatus(request.status).label
+    own_project = task.project_key == request.company.jira_project
+    taken = Request.objects.filter(jira_key=task.key).exclude(pk=request.pk).exists()
+    if own_project and not taken:
+        request.jira_key, request.jira_url = task.key, task.url
+        request.save(update_fields=["jira_key", "jira_url"])
+        TaskEvent.objects.create(
+            request=request, kind=TaskEventKind.MOVED, task_key=old, new_key=task.key
+        )
+        return TaskLost(
+            request=request,
+            task_key=task.key,
+            what=f"Moved in Jira: {old} → {task.key}",
+            effect=f"The request now follows {task.key}.",
+            needs_attention=False,
+        )
+    request.jira_moved_to = task.key
+    request.save(update_fields=["jira_moved_to"])
+    TaskEvent.objects.create(
+        request=request, kind=TaskEventKind.MOVED_AWAY, task_key=old, new_key=task.key
+    )
+    why = (
+        f"{task.key} already belongs to another request"
+        if own_project
+        else f"{task.key} is outside {request.company}’s project"
+    )
+    return TaskLost(
+        request=request,
+        task_key=old,
+        what=f"Moved to {task.key}",
+        effect=f"{why}, so the sync no longer follows it; the client keeps seeing “{status}”.",
+        needs_attention=True,
+    )
+
+
+@transaction.atomic
+def unlink_task(pm: User, request: Request) -> Request:
+    """Unlink, from Logs: the PM lets go of a task Jira moved into another client's project.
+    The request keeps its status; the PM links another task or declines it."""
+    request = Request.objects.select_for_update().get(pk=request.pk)
+    if not can_unlink_task(pm, request):
+        raise NotAllowedError
+    TaskEvent.objects.create(
+        request=request,
+        kind=TaskEventKind.UNLINKED,
+        task_key=request.jira_key,
+        new_key=request.jira_moved_to,
+        actor=pm,
+    )
+    request.jira_key = request.jira_url = request.jira_status = request.jira_moved_to = ""
+    request.save(update_fields=["jira_key", "jira_url", "jira_status", "jira_moved_to"])
+    return request

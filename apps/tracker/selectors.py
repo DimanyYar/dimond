@@ -83,6 +83,8 @@ class Attention:
     title: str
     detail: str
     request: Request
+    # A task Jira moved into another client's project: Link another task or Unlink.
+    moved: bool = False
 
 
 @dataclass(frozen=True)
@@ -157,28 +159,55 @@ def _runs(pm: User, show: RunFilter) -> QuerySet[SyncRun]:
 
 
 def needs_attention(pm: User) -> list[Attention]:
-    """Problems that are still there now, not just logged once: open requests of this PM's
-    clients whose task sits in a status the mapping does not know."""
+    """Problems that are still there now, not just logged once, on open requests of this PM's
+    clients: a task deleted or moved to another client's project, an unmapped status."""
     if not has_clients_page(pm):
         return []
-    unmapped = (
+    open_requests = (
         Request.objects.filter(company__owner=pm)
-        .exclude(jira_key="")
-        .exclude(jira_status="")
-        .exclude(jira_status__in=JIRA_STATUSES)
         .exclude(status__in=CLOSED_STATUSES)
         .select_related("company")
+    )
+    items = []
+    for request in open_requests.filter(jira_key="").exclude(lost_jira_key=""):
+        items.append(
+            Attention(
+                title=f"{request.lost_jira_key} not found in Jira",
+                detail=f"{request.key} · {request.company}. Deleted, so dimond unlinked it; "
+                f"the client still sees “{ClientStatus(request.status).label}”. Link another "
+                "task or decline the request.",
+                request=request,
+            )
+        )
+    for request in open_requests.exclude(jira_moved_to=""):
+        own_project = request.jira_moved_to.split("-")[0] == request.company.jira_project
+        why = "That key belongs to another request" if own_project else "That’s another project"
+        items.append(
+            Attention(
+                title=f"{request.jira_key} moved to {request.jira_moved_to}",
+                detail=f"{request.key} · {request.company}. {why}, so the sync stopped "
+                f"following it; the client still sees “{ClientStatus(request.status).label}”.",
+                request=request,
+                moved=True,
+            )
+        )
+    unmapped = (
+        open_requests.exclude(jira_key="")
+        .filter(jira_moved_to="")
+        .exclude(jira_status="")
+        .exclude(jira_status__in=JIRA_STATUSES)
         .order_by("jira_key")
     )
-    return [
-        Attention(
-            title=f"“{request.jira_status}” isn’t mapped",
-            detail=f"{request.jira_key} sits in it; {request.company} keeps seeing "
-            f"“{ClientStatus(request.status).label}”.",
-            request=request,
+    for request in unmapped:
+        items.append(
+            Attention(
+                title=f"“{request.jira_status}” isn’t mapped",
+                detail=f"{request.jira_key} sits in it; {request.company} keeps seeing "
+                f"“{ClientStatus(request.status).label}”.",
+                request=request,
+            )
         )
-        for request in unmapped
-    ]
+    return items
 
 
 def _tracker_label() -> tuple[str, bool]:

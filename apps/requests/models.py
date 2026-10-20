@@ -151,6 +151,18 @@ class Request(models.Model):
         blank=True,
         help_text="The task's status in Jira as the last sync saw it, e.g. Code review.",
     )
+    lost_jira_key = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="The task this request followed until it was deleted in Jira; the sync "
+        "unlinked it. Cleared when the PM links another task.",
+    )
+    jira_moved_to = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="Jira moved the task into another client's project under this key; the sync "
+        "stopped following it until the PM links another task or unlinks it.",
+    )
     pm_handled_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -211,6 +223,56 @@ class StatusEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.from_status or 'new'} → {self.to_status}"
+
+
+class TaskEventKind(models.TextChoices):
+    LINKED = "linked", "Linked"
+    DELETED = "deleted", "Deleted in Jira"
+    MOVED = "moved", "Moved in the client's project"
+    MOVED_AWAY = "moved_away", "Moved to another client's project"
+    UNLINKED = "unlinked", "Unlinked by the PM"
+
+
+class TaskEvent(models.Model):
+    """The request's Jira task changed: linked, deleted, moved or unlinked. Its line in the
+    thread keeps the key for good, so the PM can look the task up even once it is gone.
+    The client sees only "Linked"; the rest is the PM's (PRD: Jira sync)."""
+
+    request = models.ForeignKey(Request, on_delete=models.PROTECT, related_name="task_events")
+    kind = models.CharField(max_length=20, choices=TaskEventKind.choices)
+    task_key = models.CharField(max_length=32)
+    new_key = models.CharField(max_length=32, blank=True, help_text="Where Jira moved it.")
+    actor = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text="Empty when the Jira sync noticed it.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+    def __str__(self) -> str:
+        return f"{self.task_key}: {self.get_kind_display()}"
+
+    @property
+    def text(self) -> str:
+        """The line in the thread."""
+        if self.kind == TaskEventKind.LINKED:
+            return f"Linked to {self.task_key}"
+        if self.kind == TaskEventKind.DELETED:
+            return f"{self.task_key} unlinked: deleted in Jira. Link another task or decline it"
+        if self.kind == TaskEventKind.MOVED:
+            return f"{self.task_key} moved to {self.new_key} in Jira; the request follows it"
+        if self.kind == TaskEventKind.MOVED_AWAY:
+            return (
+                f"{self.task_key} moved to {self.new_key}, another client’s project: the sync "
+                "stopped following it"
+            )
+        return f"{self.actor} unlinked {self.task_key} (moved to {self.new_key})"
 
 
 class Message(models.Model):
@@ -315,7 +377,14 @@ class InternalNote(models.Model):
     note). Notes stay in dimond and are never sent to Jira either."""
 
     request = models.ForeignKey(Request, on_delete=models.PROTECT, related_name="notes")
-    author = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
+    author = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text="Empty on a few early notes the Jira sync wrote; it now writes thread lines.",
+    )
     text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 

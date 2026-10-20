@@ -10,9 +10,9 @@ from django.utils import timezone
 from apps.accounts.models import Company, User
 from apps.files.models import Attachment
 from apps.requests import services
-from apps.requests.models import ClientStatus, Request, RequestType, WhenNeeded
-from apps.requests.selectors import request_page
-from apps.tracker.base import Issue, TrackerUnreachable
+from apps.requests.models import ClientStatus, Request, RequestType, TaskEvent, WhenNeeded
+from apps.requests.selectors import PmReason, pm_reasons, request_page, requests_for
+from apps.tracker.base import Issue, IssueNotFound, TrackerUnreachable
 from apps.tracker.models import SyncEvent, SyncOutcome, SyncRun
 from apps.tracker.services import sync_tasks
 
@@ -20,12 +20,21 @@ pytestmark = pytest.mark.django_db
 
 
 class FakeJira:
-    """Answers with the statuses a test sets; a key it does not know is a deleted task."""
+    """Answers with the statuses a test sets; a key it does not know is a deleted task, and
+    `moved` maps an old key to the task Jira answers with when asked for it by that key."""
 
     def __init__(self, statuses: dict[str, str], fails: Exception | None = None) -> None:
         self.statuses = statuses
         self.fails = fails
+        self.moved: dict[str, Issue] = {}
         self.asked: list[list[str]] = []
+
+    def issue(self, key: str) -> Issue:
+        if key in self.moved:
+            return self.moved[key]
+        if key in self.statuses:
+            return Issue(key, "", self.statuses[key], "Story", "FI", False, "")
+        raise IssueNotFound(key)
 
     def issues(self, keys: list[str]) -> list[Issue]:
         self.asked.append(keys)
@@ -276,3 +285,179 @@ def test_the_demo_tracker_brings_its_statuses_too(anna, pm, capsys):
     assert status_of(request) == ClientStatus.IN_PROGRESS
     assert SyncEvent.objects.get().what == "Status in Jira: Code review"
     assert "Succeeded: 1 task(s), 1 change(s)" in capsys.readouterr().out
+
+
+def moved_task(key: str, status: str = "on Staging") -> Issue:
+    return Issue(key, "", status, "Story", key.split("-")[0], False, f"https://jira.test/{key}")
+
+
+def test_a_task_deleted_in_jira_is_unlinked_with_a_line_and_waits_for_the_pm(jira, anna, pm):
+    request = linked(anna, "FI-2207", ClientStatus.IN_PROGRESS, "In Progress")
+
+    run = sync_tasks()
+
+    request.refresh_from_db()
+    assert (request.jira_key, request.lost_jira_key) == ("", "FI-2207")
+    assert request.status == ClientStatus.IN_PROGRESS
+    lines = [e.event for e in request_page(pm, request.pk).thread if e.event]
+    assert "FI-2207 unlinked: deleted in Jira. Link another task or decline it" in lines
+    logged = run.events.get()
+    assert (logged.task_key, logged.what, logged.needs_attention) == (
+        "FI-2207",
+        "Not found in Jira",
+        True,
+    )
+    assert pm_reasons(requests_for(pm)) == {request.pk: PmReason.TASK_LOST}
+
+
+def test_the_pm_links_another_task_to_a_request_whose_task_was_deleted(jira, anna, pm):
+    request = linked(anna, "FI-2207", ClientStatus.IN_PROGRESS, "In Progress")
+    sync_tasks()
+
+    services.link_jira_task(pm, request, "FI-2214", "")
+
+    request.refresh_from_db()
+    assert (request.jira_key, request.lost_jira_key) == ("FI-2214", "")
+    assert request.pk not in pm_reasons(requests_for(pm))
+
+
+def test_a_deleted_task_is_noticed_once(jira, anna):
+    linked(anna, "FI-2207", ClientStatus.IN_PROGRESS, "In Progress")
+    sync_tasks()
+
+    again = sync_tasks()
+
+    assert not again.events.exists()
+
+
+def test_a_task_gone_after_the_request_closed_changes_nothing(jira, anna):
+    request = linked(anna, "FI-2150", ClientStatus.DONE, "Done")
+
+    run = sync_tasks()
+
+    request.refresh_from_db()
+    assert request.jira_key == "FI-2150"
+    assert not run.events.exists()
+
+
+def test_a_task_moved_within_the_clients_project_is_followed_under_its_new_key(jira, anna):
+    request = linked(anna, "FI-2207", ClientStatus.IN_PROGRESS, "In Progress")
+    jira.moved["FI-2207"] = moved_task("FI-2290")
+
+    run = sync_tasks()
+
+    request.refresh_from_db()
+    assert request.jira_key == "FI-2290"
+    assert request.status == ClientStatus.READY_TO_CHECK
+    assert [e.what for e in run.events.all()] == [
+        "Moved in Jira: FI-2207 → FI-2290",
+        "In Progress → on Staging",
+    ]
+    assert not run.events.filter(needs_attention=True).exists()
+
+
+def test_a_task_moved_to_another_clients_project_is_no_longer_followed(jira, anna):
+    request = linked(anna, "FI-2207", ClientStatus.IN_PROGRESS, "In Progress")
+    jira.moved["FI-2207"] = moved_task("NW-90", "Done")
+
+    run = sync_tasks()
+
+    request.refresh_from_db()
+    assert (request.jira_key, request.jira_moved_to) == ("FI-2207", "NW-90")
+    assert request.status == ClientStatus.IN_PROGRESS
+    logged = run.events.get()
+    assert logged.needs_attention
+    assert logged.effect.startswith("NW-90 is outside Atlas’s project")
+    assert not sync_tasks().events.exists()
+
+
+def test_the_pm_unlinks_a_task_moved_to_another_clients_project(jira, anna, pm):
+    request = linked(anna, "FI-2207", ClientStatus.IN_PROGRESS, "In Progress")
+    jira.moved["FI-2207"] = moved_task("NW-90")
+    sync_tasks()
+
+    services.unlink_task(pm, request)
+
+    request.refresh_from_db()
+    assert (request.jira_key, request.jira_moved_to) == ("", "")
+    lines = [e.event for e in request_page(pm, request.pk).thread if e.event]
+    assert lines[-2:] == [
+        "FI-2207 moved to NW-90, another client’s project: the sync stopped following it",
+        "Dmitry unlinked FI-2207 (moved to NW-90)",
+    ]
+
+
+def test_jira_not_answering_about_a_missing_task_leaves_it_for_the_next_run(monkeypatch, anna):
+    request = linked(anna, "FI-2207", ClientStatus.IN_PROGRESS, "In Progress")
+
+    class Flaky(FakeJira):
+        def issue(self, key: str) -> Issue:
+            raise TrackerUnreachable("timeout")
+
+    monkeypatch.setattr("apps.tracker.services.current_tracker", lambda: Flaky({}))
+
+    sync_tasks()
+
+    request.refresh_from_db()
+    assert request.jira_key == "FI-2207"
+
+
+def test_the_key_stays_in_the_thread_after_the_task_is_gone_but_only_the_pm_reads_why(
+    jira, anna, pm
+):
+    request = services.create_request(
+        anna, RequestType.IMPROVEMENT, "Filter by source", "Context", WhenNeeded.NEXT_RELEASE
+    )
+    services.link_jira_task(pm, request, "FI-2214", "")
+    Request.objects.filter(pk=request.pk).update(jira_key="FI-9999")
+    request.refresh_from_db()
+    TaskEvent.objects.filter(request=request).update(task_key="FI-9999")
+
+    sync_tasks()
+
+    pm_lines = [e.event for e in request_page(pm, request.pk).thread if e.event]
+    client_lines = [e.event for e in request_page(anna, request.pk).thread if e.event]
+    assert "Linked to FI-9999" in pm_lines
+    assert "Linked to FI-9999" in client_lines
+    assert any(line.startswith("FI-9999 unlinked") for line in pm_lines)
+    assert not any("unlinked" in line for line in client_lines)
+
+
+def test_a_task_the_search_missed_is_followed_as_usual(jira, anna):
+    request = linked(anna, "FI-2207", ClientStatus.IN_PROGRESS, "In Progress")
+    # The search index lags: asked by key, Jira has it under the same key.
+    jira.moved["FI-2207"] = moved_task("FI-2207", "on Staging")
+
+    run = sync_tasks()
+
+    request.refresh_from_db()
+    assert (request.jira_key, request.jira_moved_to) == ("FI-2207", "")
+    assert request.status == ClientStatus.READY_TO_CHECK
+    assert [e.what for e in run.events.all()] == ["In Progress → on Staging"]
+
+
+def test_a_task_moved_onto_a_key_another_request_has_says_so(jira, anna):
+    linked(anna, "FI-2290", ClientStatus.PLANNED, "To Do")
+    request = linked(anna, "FI-2207", ClientStatus.IN_PROGRESS, "In Progress")
+    jira.moved["FI-2207"] = moved_task("FI-2290")
+    jira.statuses["FI-2290"] = "To Do"
+
+    run = sync_tasks()
+
+    request.refresh_from_db()
+    assert request.jira_moved_to == "FI-2290"
+    assert run.events.get(request=request).effect.startswith(
+        "FI-2290 already belongs to another request"
+    )
+
+
+def test_after_unlinking_the_pm_can_link_another_task_to_a_request_in_work(jira, anna, pm):
+    request = linked(anna, "FI-2207", ClientStatus.IN_PROGRESS, "In Progress")
+    jira.moved["FI-2207"] = moved_task("NW-90")
+    sync_tasks()
+    services.unlink_task(pm, request)
+
+    services.link_jira_task(pm, request, "FI-2214", "")
+
+    request.refresh_from_db()
+    assert request.jira_key == "FI-2214"

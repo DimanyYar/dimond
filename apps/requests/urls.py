@@ -23,4 +23,5 @@ urlpatterns = [
         views.request_link_jira_task,
         name="request_link_jira_task",
     ),
+    path("requests/<int:pk>/jira/unlink/", views.request_unlink_task, name="request_unlink_task"),
 ]

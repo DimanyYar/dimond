@@ -131,7 +131,8 @@ def test_the_thread_says_planned_with_the_task_key_and_the_reply(client, pm, ann
 
     client.force_login(anna)
     page = client.get(bug.get_absolute_url()).content.decode()
-    assert f"Planned · {bug.jira_key}" in page
+    assert "Planned" in page
+    assert f"Linked to {bug.jira_key}" in page
     assert "Thanks, the team has it." in page
 
 

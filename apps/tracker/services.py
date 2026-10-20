@@ -10,9 +10,15 @@ from django.utils import timezone
 from apps.accounts.models import User
 from apps.accounts.selectors import has_clients_page
 from apps.requests.models import CLOSED_STATUSES, Request
-from apps.requests.services import TaskFollowed, follow_task
+from apps.requests.services import (
+    TaskFollowed,
+    TaskLost,
+    drop_deleted_task,
+    follow_moved_task,
+    follow_task,
+)
 
-from .base import TrackerError
+from .base import Issue, IssueNotFound, Tracker, TrackerError
 from .connection import current_tracker
 from .models import SyncEvent, SyncOutcome, SyncRun
 
@@ -67,27 +73,71 @@ def sync_tasks(queued: SyncRun | None = None) -> SyncRun:
         run.outcome, run.started_at = SyncOutcome.RUNNING, timezone.now()
         run.save(update_fields=["outcome", "started_at"])
     now = timezone.now()
+    # A task moved into another client's project is no longer followed (PRD: Jira sync).
     linked = list(
-        Request.objects.exclude(jira_key="").filter(
-            ~Q(status__in=CLOSED_STATUSES) | Q(updated_at__gte=now - CLOSED_WATCH)
-        )
+        Request.objects.exclude(jira_key="")
+        .filter(jira_moved_to="")
+        .filter(~Q(status__in=CLOSED_STATUSES) | Q(updated_at__gte=now - CLOSED_WATCH))
     )
     try:
-        issues = current_tracker().issues([request.jira_key for request in linked])
+        tracker = current_tracker()
+        issues = tracker.issues([request.jira_key for request in linked])
     except TrackerError as error:
         return _finish(run, SyncOutcome.FAILED, error=str(error))
     by_key = {issue.key: issue for issue in issues}
     for request in linked:
-        issue = by_key.get(request.jira_key)
-        if issue is None:
-            # Deleted or moved: handled once the sync can tell which (#16d).
-            continue
-        followed = follow_task(request, issue.status)
-        if followed is not None:
-            _log(run, followed)
+        _sync_one(run, tracker, request, by_key.get(request.jira_key))
     problems = run.events.filter(needs_attention=True).exists()
     outcome = SyncOutcome.PROBLEMS if problems else SyncOutcome.SUCCEEDED
     return _finish(run, outcome, checked=len(issues))
+
+
+def _sync_one(run: SyncRun, tracker: Tracker, request: Request, issue: Issue | None) -> None:
+    if issue is None:
+        if request.status in CLOSED_STATUSES:
+            # The request is over: a task gone from Jira afterwards changes nothing.
+            return
+        lost, found = _find_lost(tracker, request)
+        if lost is not None:
+            _log_lost(run, lost)
+            if lost.needs_attention:
+                return
+            # Moved within the client's project: follow the task under its new key.
+            request = lost.request
+        if found is None:
+            return
+        issue = found
+    followed = follow_task(request, issue.status)
+    if followed is not None:
+        _log(run, followed)
+
+
+def _find_lost(tracker: Tracker, request: Request) -> tuple[TaskLost | None, Issue | None]:
+    """The search did not return the task under its key. Asked by key, Jira answers for a
+    moved task under its new key, and "not found" for a deleted one; the same key means
+    nothing happened to it. (None, None): Jira did not answer this time; the next run asks
+    again."""
+    try:
+        moved = tracker.issue(request.jira_key)
+    except IssueNotFound:
+        return drop_deleted_task(request), None
+    except TrackerError:
+        return None, None
+    if moved.key == request.jira_key:
+        # Not moved: the search missed it (Jira's search index can lag behind its tasks).
+        return None, moved
+    return follow_moved_task(request, moved), moved
+
+
+def _log_lost(run: SyncRun, lost: TaskLost) -> None:
+    SyncEvent.objects.create(
+        run=run,
+        request=lost.request,
+        task_key=lost.task_key,
+        what=lost.what,
+        effect=lost.effect,
+        needs_attention=lost.needs_attention,
+    )
 
 
 def _log(run: SyncRun, followed: TaskFollowed) -> None:
