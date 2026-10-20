@@ -92,6 +92,17 @@ def test_a_failed_run_is_shown_to_every_pm_with_jiras_words(client, other_pm):
     assert "Problems · 1" in page
 
 
+def test_the_newest_run_with_changes_opens_by_itself(client, pm, anna):
+    run_with(linked(anna, "FI-2214"), "To Do → Code review")
+    quiet = SyncRun.objects.create(outcome=SyncOutcome.SUCCEEDED, checked=1)
+    SyncRun.objects.filter(pk=quiet.pk).update(finished_at=quiet.started_at)
+
+    page = logs(client, pm)
+
+    assert page.count("<details open>") == 1
+    assert page.index("<details>") < page.index("<details open>")
+
+
 def test_with_changes_leaves_out_quiet_runs(client, pm, anna):
     quiet = SyncRun.objects.create(outcome=SyncOutcome.SUCCEEDED, checked=14)
     SyncRun.objects.filter(pk=quiet.pk).update(finished_at=quiet.started_at)

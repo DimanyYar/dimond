@@ -28,17 +28,17 @@ land (#19), so there are no tabs yet.
       <div class="logs-filters" role="group" aria-label="Filter runs">
         <a class="chip" href="{% url 'logs' %}"{% if show == "all" %} aria-current="true"{% endif %}>All runs</a>
         <a class="chip" href="?show=changes"{% if show == "changes" %} aria-current="true"{% endif %}>With changes</a>
-        <a class="chip" href="?show=problems"{% if show == "problems" %} aria-current="true"{% endif %}>Problems{% if problem_runs %} · {{ problem_runs }}{% endif %}</a>
+        <a class="chip" href="?show=problems"{% if show == "problems" %} aria-current="true"{% endif %}>Problems{% if page.problem_runs %} · {{ page.problem_runs }}{% endif %}</a>
       </div>
 
-      {% if runs %}
+      {% if page.runs %}
         <ol class="card run-list">
-          {% for item in runs %}
+          {% for item in page.runs %}
             {% ifchanged item.run.started_at.date %}
               <li class="run-day">{{ item.run.started_at|date:"D, M j" }}</li>
             {% endifchanged %}
             <li class="run">
-              <details{% if forloop.first and item.events or item.failed and forloop.first %} open{% endif %}>
+              <details{% if item.open %} open{% endif %}>
                 <summary class="run-summary">
                   <time class="run-time" datetime="{{ item.run.started_at|date:'c' }}">{{ item.run.started_at|date:"H:i" }}</time>
                   <span class="run-icon run-icon-{{ item.result }}" role="img" aria-label="{% if item.result == 'fail' %}Failed{% elif item.result == 'warn' %}Finished with problems{% else %}Succeeded{% endif %}">{% if item.result == "fail" %}×{% elif item.result == "warn" %}!{% else %}✓{% endif %}</span>
@@ -46,7 +46,7 @@ land (#19), so there are no tabs yet.
                     <span class="run-title">{{ item.title }}</span>
                     <span class="run-sub muted">{{ item.subtitle }}</span>
                   </span>
-                  <span class="run-meta muted">{% if item.run.manual %}manual{% else %}auto{% endif %} · {{ item.seconds|floatformat:1 }} s</span>
+                  <span class="run-meta muted">{{ item.seconds|floatformat:1 }} s</span>
                   {% if item.events %}<svg class="run-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>{% endif %}
                 </summary>
                 {% if item.events %}

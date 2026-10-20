@@ -27,11 +27,5 @@ def logs(request: HttpRequest) -> HttpResponse:
     except ValueError:
         show = selectors.RunFilter.ALL
     return render(
-        request,
-        "tracker/logs.html",
-        {
-            "show": show,
-            "runs": selectors.sync_log(pm, show),
-            "problem_runs": selectors.problem_runs(pm),
-        },
+        request, "tracker/logs.html", {"show": show, "page": selectors.logs_page(pm, show)}
     )

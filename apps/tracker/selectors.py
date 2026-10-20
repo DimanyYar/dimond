@@ -32,6 +32,8 @@ class RunFilter(StrEnum):
 class LoggedRun:
     run: SyncRun
     events: list[SyncEvent]
+    # The newest run that changed something opens by itself: that is what the PM came for.
+    open: bool = False
 
     @property
     def problems(self) -> int:
@@ -102,7 +104,24 @@ def _own_events(pm: User) -> QuerySet[SyncEvent]:
     )
 
 
-def sync_log(pm: User, show: RunFilter) -> list[LoggedRun]:
+@dataclass(frozen=True)
+class LogsPage:
+    runs: list[LoggedRun]
+    problem_runs: int
+
+
+def logs_page(pm: User, show: RunFilter) -> LogsPage:
+    """The Logs page: runs as filtered, and how many have problems, for the Problems chip."""
+    runs = _sync_log(pm, show)
+    problems = runs if show == RunFilter.PROBLEMS else _sync_log(pm, RunFilter.PROBLEMS)
+    first_with_events = next((item for item in runs if item.events), None)
+    return LogsPage(
+        runs=[LoggedRun(item.run, item.events, open=item is first_with_events) for item in runs],
+        problem_runs=len(problems),
+    )
+
+
+def _sync_log(pm: User, show: RunFilter) -> list[LoggedRun]:
     """The latest finished runs, each with this PM's events in it, filtered as asked."""
     if not has_clients_page(pm):
         return []
@@ -117,11 +136,6 @@ def sync_log(pm: User, show: RunFilter) -> list[LoggedRun]:
             | Q(events__in=_own_events(pm).filter(needs_attention=True))
         ).distinct()
     return [LoggedRun(run, run.own_events) for run in runs[:RUNS_SHOWN]]
-
-
-def problem_runs(pm: User) -> int:
-    """For the Problems chip: how many of the listed runs have something wrong."""
-    return sum(1 for run in sync_log(pm, RunFilter.PROBLEMS))
 
 
 def _tracker_label() -> tuple[str, bool]:
