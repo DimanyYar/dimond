@@ -1,7 +1,10 @@
 """Logs · Jira sync (PRD: Jira sync; mockup 4.x · PM logs): only PMs, each sees their own
-clients' events."""
+clients' events; Sync now queues a run the worker picks up."""
+
+from datetime import timedelta
 
 import pytest
+from django.core.management import call_command
 from django.urls import reverse
 from django.utils import timezone
 
@@ -9,6 +12,7 @@ from apps.accounts.models import Company, Role, User
 from apps.requests import services
 from apps.requests.models import ClientStatus, Request, RequestType, WhenNeeded
 from apps.tracker.models import SyncEvent, SyncOutcome, SyncRun
+from apps.tracker.services import close_cut_off_runs
 
 pytestmark = pytest.mark.django_db
 
@@ -125,6 +129,51 @@ def test_with_changes_leaves_out_quiet_runs(client, pm, anna):
     assert "14 linked tasks checked" not in logs(client, pm, "?show=changes")
 
 
+def test_an_unmapped_status_needs_attention_while_the_task_sits_in_it(client, pm, anna):
+    request = linked(anna, "FI-2207", jira_status="Blocked")
+
+    page = logs(client, pm)
+
+    assert "Needs attention · 1" in page
+    assert "“Blocked” isn’t mapped" in page
+    assert "FI-2207 sits in it; Atlas keeps seeing “Planned”." in page
+
+    Request.objects.filter(pk=request.pk).update(jira_status="In Progress")
+    assert "Needs attention ·" not in logs(client, pm)
+
+
+def test_the_mapping_from_the_prd_is_on_the_page(client, pm):
+    page = logs(client, pm)
+
+    assert "on Staging" in page
+    assert "Ready to check" in page
+
+
+def test_sync_now_queues_one_run_and_the_worker_picks_it_up(client, pm, anna):
+    linked(anna, "FI-2214")
+    client.force_login(pm)
+
+    client.post(reverse("sync_now"))
+    client.post(reverse("sync_now"))
+
+    assert SyncRun.objects.filter(outcome=SyncOutcome.QUEUED).count() == 1
+    assert "Syncing…" in logs(client, pm)
+
+    call_command("sync_tracker")
+
+    run = SyncRun.objects.get()
+    assert run.manual
+    assert run.outcome == SyncOutcome.SUCCEEDED
+    assert "manual ·" in logs(client, pm)
+
+
+def test_a_client_cannot_press_sync_now(client, anna):
+    client.force_login(anna)
+
+    assert client.post(reverse("sync_now")).status_code == 404
+    assert not SyncRun.objects.exists()
+
+
 def test_every_pm_page_says_when_jira_last_synced(client, pm):
     assert "Jira not synced yet" in logs(client, pm)
 
@@ -135,3 +184,30 @@ def test_every_pm_page_says_when_jira_last_synced(client, pm):
 
     SyncRun.objects.filter(pk=run.pk).update(outcome=SyncOutcome.FAILED)
     assert "Jira sync failed just now" in client.get(reverse("clients")).content.decode()
+
+
+def test_the_logs_link_counts_what_needs_attention(client, pm, anna):
+    linked(anna, "FI-2207", jira_status="Blocked")
+    client.force_login(pm)
+
+    page = client.get(reverse("clients")).content.decode()
+
+    assert 'aria-label="1 need attention"' in page
+
+
+def test_a_run_cut_off_by_a_restart_stops_saying_syncing(client, pm):
+    cut_off = SyncRun.objects.create(outcome=SyncOutcome.RUNNING)
+    SyncRun.objects.filter(pk=cut_off.pk).update(started_at=timezone.now() - timedelta(minutes=11))
+    assert 'type="submit">Sync now</button>' in logs(client, pm)
+
+    close_cut_off_runs()
+
+    cut_off.refresh_from_db()
+    assert cut_off.outcome == SyncOutcome.FAILED
+    assert "its worker was restarted" in logs(client, pm, "?show=problems")
+
+
+def test_sync_now_cannot_be_pressed_while_a_run_waits(client, pm):
+    SyncRun.objects.create(outcome=SyncOutcome.QUEUED, manual=True)
+
+    assert '<button class="btn btn-dark" type="submit" disabled>' in logs(client, pm)

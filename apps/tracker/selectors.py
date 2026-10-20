@@ -13,10 +13,12 @@ from django.utils.timesince import timesince
 
 from apps.accounts.models import User
 from apps.accounts.selectors import has_clients_page
+from apps.requests.models import CLOSED_STATUSES, JIRA_STATUSES, ClientStatus, Request
 
 from .base import TrackerNotConfigured
 from .connection import current_tracker
 from .models import SyncEvent, SyncOutcome, SyncRun
+from .services import STUCK_AFTER
 
 RUNS_SHOWN = 50
 DONE_RUNS = (SyncOutcome.SUCCEEDED, SyncOutcome.PROBLEMS, SyncOutcome.FAILED)
@@ -77,6 +79,13 @@ class LoggedRun:
 
 
 @dataclass(frozen=True)
+class Attention:
+    title: str
+    detail: str
+    request: Request
+
+
+@dataclass(frozen=True)
 class SyncState:
     """The sync line in the PM's sidebar and the box on the Logs page."""
 
@@ -84,6 +93,8 @@ class SyncState:
     tracker: str
     connected: bool
     last: SyncRun | None
+    waiting: bool
+    attention: int
 
     @property
     def failed(self) -> bool:
@@ -108,13 +119,15 @@ def _own_events(pm: User) -> QuerySet[SyncEvent]:
 class LogsPage:
     runs: list[LoggedRun]
     problem_runs: int
+    attention: list[Attention]
+    mapping: list[tuple[str, ClientStatus]]
 
 
 def logs_page(pm: User, show: RunFilter) -> LogsPage:
-    """The Logs page: the latest runs as filtered, and how many runs have problems, for the
-    Problems chip. The chip counts them all, not only the ones listed."""
+    """The Logs page: the latest runs as filtered, how many runs have problems (the Problems
+    chip counts them all, not only the ones listed), what needs attention, the mapping."""
     if not has_clients_page(pm):
-        return LogsPage(runs=[], problem_runs=0)
+        return LogsPage(runs=[], problem_runs=0, attention=[], mapping=[])
     listed = [
         LoggedRun(run, run.own_events)
         for run in _runs(pm, show).prefetch_related(
@@ -125,6 +138,8 @@ def logs_page(pm: User, show: RunFilter) -> LogsPage:
     return LogsPage(
         runs=[LoggedRun(item.run, item.events, open=item is first_with_events) for item in listed],
         problem_runs=_runs(pm, RunFilter.PROBLEMS).count(),
+        attention=needs_attention(pm),
+        mapping=list(JIRA_STATUSES.items()),
     )
 
 
@@ -141,6 +156,31 @@ def _runs(pm: User, show: RunFilter) -> QuerySet[SyncRun]:
     return runs
 
 
+def needs_attention(pm: User) -> list[Attention]:
+    """Problems that are still there now, not just logged once: open requests of this PM's
+    clients whose task sits in a status the mapping does not know."""
+    if not has_clients_page(pm):
+        return []
+    unmapped = (
+        Request.objects.filter(company__owner=pm)
+        .exclude(jira_key="")
+        .exclude(jira_status="")
+        .exclude(jira_status__in=JIRA_STATUSES)
+        .exclude(status__in=CLOSED_STATUSES)
+        .select_related("company")
+        .order_by("jira_key")
+    )
+    return [
+        Attention(
+            title=f"“{request.jira_status}” isn’t mapped",
+            detail=f"{request.jira_key} sits in it; {request.company} keeps seeing "
+            f"“{ClientStatus(request.status).label}”.",
+            request=request,
+        )
+        for request in unmapped
+    ]
+
+
 def _tracker_label() -> tuple[str, bool]:
     try:
         tracker = current_tracker()
@@ -151,10 +191,15 @@ def _tracker_label() -> tuple[str, bool]:
     return urlsplit(tracker.address).hostname or tracker.address, True
 
 
-def sync_state() -> SyncState:
+def sync_state(pm: User) -> SyncState:
     tracker, connected = _tracker_label()
     return SyncState(
         tracker=tracker,
         connected=connected,
         last=SyncRun.objects.filter(outcome__in=DONE_RUNS).first(),
+        waiting=SyncRun.objects.filter(
+            Q(outcome=SyncOutcome.QUEUED)
+            | Q(outcome=SyncOutcome.RUNNING, started_at__gte=timezone.now() - STUCK_AFTER)
+        ).exists(),
+        attention=len(needs_attention(pm)),
     )
