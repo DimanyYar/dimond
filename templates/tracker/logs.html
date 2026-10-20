@@ -1,0 +1,81 @@
+{% extends "layouts/pm.html" %}
+{% comment %}
+Logs · Jira sync (mockup 4.x · PM logs). The Emails and Sign-ins tabs join when their features
+land (#19), so there are no tabs yet.
+{% endcomment %}
+{% block title %}Logs · dimon.d{% endblock %}
+
+{% block content %}
+<div class="logs">
+  <header class="logs-header">
+    <div class="logs-heading">
+      <h1>Logs</h1>
+      <p class="muted">dimond reads task statuses from Jira. It writes to Jira only when you create or link a task.</p>
+    </div>
+    <div class="sync-box" data-region="sync-box">
+      <span class="sync-box-text">
+        <span class="sync-box-title"><span class="sync-dot{% if not sync.connected or sync.failed %} sync-dot-bad{% endif %}" aria-hidden="true"></span>{% if sync.connected %}Connected · {% endif %}{{ sync.tracker }}</span>
+        <span class="muted">
+          {% if sync.last %}Last run {{ sync.last.started_at|date:"H:i" }}{% if sync.failed %} failed{% endif %} · every 15 min
+          {% else %}No runs yet · every 15 min{% endif %}
+        </span>
+      </span>
+    </div>
+  </header>
+
+  <div class="logs-body" data-region="results">
+    <section class="logs-runs" aria-label="Runs">
+      <div class="logs-filters" role="group" aria-label="Filter runs">
+        <a class="chip" href="{% url 'logs' %}"{% if show == "all" %} aria-current="true"{% endif %}>All runs</a>
+        <a class="chip" href="?show=changes"{% if show == "changes" %} aria-current="true"{% endif %}>With changes</a>
+        <a class="chip" href="?show=problems"{% if show == "problems" %} aria-current="true"{% endif %}>Problems{% if problem_runs %} · {{ problem_runs }}{% endif %}</a>
+      </div>
+
+      {% if runs %}
+        <ol class="card run-list">
+          {% for item in runs %}
+            {% ifchanged item.run.started_at.date %}
+              <li class="run-day">{{ item.run.started_at|date:"D, M j" }}</li>
+            {% endifchanged %}
+            <li class="run">
+              <details{% if forloop.first and item.events or item.failed and forloop.first %} open{% endif %}>
+                <summary class="run-summary">
+                  <time class="run-time" datetime="{{ item.run.started_at|date:'c' }}">{{ item.run.started_at|date:"H:i" }}</time>
+                  <span class="run-icon run-icon-{{ item.result }}" role="img" aria-label="{% if item.result == 'fail' %}Failed{% elif item.result == 'warn' %}Finished with problems{% else %}Succeeded{% endif %}">{% if item.result == "fail" %}×{% elif item.result == "warn" %}!{% else %}✓{% endif %}</span>
+                  <span class="run-text">
+                    <span class="run-title">{{ item.title }}</span>
+                    <span class="run-sub muted">{{ item.subtitle }}</span>
+                  </span>
+                  <span class="run-meta muted">{% if item.run.manual %}manual{% else %}auto{% endif %} · {{ item.seconds|floatformat:1 }} s</span>
+                  {% if item.events %}<svg class="run-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>{% endif %}
+                </summary>
+                {% if item.events %}
+                  <ul class="run-events">
+                    {% for event in item.events %}
+                      <li class="run-event{% if event.needs_attention %} run-event-problem{% endif %}">
+                        <span class="run-event-head">
+                          <strong>{{ event.task_key }}</strong>
+                          <span class="muted">{{ event.what }}</span>
+                          <a class="run-event-request" href="{{ event.request.get_absolute_url }}">{{ event.request.key }} · {{ event.request.company }}</a>
+                        </span>
+                        <span class="run-event-effect">{{ event.effect }}</span>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                {% endif %}
+              </details>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <section class="card empty-state">
+          <h2>{% if show == "all" %}No runs yet{% else %}Nothing here{% endif %}</h2>
+          <p class="muted">{% if show == "all" %}The first sync runs within 15 minutes.{% elif show == "changes" %}No run has changed anything for your clients lately.{% else %}No problems lately.{% endif %}</p>
+        </section>
+      {% endif %}
+      <p class="muted logs-note">Runs with no changes are kept for 7 days, everything else for a year. Messages from PM to clients are never part of sync.</p>
+    </section>
+
+  </div>
+</div>
+{% endblock %}

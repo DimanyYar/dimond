@@ -1,0 +1,37 @@
+from django.contrib.auth.decorators import login_required
+from django.http import Http404, HttpRequest, HttpResponse
+from django.shortcuts import render
+from django.views.decorators.http import require_GET
+
+from apps.accounts.models import User
+from apps.accounts.selectors import has_clients_page
+
+from . import selectors
+
+
+def _pm(request: HttpRequest) -> User:
+    """The signed-in PM; everyone else gets "not found", as on the other PM pages."""
+    assert isinstance(request.user, User)  # login_required lets only signed-in people in
+    if not has_clients_page(request.user):
+        raise Http404
+    return request.user
+
+
+@require_GET
+@login_required
+def logs(request: HttpRequest) -> HttpResponse:
+    """Logs · Jira sync (mockup 4.x · PM logs): the runs and what each one changed."""
+    pm = _pm(request)
+    try:
+        show = selectors.RunFilter(request.GET.get("show", selectors.RunFilter.ALL))
+    except ValueError:
+        show = selectors.RunFilter.ALL
+    return render(
+        request,
+        "tracker/logs.html",
+        {
+            "show": show,
+            "runs": selectors.sync_log(pm, show),
+            "problem_runs": selectors.problem_runs(pm),
+        },
+    )
