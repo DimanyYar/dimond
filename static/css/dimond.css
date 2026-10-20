@@ -5602,6 +5602,24 @@ a.person-name:hover {
   gap: var(--space-2);
 }
 
+.nav-badge {
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--error);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.tabbar .nav-badge {
+  position: absolute;
+  top: 0;
+  margin-left: 30px;
+}
+
 .tabbar a {
   position: relative;
 }
@@ -5691,11 +5709,37 @@ a.person-name:hover {
   background: var(--error);
 }
 
+/* Runs on the left, the side cards on the right. On a phone the cards stack around the runs:
+   what needs attention comes first, the mapping, a reference, last. */
+.logs-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "runs attention"
+    "runs mapping";
+  gap: 18px;
+  align-items: start;
+}
+
 .logs-runs {
+  grid-area: runs;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.logs-side {
+  display: contents;
+}
+
+.attention-card {
+  grid-area: attention;
+}
+
+.mapping-card {
+  grid-area: mapping;
 }
 
 .logs-filters {
@@ -5864,10 +5908,82 @@ details[open] .run-chevron {
   font-size: 13px;
 }
 
+.logs-side .card {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.logs-side h2 {
+  font-size: 16px;
+}
+
+.attention-card {
+  border: 1.5px solid var(--error);
+}
+
+.attention-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.attention-item + .attention-item {
+  border-top: 1px solid var(--hairline-soft);
+  padding-top: 10px;
+}
+
+.attention-title {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.mapping {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.mapping th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 6px 0;
+}
+
+.mapping td {
+  padding: 6px 0;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.mapping-arrow {
+  width: 24px;
+  color: var(--muted-on-panel);
+}
+
+.mapping-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 @media (max-width: 899px) {
   .sync-box {
     flex: 1 1 100%;
     justify-content: space-between;
+  }
+
+  .logs-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      "attention"
+      "runs"
+      "mapping";
   }
 
   .run-summary {

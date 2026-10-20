@@ -1,7 +1,9 @@
 {% extends "layouts/pm.html" %}
+{% load static %}
 {% comment %}
 Logs · Jira sync (mockup 4.x · PM logs). The Emails and Sign-ins tabs join when their features
-land (#19), so there are no tabs yet.
+land (#19), so there are no tabs yet. Runs on the left, what needs attention and the mapping on
+the right; on a phone they stack.
 {% endcomment %}
 {% block title %}Logs · dimon.d{% endblock %}
 
@@ -13,15 +15,25 @@ land (#19), so there are no tabs yet.
       <p class="muted">dimond reads task statuses from Jira. It writes to Jira only when you create or link a task.</p>
     </div>
     <div class="sync-box" data-region="sync-box">
+      {% if sync.waiting %}<span data-sync-waiting hidden></span>{% endif %}
       <span class="sync-box-text">
         <span class="sync-box-title"><span class="sync-dot{% if not sync.connected or sync.failed %} sync-dot-bad{% endif %}" aria-hidden="true"></span>{% if sync.connected %}Connected · {% endif %}{{ sync.tracker }}</span>
         <span class="muted">
-          {% if sync.last %}Last run {{ sync.last.started_at|date:"H:i" }}{% if sync.failed %} failed{% endif %} · every 15 min
+          {% if sync.waiting %}Syncing…
+          {% elif sync.last %}Last run {{ sync.last.started_at|date:"H:i" }}{% if sync.failed %} failed{% endif %} · every 15 min
           {% else %}No runs yet · every 15 min{% endif %}
         </span>
       </span>
+      <form method="post" action="{% url 'sync_now' %}" data-busy="Syncing…">
+        {% csrf_token %}
+        <button class="btn btn-dark" type="submit"{% if sync.waiting %} aria-disabled="true"{% endif %}>{% if sync.waiting %}Syncing…{% else %}Sync now{% endif %}</button>
+      </form>
     </div>
   </header>
+
+  {% for message in messages %}
+    <div class="banner" role="status">{{ message }}</div>
+  {% endfor %}
 
   <div class="logs-body" data-region="results">
     <section class="logs-runs" aria-label="Runs">
@@ -46,7 +58,7 @@ land (#19), so there are no tabs yet.
                     <span class="run-title">{{ item.title }}</span>
                     <span class="run-sub muted">{{ item.subtitle }}</span>
                   </span>
-                  <span class="run-meta muted">{{ item.seconds|floatformat:1 }} s</span>
+                  <span class="run-meta muted">{% if item.run.manual %}manual{% else %}auto{% endif %} · {{ item.seconds|floatformat:1 }} s</span>
                   {% if item.events %}<svg class="run-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>{% endif %}
                 </summary>
                 {% if item.events %}
@@ -70,12 +82,39 @@ land (#19), so there are no tabs yet.
       {% else %}
         <section class="card empty-state">
           <h2>{% if show == "all" %}No runs yet{% else %}Nothing here{% endif %}</h2>
-          <p class="muted">{% if show == "all" %}The first sync runs within 15 minutes.{% elif show == "changes" %}No run has changed anything for your clients lately.{% else %}No problems lately.{% endif %}</p>
+          <p class="muted">{% if show == "all" %}The first sync runs within 15 minutes, or press Sync now.{% elif show == "changes" %}No run has changed anything for your clients lately.{% else %}No problems lately.{% endif %}</p>
         </section>
       {% endif %}
       <p class="muted logs-note">Runs with no changes are kept for 7 days, everything else for a year. Messages from PM to clients are never part of sync.</p>
     </section>
 
+    <aside class="logs-side" aria-label="Needs attention and mapping">
+      {% if page.attention %}
+        <section class="card attention-card" aria-label="Needs attention">
+          <h2>Needs attention · {{ page.attention|length }}</h2>
+          {% for item in page.attention %}
+            <div class="attention-item">
+              <a class="attention-title" href="{{ item.request.get_absolute_url }}">{{ item.title }}</a>
+              <span class="muted">{{ item.detail }}</span>
+            </div>
+          {% endfor %}
+        </section>
+      {% endif %}
+      <section class="card mapping-card" aria-label="Status mapping">
+        <h2>Status mapping</h2>
+        <table class="mapping">
+          <thead><tr><th scope="col">Jira</th><th scope="col"><span class="visually-hidden">becomes</span></th><th scope="col">Client sees</th></tr></thead>
+          <tbody>
+            {% for jira_status, client_status in page.mapping %}
+              <tr><td>{{ jira_status }}</td><td class="mapping-arrow" aria-hidden="true">→</td><td><span class="status status-{{ client_status }}">{{ client_status.label }}</span></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="muted mapping-note">The same for every project. Unknown statuses never break sync: the client keeps the last mapped one.</p>
+      </section>
+    </aside>
   </div>
 </div>
+<script type="module" src="{% static 'js/busy-button.js' %}"></script>
+<script type="module" src="{% static 'js/logs.js' %}"></script>
 {% endblock %}

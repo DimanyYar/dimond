@@ -3,15 +3,21 @@ ADR 0010, 0019)."""
 
 from datetime import datetime, timedelta
 
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.accounts.models import User
+from apps.accounts.selectors import has_clients_page
 from apps.requests.models import CLOSED_STATUSES, Request
 from apps.requests.services import TaskFollowed, follow_task
 
 from .base import TrackerError
 from .connection import current_tracker
 from .models import SyncEvent, SyncOutcome, SyncRun
+
+# How often the worker looks for a Sync now between its regular runs.
+QUEUE_CHECK_SECONDS = 3
 
 # Closed requests are still read for a while, so a task reopened soon after shows up in the
 # log; reading every request ever closed would grow without end.
@@ -21,9 +27,33 @@ KEEP_QUIET_RUNS = timedelta(days=7)
 KEEP_RUNS = timedelta(days=365)
 
 
-def sync_tasks() -> SyncRun:
-    """One sync run. A failure is logged on the run, never raised: the next run tries again."""
-    run = SyncRun.objects.create()
+class NotAllowedError(Exception):
+    pass
+
+
+@transaction.atomic
+def ask_for_sync(pm: User) -> SyncRun:
+    """Sync now: queues a run for the worker, which picks it up within seconds. The page does
+    not wait for Jira itself. A second press while one is waiting joins it."""
+    if not has_clients_page(pm):
+        raise NotAllowedError
+    waiting = SyncRun.objects.select_for_update().filter(outcome=SyncOutcome.QUEUED)
+    return waiting.first() or SyncRun.objects.create(outcome=SyncOutcome.QUEUED, manual=True)
+
+
+def next_queued_run() -> SyncRun | None:
+    return SyncRun.objects.filter(outcome=SyncOutcome.QUEUED).order_by("started_at").first()
+
+
+def sync_tasks(queued: SyncRun | None = None) -> SyncRun:
+    """One sync run, or the queued one from Sync now. A failure is logged on the run, never
+    raised: the next run tries again."""
+    if queued is None:
+        run = SyncRun.objects.create()
+    else:
+        run = queued
+        run.outcome, run.started_at = SyncOutcome.RUNNING, timezone.now()
+        run.save(update_fields=["outcome", "started_at"])
     now = timezone.now()
     linked = list(
         Request.objects.exclude(jira_key="").filter(

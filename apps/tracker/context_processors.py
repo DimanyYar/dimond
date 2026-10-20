@@ -12,4 +12,4 @@ def sync(request: HttpRequest) -> dict[str, SyncState]:
     user = getattr(request, "user", None)
     if not isinstance(user, User) or not has_clients_page(user):
         return {}
-    return {"sync": sync_state()}
+    return {"sync": sync_state(user)}

@@ -44,6 +44,7 @@ class TrackerSettings(models.Model):
 
 
 class SyncOutcome(models.TextChoices):
+    QUEUED = "queued", "Queued"
     RUNNING = "running", "Running"
     SUCCEEDED = "succeeded", "Succeeded"
     PROBLEMS = "problems", "Finished with problems"
@@ -58,6 +59,7 @@ class SyncRun(models.Model):
     outcome = models.CharField(
         max_length=20, choices=SyncOutcome.choices, default=SyncOutcome.RUNNING
     )
+    manual = models.BooleanField(default=False, help_text="Asked for with Sync now.")
     checked = models.PositiveIntegerField(default=0, help_text="Linked tasks read from Jira.")
     error = models.TextField(blank=True, help_text="Why the run failed, as the tracker said.")
 
