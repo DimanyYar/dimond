@@ -111,31 +111,34 @@ class LogsPage:
 
 
 def logs_page(pm: User, show: RunFilter) -> LogsPage:
-    """The Logs page: runs as filtered, and how many have problems, for the Problems chip."""
-    runs = _sync_log(pm, show)
-    problems = runs if show == RunFilter.PROBLEMS else _sync_log(pm, RunFilter.PROBLEMS)
-    first_with_events = next((item for item in runs if item.events), None)
-    return LogsPage(
-        runs=[LoggedRun(item.run, item.events, open=item is first_with_events) for item in runs],
-        problem_runs=len(problems),
-    )
-
-
-def _sync_log(pm: User, show: RunFilter) -> list[LoggedRun]:
-    """The latest finished runs, each with this PM's events in it, filtered as asked."""
+    """The Logs page: the latest runs as filtered, and how many runs have problems, for the
+    Problems chip. The chip counts them all, not only the ones listed."""
     if not has_clients_page(pm):
-        return []
-    runs = SyncRun.objects.filter(outcome__in=DONE_RUNS).prefetch_related(
-        Prefetch("events", queryset=_own_events(pm), to_attr="own_events")
+        return LogsPage(runs=[], problem_runs=0)
+    listed = [
+        LoggedRun(run, run.own_events)
+        for run in _runs(pm, show).prefetch_related(
+            Prefetch("events", queryset=_own_events(pm), to_attr="own_events")
+        )[:RUNS_SHOWN]
+    ]
+    first_with_events = next((item for item in listed if item.events), None)
+    return LogsPage(
+        runs=[LoggedRun(item.run, item.events, open=item is first_with_events) for item in listed],
+        problem_runs=_runs(pm, RunFilter.PROBLEMS).count(),
     )
+
+
+def _runs(pm: User, show: RunFilter) -> QuerySet[SyncRun]:
+    """Finished runs, newest first, that the filter keeps for this PM."""
+    runs = SyncRun.objects.filter(outcome__in=DONE_RUNS)
     if show == RunFilter.CHANGES:
-        runs = runs.filter(events__in=_own_events(pm)).distinct()
-    elif show == RunFilter.PROBLEMS:
-        runs = runs.filter(
+        return runs.filter(events__in=_own_events(pm)).distinct()
+    if show == RunFilter.PROBLEMS:
+        return runs.filter(
             Q(outcome=SyncOutcome.FAILED)
             | Q(events__in=_own_events(pm).filter(needs_attention=True))
         ).distinct()
-    return [LoggedRun(run, run.own_events) for run in runs[:RUNS_SHOWN]]
+    return runs
 
 
 def _tracker_label() -> tuple[str, bool]:

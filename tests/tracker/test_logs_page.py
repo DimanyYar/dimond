@@ -3,6 +3,7 @@ clients' events."""
 
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.accounts.models import Company, Role, User
 from apps.requests import services
@@ -101,6 +102,18 @@ def test_the_newest_run_with_changes_opens_by_itself(client, pm, anna):
 
     assert page.count("<details open>") == 1
     assert page.index("<details>") < page.index("<details open>")
+
+
+def test_the_problems_chip_counts_every_problem_run_not_just_the_ones_listed(client, other_pm):
+    SyncRun.objects.bulk_create(
+        SyncRun(outcome=SyncOutcome.FAILED, error="Jira did not answer") for _ in range(51)
+    )
+    SyncRun.objects.update(finished_at=timezone.now())
+
+    page = logs(client, other_pm)
+
+    assert "Problems · 51" in page
+    assert page.count("Sync failed") == 50
 
 
 def test_with_changes_leaves_out_quiet_runs(client, pm, anna):
