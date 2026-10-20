@@ -180,12 +180,13 @@ def needs_attention(pm: User) -> list[Attention]:
             )
         )
     for request in open_requests.exclude(jira_moved_to=""):
+        own_project = request.jira_moved_to.split("-")[0] == request.company.jira_project
+        why = "That key belongs to another request" if own_project else "That’s another project"
         items.append(
             Attention(
                 title=f"{request.jira_key} moved to {request.jira_moved_to}",
-                detail=f"{request.key} · {request.company}. That’s another client’s project, "
-                f"so the sync stopped following it; the client still sees "
-                f"“{ClientStatus(request.status).label}”.",
+                detail=f"{request.key} · {request.company}. {why}, so the sync stopped "
+                f"following it; the client still sees “{ClientStatus(request.status).label}”.",
                 request=request,
                 moved=True,
             )

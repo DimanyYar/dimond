@@ -421,3 +421,43 @@ def test_the_key_stays_in_the_thread_after_the_task_is_gone_but_only_the_pm_read
     assert "Linked to FI-9999" in client_lines
     assert any(line.startswith("FI-9999 unlinked") for line in pm_lines)
     assert not any("unlinked" in line for line in client_lines)
+
+
+def test_a_task_the_search_missed_is_followed_as_usual(jira, anna):
+    request = linked(anna, "FI-2207", ClientStatus.IN_PROGRESS, "In Progress")
+    # The search index lags: asked by key, Jira has it under the same key.
+    jira.moved["FI-2207"] = moved_task("FI-2207", "on Staging")
+
+    run = sync_tasks()
+
+    request.refresh_from_db()
+    assert (request.jira_key, request.jira_moved_to) == ("FI-2207", "")
+    assert request.status == ClientStatus.READY_TO_CHECK
+    assert [e.what for e in run.events.all()] == ["In Progress → on Staging"]
+
+
+def test_a_task_moved_onto_a_key_another_request_has_says_so(jira, anna):
+    linked(anna, "FI-2290", ClientStatus.PLANNED, "To Do")
+    request = linked(anna, "FI-2207", ClientStatus.IN_PROGRESS, "In Progress")
+    jira.moved["FI-2207"] = moved_task("FI-2290")
+    jira.statuses["FI-2290"] = "To Do"
+
+    run = sync_tasks()
+
+    request.refresh_from_db()
+    assert request.jira_moved_to == "FI-2290"
+    assert run.events.get(request=request).effect.startswith(
+        "FI-2290 already belongs to another request"
+    )
+
+
+def test_after_unlinking_the_pm_can_link_another_task_to_a_request_in_work(jira, anna, pm):
+    request = linked(anna, "FI-2207", ClientStatus.IN_PROGRESS, "In Progress")
+    jira.moved["FI-2207"] = moved_task("NW-90")
+    sync_tasks()
+    services.unlink_task(pm, request)
+
+    services.link_jira_task(pm, request, "FI-2214", "")
+
+    request.refresh_from_db()
+    assert request.jira_key == "FI-2214"

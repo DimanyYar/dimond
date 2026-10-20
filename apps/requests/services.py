@@ -640,7 +640,8 @@ def follow_moved_task(request: Request, task: Issue) -> TaskLost:
     old = request.jira_key
     status = ClientStatus(request.status).label
     own_project = task.project_key == request.company.jira_project
-    if own_project and not Request.objects.filter(jira_key=task.key).exists():
+    taken = Request.objects.filter(jira_key=task.key).exclude(pk=request.pk).exists()
+    if own_project and not taken:
         request.jira_key, request.jira_url = task.key, task.url
         request.save(update_fields=["jira_key", "jira_url"])
         TaskEvent.objects.create(
@@ -658,12 +659,16 @@ def follow_moved_task(request: Request, task: Issue) -> TaskLost:
     TaskEvent.objects.create(
         request=request, kind=TaskEventKind.MOVED_AWAY, task_key=old, new_key=task.key
     )
+    why = (
+        f"{task.key} already belongs to another request"
+        if own_project
+        else f"{task.key} is outside {request.company}’s project"
+    )
     return TaskLost(
         request=request,
         task_key=old,
         what=f"Moved to {task.key}",
-        effect=f"{task.key} is outside {request.company}’s project, so the sync no longer "
-        f"follows it; the client keeps seeing “{status}”.",
+        effect=f"{why}, so the sync no longer follows it; the client keeps seeing “{status}”.",
         needs_attention=True,
     )
 

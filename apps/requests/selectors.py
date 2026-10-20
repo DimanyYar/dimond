@@ -559,17 +559,14 @@ JIRA_TASK_STATUSES = (ClientStatus.RECEIVED, ClientStatus.NEEDS_INPUT, ClientSta
 
 
 def can_create_jira_task(user: User, request: Request) -> bool:
-    """Create Jira task, in the client's own project (PRD: PM buttons; tracker and settings).
-    Also once the sync lost the request's task, whatever the status: the PM links another."""
+    """Create Jira task, in the client's own project (PRD: PM buttons; tracker and settings),
+    for any open request without a task. Past Planned that only happens once its task was
+    lost (deleted, unlinked); a task moved to another client's project may be replaced too."""
     if not _is_owner_pm(user, request) or not request.company.jira_project:
         return False
     if request.status in CLOSED_STATUSES:
         return False
-    if request.jira_moved_to:
-        return True
-    return not request.jira_key and (
-        request.status in JIRA_TASK_STATUSES or bool(request.lost_jira_key)
-    )
+    return not request.jira_key or bool(request.jira_moved_to)
 
 
 def can_unlink_task(user: User, request: Request) -> bool:

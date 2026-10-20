@@ -97,14 +97,16 @@ def _sync_one(run: SyncRun, tracker: Tracker, request: Request, issue: Issue | N
         if request.status in CLOSED_STATUSES:
             # The request is over: a task gone from Jira afterwards changes nothing.
             return
-        lost, moved = _find_lost(tracker, request)
-        if lost is None:
+        lost, found = _find_lost(tracker, request)
+        if lost is not None:
+            _log_lost(run, lost)
+            if lost.needs_attention:
+                return
+            # Moved within the client's project: follow the task under its new key.
+            request = lost.request
+        if found is None:
             return
-        _log_lost(run, lost)
-        if lost.needs_attention or moved is None:
-            return
-        # Moved within the client's project: follow the task under its new key.
-        request, issue = lost.request, moved
+        issue = found
     followed = follow_task(request, issue.status)
     if followed is not None:
         _log(run, followed)
@@ -112,14 +114,18 @@ def _sync_one(run: SyncRun, tracker: Tracker, request: Request, issue: Issue | N
 
 def _find_lost(tracker: Tracker, request: Request) -> tuple[TaskLost | None, Issue | None]:
     """The search did not return the task under its key. Asked by key, Jira answers for a
-    moved task under its new key, and "not found" for a deleted one. (None, None): Jira did
-    not answer this time; the next run asks again."""
+    moved task under its new key, and "not found" for a deleted one; the same key means
+    nothing happened to it. (None, None): Jira did not answer this time; the next run asks
+    again."""
     try:
         moved = tracker.issue(request.jira_key)
     except IssueNotFound:
         return drop_deleted_task(request), None
     except TrackerError:
         return None, None
+    if moved.key == request.jira_key:
+        # Not moved: the search missed it (Jira's search index can lag behind its tasks).
+        return None, moved
     return follow_moved_task(request, moved), moved
 
 
