@@ -77,8 +77,8 @@ class Company(models.Model):
 class Notify(models.TextChoices):
     """Which requests a person gets emails about (PRD: notifications)."""
 
-    OWN = "own", "My requests and the ones I follow"
-    COMPANY = "company", "Everything at my company"
+    OWN = "own", "My requests"
+    COMPANY = "company", "My requests and my team’s"
     NONE = "none", "Nothing"
 
 
@@ -145,6 +145,12 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self) -> str:
         return self.name or self.email
+
+    @property
+    def initials(self) -> str:
+        """Up to two letters for the round avatar; "@" for someone with no name yet."""
+        words = self.name.split()
+        return "".join(word[0] for word in words[:2]).upper() or "@"
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         # Nobody signs in with a password except the admin superuser (ADR 0003). An empty

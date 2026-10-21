@@ -85,8 +85,7 @@ class PersonRow:
 
     @property
     def initials(self) -> str:
-        words = self.person.name.split()
-        return "".join(word[0] for word in words[:2]).upper() or "@"
+        return self.person.initials
 
 
 def _person_row(person: User, last_invite: SignInLink | None, now: datetime) -> PersonRow:
@@ -198,17 +197,11 @@ def person_page(user: User, company_pk: int, person_pk: int) -> PersonPage:
     Company.DoesNotExist or User.DoesNotExist for anyone else, exactly as for a missing one."""
     company = client_for(user, company_pk)
     person = company.people.get(pk=person_pk)
-    first_invite = (
-        SignInLink.objects.filter(user=person, kind=LinkKind.INVITE, invited_by__isnull=False)
-        .select_related("invited_by")
-        .order_by("created_at")
-        .first()
-    )
     requests = Request.objects.filter(author=person)
     return PersonPage(
         company=company,
         row=_rows([person])[0],
-        invited_by=first_invite.invited_by if first_invite else None,
+        invited_by=_inviter(person),
         requests_created=requests.count(),
         replies=Message.objects.filter(author=person).count(),
         last_request=requests.order_by("-created_at").first(),
@@ -216,8 +209,46 @@ def person_page(user: User, company_pk: int, person_pk: int) -> PersonPage:
     )
 
 
+def _inviter(person: User) -> User | None:
+    """Who first invited this person, if anyone did."""
+    first_invite = (
+        SignInLink.objects.filter(user=person, kind=LinkKind.INVITE, invited_by__isnull=False)
+        .select_related("invited_by")
+        .order_by("created_at")
+        .first()
+    )
+    return first_invite.invited_by if first_invite else None
+
+
 def _signed_in_on(person: User) -> list[Device]:
     """Devices whose session still works, newest first. A signed-out or expired session may
     leave its row until the person's next sign-in tidies up."""
     alive = Session.objects.filter(expire_date__gt=timezone.now()).values("session_key")
     return list(person.devices.filter(session_key__in=alive).order_by("-signed_in_at", "-pk"))
+
+
+@dataclass(frozen=True)
+class AccountPage:
+    person: User
+    invited_by: User | None
+    devices: list[Device]
+    this_device: Device | None
+
+
+def account_owner(user: User) -> User:
+    """Whose account page this is: a client's own. Raises User.DoesNotExist for anyone else;
+    the PM's account comes with the PM's own emails."""
+    if user.role != Role.CLIENT:
+        raise User.DoesNotExist
+    return user
+
+
+def account_page(user: User, session_key: str | None) -> AccountPage:
+    """A client's own account (PRD: email notifications), with the devices they are signed in
+    on and which of them is this one."""
+    person = account_owner(user)
+    devices = _signed_in_on(person)
+    this_device = next((d for d in devices if d.session_key == session_key), None)
+    return AccountPage(
+        person=person, invited_by=_inviter(person), devices=devices, this_device=this_device
+    )

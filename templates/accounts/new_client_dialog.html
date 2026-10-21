@@ -72,8 +72,8 @@ People are optional; addresses outside the domain come back with "Create anyway"
         {% endif %}
         <fieldset class="invite-notify">
           <legend>Email them about</legend>
-          <label class="choice-inline"><input type="radio" name="notify" value="own"{% if form.notify.value|default:"own" == "own" %} checked{% endif %}>Their own requests</label>
-          <label class="choice-inline"><input type="radio" name="notify" value="company"{% if form.notify.value == "company" %} checked{% endif %}>Everything at the company</label>
+          <label class="choice-inline"><input type="radio" name="notify" value="own"{% if form.notify.value|default:"own" == "own" %} checked{% endif %}>Their requests</label>
+          <label class="choice-inline"><input type="radio" name="notify" value="company"{% if form.notify.value == "company" %} checked{% endif %}>Their requests and their team’s</label>
         </fieldset>
       </section>
     </div>

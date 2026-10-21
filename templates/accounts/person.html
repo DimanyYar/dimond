@@ -57,8 +57,8 @@ on the right; one column on a phone. ?revoke asks before revoking, without scrip
         <legend>Email them about</legend>
         {% if form.notify.errors %}<span class="error-text" id="person-notify-error">Pick one of these.</span>{% endif %}
         {% with notify=form.notify.value %}
-          <label class="choice choice-with-hint"><input type="radio" name="notify" value="own"{% if notify == "own" %} checked{% endif %}><span><span class="choice-title">Their own requests</span><span class="hint">Requests they created or follow</span></span></label>
-          <label class="choice choice-with-hint"><input type="radio" name="notify" value="company"{% if notify == "company" %} checked{% endif %}><span><span class="choice-title">Everything at {{ company.name }}</span><span class="hint">Every request from anyone at {{ company.name }}</span></span></label>
+          <label class="choice choice-with-hint"><input type="radio" name="notify" value="own"{% if notify == "own" %} checked{% endif %}><span><span class="choice-title">Their requests</span><span class="hint">Requests they created</span></span></label>
+          <label class="choice choice-with-hint"><input type="radio" name="notify" value="company"{% if notify == "company" %} checked{% endif %}><span><span class="choice-title">Their requests and their team’s</span><span class="hint">Every request from anyone at {{ company.name }}</span></span></label>
           <label class="choice choice-with-hint"><input type="radio" name="notify" value="none"{% if notify == "none" %} checked{% endif %}><span><span class="choice-title">Nothing</span><span class="hint">They check the portal themselves. Sign-in links still arrive</span></span></label>
         {% endwith %}
       </fieldset>

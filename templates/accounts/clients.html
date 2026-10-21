@@ -86,7 +86,7 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
                       </span>
                     </td>
                     <td class="person-notify">
-                      {% if row.status == "no_access" %}—{% elif row.person.notify == "company" %}Everything at {{ company.name }}{% elif row.person.notify == "none" %}Nothing{% else %}Own requests{% endif %}
+                      {% if row.status == "no_access" %}—{% elif row.person.notify == "company" %}Theirs and team’s{% elif row.person.notify == "none" %}Nothing{% else %}Their requests{% endif %}
                     </td>
                     <td>
                       <span class="person-status">

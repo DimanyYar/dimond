@@ -250,6 +250,34 @@ def sign_out_everywhere(person: User) -> None:
     _end_sessions(list(User.objects.select_for_update().filter(pk=person.pk)))
 
 
+def rename_myself(person: User, name: str) -> None:
+    """A person changes the name shown on their requests and replies (PRD: account)."""
+    person.name = name
+    person.save(update_fields=["name"])
+
+
+def choose_emails(person: User, notify: Notify) -> None:
+    """A person picks which requests they get emails about (PRD: email notifications)."""
+    person.notify = notify
+    person.save(update_fields=["notify"])
+
+
+@transaction.atomic
+def sign_out_other_devices(person: User, this_session_key: str) -> None:
+    """The person's own "Sign out other devices": every session but this one ends.
+
+    The same new-password fingerprint as signing out everywhere (ADR 0015), so sessions from
+    before devices were recorded end too. The caller gives this session the new fingerprint.
+    """
+    locked = User.objects.select_for_update().get(pk=person.pk)
+    locked.set_unusable_password()
+    locked.save(update_fields=["password"])
+    person.password = locked.password
+    others = Device.objects.filter(user=person).exclude(session_key=this_session_key)
+    Session.objects.filter(session_key__in=others.values("session_key")).delete()
+    others.delete()
+
+
 def record_sign_in(user: User, session_key: str, user_agent: str) -> None:
     """Remember the browser behind a new session, for the person page (ADR 0016)."""
     # Sessions that ended (sign-out, expiry) leave rows behind; a sign-in tidies them up.
