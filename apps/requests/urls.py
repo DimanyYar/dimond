@@ -10,6 +10,11 @@ urlpatterns = [
     path("requests/<int:pk>/", views.request_detail, name="request_detail"),
     path("requests/<int:pk>/edit/", views.request_edit, name="request_edit"),
     path("requests/<int:pk>/answer/", views.request_answer, name="request_answer"),
+    path(
+        "requests/<int:pk>/messages/<int:message_pk>/jira/",
+        views.request_send_to_jira,
+        name="request_send_to_jira",
+    ),
     path("requests/<int:pk>/withdraw/", views.request_withdraw, name="request_withdraw"),
     path(
         "requests/<int:pk>/withdrawal/",

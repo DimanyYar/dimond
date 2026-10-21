@@ -126,15 +126,29 @@
             <strong>{{ m.author }}</strong>
             <span class="muted">{% if m.author.role == 'pm' %}Dimon · {% if is_client %}your PM{% else %}PM{% endif %}{% else %}{{ m.author.company }}{% endif %}</span>
             <time class="muted" datetime="{{ m.created_at|date:'c' }}">{{ m.created_at|date:"M j, H:i" }}</time>
+            {% if page.can_send_to_jira and not m.jira_comment_id and not m.jira_error %}
+              <form class="to-jira" method="post" action="{% url 'request_send_to_jira' r.pk m.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="to-jira-button" aria-label="Send this message to {{ r.jira_key }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>Send to Jira</button>
+              </form>
+            {% endif %}
           </div>
           {% if m.text %}<p class="message-text">{{ m.text }}</p>{% endif %}
           {% with files=m.attachments.all %}{% if files %}{% include "files/file_list.html" with small=True %}{% endif %}{% endwith %}
-          {% if m.answers_team %}
-            {% if m.jira_error and not is_client %}
-              <p class="jira-note jira-note-failed" role="status">Not passed to {{ r.jira_key|default:"Jira" }}: {{ m.jira_error }}</p>
-            {% else %}
-              <p class="jira-note"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>Passed to the team · {{ m.created_at|date:"M j, H:i" }}</p>
-            {% endif %}
+          {% if m.jira_error and not is_client %}
+            <div class="jira-failed" role="status">
+              <span>Not passed to {{ r.jira_key|default:"Jira" }}: {{ m.jira_error }}</span>
+              {% if page.can_send_to_jira %}
+                <form method="post" action="{% url 'request_send_to_jira' r.pk m.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-dark btn-small">Send again</button>
+                </form>
+              {% endif %}
+            </div>
+          {% elif m.answers_team %}
+            <p class="jira-note"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>Passed to the team{% if not is_client and r.jira_key %} · {{ r.jira_key }}{% endif %} · {{ m.jira_sent_at|default:m.created_at|date:"M j, H:i" }}</p>
+          {% elif m.jira_sent_at and not is_client %}
+            <p class="jira-note"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>Sent to {{ r.jira_key|default:"Jira" }} · {{ m.jira_sent_at|date:"M j, H:i" }}</p>
           {% endif %}
         </article>
         {% endif %}

@@ -23,7 +23,8 @@ def _preview_name(attachment: "Attachment", filename: str) -> str:
 
 
 class JiraCopy(models.TextChoices):
-    """What became of a file of the client's answer to the team in the Jira task."""
+    """What became of a file of a message sent to the Jira task (an answer to the team, or a
+    message the PM sent with Send to Jira)."""
 
     NONE = "", "Not sent yet"
     UPLOADED = "uploaded", "Uploaded"
@@ -122,8 +123,8 @@ class Attachment(models.Model):
         max_length=10,
         choices=JiraCopy.choices,
         blank=True,
-        help_text="For a file of an answer to the team: sending the answer again skips a file "
-        "Jira already has, or one it refused for good (the PM attaches that by hand).",
+        help_text="For a file of a message sent to Jira: sending it again skips a file Jira "
+        "already has, or one it refused for good (the PM attaches that by hand).",
     )
     public_token = models.CharField(
         max_length=64,

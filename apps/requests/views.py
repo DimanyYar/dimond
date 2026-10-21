@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
@@ -245,6 +245,19 @@ def request_answer(request: HttpRequest, pk: int) -> HttpResponse:
             form.cleaned_data["answer"],
             files=form.cleaned_data["attachments"],
         )
+    except services.NotAllowedError:
+        raise PermissionDenied from None
+    return redirect(f"{page.request.get_absolute_url()}#message-{message.pk}")
+
+
+@require_POST
+@login_required
+def request_send_to_jira(request: HttpRequest, pk: int, message_pk: int) -> HttpResponse:
+    """The PM's "Send to Jira" on a message, or "Send again" on one that did not get there."""
+    page = _card_page(request, pk)
+    message = get_object_or_404(page.request.messages, pk=message_pk)
+    try:
+        services.send_to_jira(page.viewer, message)
     except services.NotAllowedError:
         raise PermissionDenied from None
     return redirect(f"{page.request.get_absolute_url()}#message-{message.pk}")

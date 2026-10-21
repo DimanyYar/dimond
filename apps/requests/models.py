@@ -352,11 +352,17 @@ class Message(models.Model):
     jira_comment_id = models.CharField(
         max_length=32,
         blank=True,
-        help_text="The comment this answer became in the Jira task, once it got there.",
+        help_text="The comment this message became in the Jira task, once it got there.",
     )
     jira_error = models.TextField(
         blank=True,
-        help_text="Why the answer did not reach Jira. The PM sees it and sends it again.",
+        help_text="Why the message did not reach Jira. The PM sees it and sends it again.",
+    )
+    jira_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When it got to the Jira task: the client's answer to the team, or a message "
+        "the PM sent there with Send to Jira.",
     )
     team_edited_at = models.DateTimeField(
         null=True, blank=True, help_text="When the comment last changed in Jira."
