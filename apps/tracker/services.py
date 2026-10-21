@@ -1,12 +1,13 @@
 """The Jira sync: every linked task's status comes back to its request (PRD: Jira sync;
 ADR 0010, 0019)."""
 
+import re
 from datetime import datetime, timedelta
 
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from apps.accounts.models import User
@@ -41,7 +42,7 @@ from .base import (
 from .connection import current_tracker, login_fingerprint
 from .models import SyncEvent, SyncOutcome, SyncRun, TrackerKind, TrackerSettings
 
-# How often the worker looks for a Sync now between its regular runs.
+# How often the worker looks for a queued run (Sync now, a webhook) between its regular runs.
 QUEUE_CHECK_SECONDS = 3
 # A run takes seconds. One still "running" after this was cut off: the worker stopped mid-run.
 STUCK_AFTER = timedelta(minutes=10)
@@ -60,6 +61,8 @@ KEEP_QUIET_RUNS = timedelta(days=7)
 KEEP_RUNS = timedelta(days=365)
 # The start of a team question quoted in the log; the thread has the rest.
 QUOTE_LENGTH = 120
+# A Jira task key as Jira writes it: project key, dash, number (FI-2214).
+TASK_KEY = re.compile(r"[A-Z][A-Z0-9_]*-[1-9][0-9]*")
 
 
 class NotAllowedError(Exception):
@@ -72,8 +75,56 @@ def ask_for_sync(pm: User) -> SyncRun:
     not wait for Jira itself. A second press while one is waiting joins it."""
     if not has_clients_page(pm):
         raise NotAllowedError
-    waiting = SyncRun.objects.select_for_update().filter(outcome=SyncOutcome.QUEUED)
-    return waiting.first() or SyncRun.objects.create(outcome=SyncOutcome.QUEUED, manual=True)
+    _lock_queue()
+    run = SyncRun.objects.filter(outcome=SyncOutcome.QUEUED).first()
+    if run is None:
+        return SyncRun.objects.create(outcome=SyncOutcome.QUEUED, manual=True)
+    if not run.manual:
+        # A webhook queued it first; the log should still say the PM asked too.
+        run.manual = True
+        run.save(update_fields=["manual"])
+    return run
+
+
+@transaction.atomic
+def wake_for_webhook(task_key: str) -> SyncRun | None:
+    """A Jira webhook said `task_key` changed: queue a run so the client sees it in seconds,
+    not in up to 15 minutes (PRD: Jira sync; ADR 0020). The run reads every linked task from
+    Jira itself, so nothing the webhook says is trusted. Webhooks that arrive while a run
+    waits join it: a bulk edit of 40 tasks makes one or two runs, not 40.
+
+    None: nothing to do. The key is not a task of a followed request (another Shakuro project,
+    a request closed long ago), or the sync is paused, where a run would only try the login
+    Jira rejected again."""
+    if _lock_queue().tracker != TrackerKind.JIRA or sync_paused():
+        return None
+    if not followed_requests().filter(jira_key=task_key).exists():
+        return None
+    run = SyncRun.objects.filter(outcome=SyncOutcome.QUEUED).first()
+    if run is None:
+        return SyncRun.objects.create(outcome=SyncOutcome.QUEUED, webhook_keys=[task_key])
+    if task_key not in run.webhook_keys:
+        run.webhook_keys.append(task_key)
+        run.save(update_fields=["webhook_keys"])
+    return run
+
+
+def _lock_queue() -> TrackerSettings:
+    """Locks the settings row until the transaction ends. Sync now and webhooks both take it
+    before looking for a waiting run, so pressed or sent at the same moment they join one run
+    instead of each queueing their own: a run that does not exist yet cannot be locked."""
+    TrackerSettings.load()
+    return TrackerSettings.objects.select_for_update().get(pk=1)
+
+
+def followed_requests() -> QuerySet[Request]:
+    """The requests whose tasks every run reads: open ones, plus those closed in the last 30
+    days. A task moved into another client's project is no longer followed (PRD: Jira sync)."""
+    return (
+        Request.objects.exclude(jira_key="")
+        .filter(jira_moved_to="")
+        .filter(~Q(status__in=CLOSED_STATUSES) | Q(updated_at__gte=timezone.now() - CLOSED_WATCH))
+    )
 
 
 def _pause(reason: str, captcha: bool) -> None:
@@ -138,21 +189,15 @@ def next_queued_run() -> SyncRun | None:
 
 
 def sync_tasks(queued: SyncRun | None = None) -> SyncRun:
-    """One sync run, or the queued one from Sync now. A failure is logged on the run, never
-    raised: the next run tries again."""
+    """One sync run, or the queued one from Sync now or a webhook. A failure is logged on the
+    run, never raised: the next run tries again."""
     if queued is None:
         run = SyncRun.objects.create()
     else:
         run = queued
         run.outcome, run.started_at = SyncOutcome.RUNNING, timezone.now()
         run.save(update_fields=["outcome", "started_at"])
-    now = timezone.now()
-    # A task moved into another client's project is no longer followed (PRD: Jira sync).
-    linked = list(
-        Request.objects.exclude(jira_key="")
-        .filter(jira_moved_to="")
-        .filter(~Q(status__in=CLOSED_STATUSES) | Q(updated_at__gte=now - CLOSED_WATCH))
-    )
+    linked = list(followed_requests())
     if _login_known_wrong():
         return _finish(run, SyncOutcome.FAILED, error=STILL_PAUSED)
     try:

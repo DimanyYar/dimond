@@ -41,6 +41,17 @@ log is `docker compose logs -f sync`, and every finished run is listed on the PM
 **Sync now** there runs it within seconds; `docker compose exec web python manage.py sync_tracker`
 does the same from a terminal.
 
+A Jira webhook makes the same run start within seconds of a change (ADR 0020). It is off until
+`TRACKER_JIRA_WEBHOOK_TOKEN` is set in `.env`. Locally Jira cannot reach your laptop, so play
+Jira with curl: link a request to a task, set a token, restart, then
+
+```bash
+curl -i -X POST "http://localhost:8000/jira/webhook/<your token>/?key=FI-2214"
+```
+
+answers `204` and the Logs page shows the run a few seconds later. A key no open request is
+linked to, or a sync paused for a wrong Jira password, answers `204` and runs nothing.
+
 Stop with `Ctrl+C`; `docker compose down` removes the containers (data stays in a volume).
 
 ### Create your admin account (once)

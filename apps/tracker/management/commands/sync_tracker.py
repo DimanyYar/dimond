@@ -17,7 +17,7 @@ from apps.tracker.services import (
 class Command(BaseCommand):
     help = (
         "Bring Jira task statuses back to their requests. With --every N, keep running: sync "
-        "every N seconds, and at once when a PM presses Sync now."
+        "every N seconds, and at once when a PM presses Sync now or a Jira webhook arrives."
     )
 
     def add_arguments(self, parser: CommandParser) -> None:
@@ -37,7 +37,7 @@ class Command(BaseCommand):
             elif queued is None and sync_paused():
                 due, retried = time.monotonic() + every, False
             else:
-                # Sync now counts as the scheduled run too: the next one waits its turn.
+                # A queued run counts as the scheduled one too: the next one waits its turn.
                 run = sync_tasks(queued)
                 self._report(run)
                 wait, retried = seconds_until_next(run, every, retried)
