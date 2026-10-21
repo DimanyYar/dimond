@@ -6,7 +6,7 @@ may always send a request. Pages fill `content`.
 {% block nav %}
   <a href="{% url 'my_requests' %}"{% if request.resolver_match.url_name == "my_requests" %} aria-current="page"{% endif %}>My requests</a>
   <a href="{% url 'account' %}"{% if request.resolver_match.url_name == "account" %} aria-current="page"{% endif %}>Account</a>
-  <a class="nav-phone-only" href="{% url 'new_request' %}"{% if request.resolver_match.url_name == "new_request" %} aria-current="page"{% endif %}><span class="nav-new-mark" aria-hidden="true">+</span>New request</a>
+  <a class="nav-phone-only" href="{% url 'new_request' %}"{% if request.resolver_match.url_name == "new_request" %} aria-current="page"{% endif %}><span class="nav-new-mark" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>New request</a>
 {% endblock %}
 {% block sidebar_footer %}
   <span>{{ user.name|default:user.email }} · {{ user.company }}</span>

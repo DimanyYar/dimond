@@ -283,14 +283,14 @@ h2 {
   }
 
   .nav-new-mark {
-    width: 22px;
-    height: 22px;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: var(--accent);
     color: var(--ink);
     display: grid;
     place-items: center;
-    font-weight: 700;
   }
 
   .sidebar-footer {
