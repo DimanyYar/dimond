@@ -70,6 +70,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "apps.tracker.context_processors.sync",
+                "apps.notifications.context_processors.mail",
             ],
         },
     },
@@ -105,6 +106,10 @@ EMAIL_PORT = int(env("EMAIL_PORT", "1025"))
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "Dimon <dimon@localhost>")
 # Mail goes over SMTP (Mailpit locally) until a Resend key is set; then through Resend's API
 # (ADR 0009). Switching providers is this setting, not code.
+# Resend's free plan sends up to 100 emails a day; Logs · Emails counts against this number.
+EMAIL_DAILY_LIMIT = int(env("EMAIL_DAILY_LIMIT", "100"))
+# Seconds to wait for the mail server: "Try now" on Logs runs in the page's request.
+EMAIL_TIMEOUT = 10
 RESEND_API_KEY = env("RESEND_API_KEY", "")
 if RESEND_API_KEY:
     # Resend refuses any sender outside a verified domain, so the local default would make

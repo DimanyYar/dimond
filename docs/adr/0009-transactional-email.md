@@ -31,5 +31,10 @@ link or message ends up there.
 − If django-anymail is abandoned, Django's own SMTP backend can send through Resend's SMTP
   relay; only the provider id in the journal and the delivery-report webhook would need
   replacing.
-− A mail server that stays down writes a "Not sent" row on every worker round (every 5
-  seconds per queued email) until the email goes out or ages out.
++ Tries of one email share its row: "Not sent · 7 tries" until it goes out (amended Oct 21,
+  2026). After a minute of nothing but "server unreachable" or "daily limit" failures,
+  emails pause: one email is tried every 5 minutes, Logs shows a banner with Try now, and
+  the first email that goes out ends the pause. Never a full stop: sign-in links are the
+  only way in, the PM's included.
+− While paused, waiting emails go out up to 5 minutes after the server is back, unless
+  the PM presses Try now.

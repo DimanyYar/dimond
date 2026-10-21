@@ -11,6 +11,25 @@ Bounced and Marked spam join with Resend's reports (#19g). On a phone each row s
 <div class="logs">
   {% include "tracker/logs_top.html" with tab="emails" note="Every email dimond sends to your clients and to you. Its text is never kept here." %}
 
+  {% if pause %}
+    <div class="banner banner-error email-pause" role="alert">
+      <span><strong>Emails are paused:</strong> {{ pause.reason|lower }} since {{ pause.since|date:"H:i" }}. Waiting emails stay queued, sign-in links first. dimond tries one every 5 minutes, next at {{ pause.next_try|date:"H:i" }}.</span>
+      <form method="post" action="{% url 'try_emails_now' %}" data-busy="Trying…">
+        {% csrf_token %}
+        <button class="btn btn-dark" type="submit">Try now</button>
+      </form>
+    </div>
+  {% endif %}
+
+  <div class="card email-count{% if today_count.over %} email-count-over{% endif %}" role="status">
+    <span class="email-count-number">
+      <span class="muted">Sent today</span>
+      <strong>{{ today_count.sent }} <span class="muted">of {{ today_count.limit }}</span></strong>
+    </span>
+    <span class="email-count-bar" aria-hidden="true"><span style="width: {{ today_count.percent }}%"></span></span>
+    <span class="muted email-count-note">{% if today_count.over %}Over the daily limit of your Resend plan: more emails wait until the count starts again at midnight UTC.{% else %}Resend’s plan sends up to {{ today_count.limit }} emails a day, for all PMs together. The count starts again at midnight UTC.{% endif %}</span>
+  </div>
+
   {% if emails %}
     <section class="card email-log" aria-label="Emails">
       <div class="email-log-row email-log-head" aria-hidden="true">
@@ -19,7 +38,7 @@ Bounced and Marked spam join with Resend's reports (#19g). On a phone each row s
       <ol class="email-log-list">
         {% for email in emails %}
           <li class="email-log-row{% if email.status == 'failed' %} email-log-problem{% endif %}">
-            <time class="email-log-time" datetime="{{ email.created_at|date:'c' }}">{% if email.created_at|date:"Ymd" == today %}{{ email.created_at|date:"H:i" }}{% else %}{{ email.created_at|date:"M j" }}{% endif %}</time>
+            <time class="email-log-time" datetime="{{ email.tried_at|date:'c' }}">{% if email.tried_at|date:"Ymd" == today %}{{ email.tried_at|date:"H:i" }}{% else %}{{ email.tried_at|date:"M j" }}{% endif %}</time>
             <span><span class="email-status email-status-{{ email.status }}">{{ email.get_status_display }}</span></span>
             <span class="email-log-who">{{ email.to }}</span>
             <span class="email-log-details">
@@ -28,12 +47,12 @@ Bounced and Marked spam join with Resend's reports (#19g). On a phone each row s
               {% elif email.kind == "sign_in_link" %}Sign-in link
               {% else %}{{ email.subject }}{% endif %}
             </span>
-            <span class="email-log-tech">{% if email.error %}{{ email.error }}{% elif email.provider_id %}resend id {{ email.provider_id }}{% else %}—{% endif %}</span>
+            <span class="email-log-tech"{% if email.error_detail %} title="{{ email.error_detail }}"{% endif %}>{% if email.status == "failed" %}{{ email.attempts }} tr{{ email.attempts|pluralize:"y,ies" }} since {{ email.created_at|date:"H:i" }} · {{ email.error }}{% else %}{% if email.attempts > 1 %}sent on try {{ email.attempts }}{% if email.provider_id %} · {% endif %}{% endif %}{% if email.provider_id %}resend id {{ email.provider_id }}{% elif email.attempts == 1 %}—{% endif %}{% endif %}</span>
           </li>
         {% endfor %}
       </ol>
     </section>
-    <p class="muted logs-note">The latest {{ emails|length }} email{{ emails|length|pluralize }}. An email that was not sent is tried again on the next round, a few seconds later.</p>
+    <p class="muted logs-note">The latest {{ emails|length }} email{{ emails|length|pluralize }}, one row each however many tries it took. Times are UTC.</p>
   {% else %}
     <section class="card empty-state">
       <h2>No emails yet</h2>
