@@ -1,50 +1,15 @@
 {% extends "layouts/pm.html" %}
 {% load static %}
 {% comment %}
-Logs · Jira sync (mockup 4.x · PM logs). The Emails and Sign-ins tabs join when their features
-land (#19), so there are no tabs yet. Runs on the left, what needs attention and the mapping on
-the right; on a phone they stack.
+Logs · Jira sync (mockup 4.x · PM logs). Runs on the left, what needs attention and the
+mapping on the right; on a phone they stack. Logs · Emails is its own page (#19); a Sign-ins
+tab joins with the sign-in journal (#21).
 {% endcomment %}
 {% block title %}Logs · dimon.d{% endblock %}
 
 {% block content %}
 <div class="logs">
-  <header class="logs-header">
-    <div class="logs-heading">
-      <h1>Logs</h1>
-      <p class="muted">dimond reads task statuses from Jira. It writes to Jira only when you create or link a task.</p>
-    </div>
-    <div class="sync-box" data-region="sync-box">
-      {% if sync.waiting %}<span data-sync-waiting hidden></span>{% endif %}
-      <span class="sync-box-text">
-        <span class="sync-box-title"><span class="sync-dot{% if not sync.connected or sync.failed or sync.paused %} sync-dot-bad{% endif %}" aria-hidden="true"></span>{% if sync.connected and not sync.paused %}Connected · {% endif %}{{ sync.tracker }}</span>
-        <span class="muted">
-          {% if sync.waiting %}Syncing…
-          {% elif sync.paused %}Paused: Jira rejected the login
-          {% elif sync.last %}Last run {{ sync.last.started_at|date:"H:i" }}{% if sync.failed %} failed{% endif %} · every 15 min
-          {% else %}No runs yet · every 15 min{% endif %}
-        </span>
-      </span>
-      <form method="post" action="{% url 'sync_now' %}" data-busy="Syncing…">
-        {% csrf_token %}
-        <button class="btn btn-dark" type="submit"{% if sync.waiting %} disabled{% endif %}>{% if sync.waiting %}Syncing…{% else %}Sync now{% endif %}</button>
-      </form>
-    </div>
-  </header>
-
-  {% if sync.paused %}
-    <div class="banner banner-error" role="alert">
-      {% if sync.captcha %}
-        <span><strong>Jira sync is paused.</strong> {{ sync.paused }} Jira does not take the password from dimond until then, even a right one. Once you have signed in to Jira in a browser, press Sync now.</span>
-      {% else %}
-        <span><strong>Jira sync is paused.</strong> {{ sync.paused }} dimond stopped trying so that Jira does not lock the account behind a captcha. Fix the login in <code>.env</code> and restart dimond: the sync resumes by itself. Until then Sync now does not try either.</span>
-      {% endif %}
-    </div>
-  {% endif %}
-
-  {% for message in messages %}
-    <div class="banner" role="status">{{ message }}</div>
-  {% endfor %}
+  {% include "tracker/logs_top.html" with tab="jira" note="dimond reads task statuses from Jira. It writes to Jira only when you create or link a task." %}
 
   <div class="logs-body" data-region="results">
     <section class="logs-runs" aria-label="Runs">

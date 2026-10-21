@@ -1,0 +1,45 @@
+{% comment %}
+The top of every Logs tab (mockup 4.x · PM logs): the heading with the tab's note, the Jira
+sync box, the paused banner, messages and the tabs. `tab` is the open tab, `note` its line.
+{% endcomment %}
+  <header class="logs-header">
+    <div class="logs-heading">
+      <h1>Logs</h1>
+      <p class="muted">{{ note }}</p>
+    </div>
+    <div class="sync-box" data-region="sync-box">
+      {% if sync.waiting %}<span data-sync-waiting hidden></span>{% endif %}
+      <span class="sync-box-text">
+        <span class="sync-box-title"><span class="sync-dot{% if not sync.connected or sync.failed or sync.paused %} sync-dot-bad{% endif %}" aria-hidden="true"></span>{% if sync.connected and not sync.paused %}Connected · {% endif %}{{ sync.tracker }}</span>
+        <span class="muted">
+          {% if sync.waiting %}Syncing…
+          {% elif sync.paused %}Paused: Jira rejected the login
+          {% elif sync.last %}Last run {{ sync.last.started_at|date:"H:i" }}{% if sync.failed %} failed{% endif %} · every 15 min
+          {% else %}No runs yet · every 15 min{% endif %}
+        </span>
+      </span>
+      <form method="post" action="{% url 'sync_now' %}" data-busy="Syncing…">
+        {% csrf_token %}
+        <button class="btn btn-dark" type="submit"{% if sync.waiting %} disabled{% endif %}>{% if sync.waiting %}Syncing…{% else %}Sync now{% endif %}</button>
+      </form>
+    </div>
+  </header>
+
+  {% if sync.paused %}
+    <div class="banner banner-error" role="alert">
+      {% if sync.captcha %}
+        <span><strong>Jira sync is paused.</strong> {{ sync.paused }} Jira does not take the password from dimond until then, even a right one. Once you have signed in to Jira in a browser, press Sync now.</span>
+      {% else %}
+        <span><strong>Jira sync is paused.</strong> {{ sync.paused }} dimond stopped trying so that Jira does not lock the account behind a captcha. Fix the login in <code>.env</code> and restart dimond: the sync resumes by itself. Until then Sync now does not try either.</span>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% for message in messages %}
+    <div class="banner" role="status">{{ message }}</div>
+  {% endfor %}
+
+  <nav class="log-tabs" aria-label="Logs">
+    <a href="{% url 'logs' %}"{% if tab == "jira" %} aria-current="page"{% endif %}>Jira sync{% if sync.attention %} <span class="nav-badge" aria-label="{{ sync.attention }} need attention">{{ sync.attention }}</span>{% endif %}</a>
+    <a href="{% url 'logs_emails' %}"{% if tab == "emails" %} aria-current="page"{% endif %}>Emails</a>
+  </nav>

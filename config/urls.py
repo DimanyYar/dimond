@@ -10,6 +10,7 @@ urlpatterns = [
     path("", include("apps.requests.urls")),
     path("", include("apps.files.urls")),
     path("", include("apps.tracker.urls")),
+    path("", include("apps.notifications.urls")),
     path("healthz", health, name="health"),
     path("favicon.ico", favicon),
     path("styleguide/", styleguide, name="styleguide"),
