@@ -148,10 +148,10 @@ def test_sign_out_other_devices_also_ends_sessions_from_before_devices_were_reco
     assert laptop.get("/account/").status_code == 200
 
 
-def test_only_device_offers_no_sign_out(anna):
+def test_sign_out_other_devices_is_offered_even_when_only_this_device_is_listed(anna):
     laptop = signed_in(anna, CHROME_MAC)
 
-    assert "Sign out other devices" not in laptop.get("/account/").content.decode()
+    assert "Sign out other devices" in laptop.get("/account/").content.decode()
 
 
 def test_pm_sees_the_new_email_choices_on_the_person_page(client, anna, pm):

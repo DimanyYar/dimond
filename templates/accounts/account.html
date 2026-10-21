@@ -85,12 +85,11 @@ devices and how to leave on the right; one column on a phone. Changing the email
             </li>
           {% endfor %}
         </ul>
-        {% if page.devices|length > 1 or not page.this_device %}
-          <form method="post" action="{% url 'sign_out_other_devices' %}">
-            {% csrf_token %}
-            <button class="btn" type="submit">Sign out other devices</button>
-          </form>
-        {% endif %}
+        {# Always offered: sessions from before devices were recorded are not listed but end too. #}
+        <form method="post" action="{% url 'sign_out_other_devices' %}">
+          {% csrf_token %}
+          <button class="btn" type="submit">Sign out other devices</button>
+        </form>
         <p class="hint">Sessions last 30 days, then a new email link is needed.</p>
       </section>
 
