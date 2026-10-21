@@ -9,7 +9,7 @@ from apps.tracker.base import TrackerError
 from apps.tracker.connection import current_tracker
 
 from . import selectors
-from .models import Company, Notify, User
+from .models import Company, Notify, Role, User
 
 
 class EmailForm(forms.Form):
@@ -40,6 +40,14 @@ class AccountNameForm(forms.Form):
 
 class AccountEmailsForm(forms.Form):
     notify = forms.ChoiceField(choices=Notify.choices)
+
+    def __init__(self, *args: Any, person: User, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # A PM's emails are about their clients' requests, on or off: "on" is stored as
+        # "own", since a PM has no company of their own to follow.
+        if person.role == Role.PM:
+            notify = cast(forms.ChoiceField, self.fields["notify"])
+            notify.choices = [(Notify.OWN, "On"), (Notify.NONE, "Nothing")]
 
 
 # A team's worth at once; a bigger list is more likely a paste mistake than a plan.

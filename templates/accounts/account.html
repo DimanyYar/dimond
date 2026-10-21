@@ -1,7 +1,8 @@
-{% extends "layouts/client.html" %}
+{% extends layout %}
 {% comment %}
-A client's own account (mockup 3.6 · Your account): name and which emails on the left,
-devices and how to leave on the right; one column on a phone. Changing the email comes with #26.
+A person's own account (mockups 3.6 · Your account for a client, PM · Your account): name and
+which emails on the left, devices on the right; one column on a phone. A PM's emails are on or
+off, a client picks which requests. Changing the email comes with #26.
 {% endcomment %}
 {% block title %}Your account · dimon.d{% endblock %}
 
@@ -17,8 +18,12 @@ devices and how to leave on the right; one column on a phone. Changing the email
     <div class="person-page-title">
       <h1>Your account</h1>
       <p class="muted">
+        {% if is_pm %}
+        PM · {{ page.clients }} client{{ page.clients|pluralize }}
+        {% else %}
         <span class="status status-person-active">Active</span>
         Client · {{ company.name }} · joined {{ person.date_joined|date:"M j" }}{% if page.invited_by %} from an invite by {{ page.invited_by.name|default:page.invited_by.email }}{% endif %}
+        {% endif %}
       </p>
     </div>
   </header>
@@ -33,12 +38,12 @@ devices and how to leave on the right; one column on a phone. Changing the email
             <label for="account-name">Name</label>
             <input class="input" id="account-name" name="name" maxlength="120" required autocomplete="name" value="{{ name_form.name.value|default:'' }}" aria-describedby="account-name-hint{% if name_form.name.errors %} account-name-error{% endif %}"{% if name_form.name.errors %} aria-invalid="true"{% endif %}>
             {% if name_form.name.errors %}<span class="error-text" id="account-name-error">{{ name_form.name.errors.0 }}</span>{% endif %}
-            <span class="hint" id="account-name-hint">Shown on requests and replies</span>
+            <span class="hint" id="account-name-hint">{% if is_pm %}Clients see it on your replies and in their emails{% else %}Shown on requests and replies{% endif %}</span>
           </div>
           <div class="field">
             <span class="field-label">Email</span>
             <span class="read-only-value">{{ person.email }}</span>
-            <span class="hint">This is how you sign in. To change it, ask {{ company.owner.name|default:"your PM" }}</span>
+            <span class="hint">{% if is_pm %}This is how you sign in. Changing it comes with accounts{% else %}This is how you sign in. To change it, ask {{ company.owner.name|default:"your PM" }}{% endif %}</span>
           </div>
         </div>
         <div class="person-profile-actions">
@@ -50,15 +55,20 @@ devices and how to leave on the right; one column on a phone. Changing the email
         {% csrf_token %}
         <div class="account-section-head">
           <h2 id="emails-title">Email notifications</h2>
-          <p class="hint">We email you when a request changes status or someone else writes in it. Pick which requests.</p>
+          <p class="hint">{% if is_pm %}Needs you on Requests always shows the same things; emails only reach you sooner.{% else %}We email you when a request changes status or someone else writes in it. Pick which requests.{% endif %}</p>
         </div>
         <fieldset class="choices"{% if emails_form.notify.errors %} aria-describedby="account-notify-error"{% endif %}>
           <legend class="visually-hidden">Email me about</legend>
           {% if emails_form.notify.errors %}<span class="error-text" id="account-notify-error">Pick one of these.</span>{% endif %}
           {% with notify=emails_form.notify.value %}
+          {% if is_pm %}
+            <label class="choice choice-with-hint"><input type="radio" name="notify" value="own"{% if notify == "own" %} checked{% endif %}><span><span class="choice-title">New requests, replies and asks to withdraw</span><span class="hint">From your clients only, a few minutes after they happen</span></span></label>
+            <label class="choice choice-with-hint"><input type="radio" name="notify" value="none"{% if notify == "none" %} checked{% endif %}><span><span class="choice-title">Nothing</span><span class="hint">You check Needs you yourself. Sign-in links still arrive</span></span></label>
+          {% else %}
             <label class="choice choice-with-hint"><input type="radio" name="notify" value="own"{% if notify == "own" %} checked{% endif %}><span><span class="choice-title">My requests</span><span class="hint">Requests you created</span></span></label>
             <label class="choice choice-with-hint"><input type="radio" name="notify" value="company"{% if notify == "company" %} checked{% endif %}><span><span class="choice-title">My requests and my team’s</span><span class="hint">Every request from anyone at {{ company.name }}. Good for the person who owns the relationship</span></span></label>
             <label class="choice choice-with-hint"><input type="radio" name="notify" value="none"{% if notify == "none" %} checked{% endif %}><span><span class="choice-title">Nothing</span><span class="hint">Check the portal yourself. Sign-in links still arrive</span></span></label>
+          {% endif %}
           {% endwith %}
         </fieldset>
         <div class="person-profile-actions">
@@ -93,10 +103,12 @@ devices and how to leave on the right; one column on a phone. Changing the email
         <p class="hint">Sessions last 30 days, then a new email link is needed.</p>
       </section>
 
-      <section class="card" aria-labelledby="leaving-title">
-        <h2 id="leaving-title">Leaving {{ company.name }}?</h2>
-        <p class="hint">Ask {{ company.owner.name|default:"your PM" }} to close your access. Your requests stay with the team, so nothing gets lost.</p>
-      </section>
+      {% if not is_pm %}
+        <section class="card" aria-labelledby="leaving-title">
+          <h2 id="leaving-title">Leaving {{ company.name }}?</h2>
+          <p class="hint">Ask {{ company.owner.name|default:"your PM" }} to close your access. Your requests stay with the team, so nothing gets lost.</p>
+        </section>
+      {% endif %}
     </div>
   </div>
 </div>

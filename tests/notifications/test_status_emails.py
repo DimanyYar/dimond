@@ -18,6 +18,9 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture
 def atlas(pm) -> Company:
+    # The PM's own emails are tested in test_pm_emails; here they would only add to the count.
+    pm.notify = Notify.NONE
+    pm.save(update_fields=["notify"])
     return Company.objects.create(name="Atlas", email_domain="atlas-crm.com", owner=pm)
 
 

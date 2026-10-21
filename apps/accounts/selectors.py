@@ -233,12 +233,13 @@ class AccountPage:
     invited_by: User | None
     devices: list[Device]
     this_device: Device | None
+    clients: int  # the PM's own clients; 0 for a client
 
 
 def account_owner(user: User) -> User:
-    """Whose account page this is: a client's own. Raises User.DoesNotExist for anyone else;
-    the PM's account comes with the PM's own emails."""
-    if user.role != Role.CLIENT:
+    """Whose account page this is: a client's or a PM's own. Raises User.DoesNotExist for the
+    team, who only open media links (PRD: roles)."""
+    if user.role not in (Role.CLIENT, Role.PM):
         raise User.DoesNotExist
     return user
 
@@ -250,5 +251,9 @@ def account_page(user: User, session_key: str | None) -> AccountPage:
     devices = _signed_in_on(person)
     this_device = next((d for d in devices if d.session_key == session_key), None)
     return AccountPage(
-        person=person, invited_by=_inviter(person), devices=devices, this_device=this_device
+        person=person,
+        invited_by=_inviter(person),
+        devices=devices,
+        this_device=this_device,
+        clients=person.clients.count() if person.role == Role.PM else 0,
     )

@@ -21,7 +21,7 @@ from .forms import (
     PersonForm,
     WelcomeForm,
 )
-from .models import Company, Notify, SignInLink, User
+from .models import Company, Notify, Role, SignInLink, User
 
 SENT_TO = "sign_in_sent_to"
 
@@ -389,7 +389,7 @@ def sign_out_devices(request: HttpRequest, pk: int, person_pk: int) -> HttpRespo
 
 
 def _me(request: HttpRequest) -> User:
-    """The signed-in client. Everyone else gets "not found": this page is a client's own."""
+    """The signed-in client or PM. The team gets "not found": they have no account page."""
     assert isinstance(request.user, User)  # login_required lets only signed-in people in
     try:
         return selectors.account_owner(request.user)
@@ -404,13 +404,18 @@ def _account_screen(
 ) -> HttpResponse:
     page = selectors.account_page(_me(request), request.session.session_key)
     person = page.person
+    is_pm = person.role == Role.PM
+    emails_on = Notify.OWN if is_pm and person.notify != Notify.NONE else person.notify
     return render(
         request,
         "accounts/account.html",
         {
             "page": page,
+            "is_pm": is_pm,
+            "layout": "layouts/pm.html" if is_pm else "layouts/client.html",
             "name_form": name_form or AccountNameForm(initial={"name": person.name}),
-            "emails_form": emails_form or AccountEmailsForm(initial={"notify": person.notify}),
+            "emails_form": emails_form
+            or AccountEmailsForm(initial={"notify": emails_on}, person=person),
         },
     )
 
@@ -418,7 +423,7 @@ def _account_screen(
 @require_GET
 @login_required
 def account(request: HttpRequest) -> HttpResponse:
-    """A client's own account: name, which emails, devices (PRD: email notifications)."""
+    """A person's own account: name, which emails, devices (PRD: email notifications)."""
     return _account_screen(request)
 
 
@@ -438,7 +443,7 @@ def save_account_name(request: HttpRequest) -> HttpResponse:
 @login_required
 def save_account_emails(request: HttpRequest) -> HttpResponse:
     me = _me(request)
-    form = AccountEmailsForm(request.POST)
+    form = AccountEmailsForm(request.POST, person=me)
     if not form.is_valid():
         return _account_screen(request, emails_form=form)
     services.choose_emails(me, Notify(form.cleaned_data["notify"]))

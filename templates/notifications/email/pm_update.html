@@ -1,0 +1,60 @@
+{% comment %}
+News for the PM about their client's request (mockup 5.7 · Email to the PM). Inline styles
+and a table layout, as in request_update.html, for email clients.
+{% endcomment %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>{{ request.key }} · {{ request.title }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&amp;display=swap" rel="stylesheet">
+</head>
+<body style="margin:0;padding:0;background:#f5f1ec;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f1ec;font-family:Figtree,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111111;">
+  <tr>
+    <td align="center" style="padding:28px 16px 40px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+        <tr>
+          <td style="padding:0 0 16px;">
+            <span style="display:inline-block;width:32px;height:32px;line-height:32px;border-radius:8px;background:#ff5600;color:#111111;font-weight:600;font-size:14px;text-align:center;vertical-align:middle;">d.</span>
+            <span style="font-weight:500;font-size:19px;letter-spacing:-0.3px;vertical-align:middle;padding-left:8px;">dimon.d</span>
+            <span style="font-size:13px;color:#626260;vertical-align:middle;">&nbsp;· PM workspace</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#ffffff;border:1px solid #d3cec6;border-radius:16px;padding:28px 28px 30px;">
+            <p style="margin:0 0 16px;font-size:13px;color:#626260;">
+              <span style="display:inline-block;font-weight:600;color:#111111;background:#ff5600;border-radius:9999px;padding:3px 10px;">Needs you</span>
+              &nbsp;<span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:{{ company.color }};"></span>
+              {{ company.name }} · {{ request.key }}
+            </p>
+            <h1 style="margin:0 0 16px;font-size:28px;font-weight:500;letter-spacing:-0.6px;line-height:1.15;">{{ headline }}</h1>
+            <p style="margin:0 0 16px;font-size:17px;font-weight:600;line-height:1.35;">{{ request.title }}</p>
+            <p style="margin:0 0 16px;font-size:14px;color:#626260;">{{ meta }}</p>
+            <p style="margin:0;font-size:15px;line-height:1.55;color:#313130;">{{ body }}</p>
+            {% if also %}
+              <p style="margin:16px 0 8px;padding-top:14px;border-top:1px solid #ebe7e1;font-size:13px;font-weight:600;color:#626260;">Also in the last few minutes</p>
+              {% for line in also %}<p style="margin:0 0 8px;font-size:15px;line-height:1.45;">· {{ line }}</p>{% endfor %}
+            {% endif %}
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:22px;">
+              <tr>
+                <td style="border-radius:8px;background:#111111;">
+                  <a href="{{ url }}" style="display:inline-block;padding:14px 22px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;">Open in dimon.d</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:18px 8px 0;font-size:13px;line-height:1.55;color:#626260;">
+            <p style="margin:0 0 8px;">You get this as the PM of {{ company.name }}: new requests, client replies and requests to withdraw. To turn these emails off, open your <a href="{{ account_url }}" style="color:#111111;">account settings</a>.</p>
+            <p style="margin:0;">Replies to this email don’t reach anyone.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
