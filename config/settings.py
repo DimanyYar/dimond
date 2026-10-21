@@ -108,6 +108,8 @@ DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "Dimon <dimon@localhost>")
 TRACKER_JIRA_URL = env("TRACKER_JIRA_URL", "")
 TRACKER_JIRA_USERNAME = env("TRACKER_JIRA_USERNAME", "")
 TRACKER_JIRA_PASSWORD = env("TRACKER_JIRA_PASSWORD", "")
+# The secret part of the address Jira's webhook calls (ADR 0020); empty turns the webhook off.
+TRACKER_JIRA_WEBHOOK_TOKEN = env("TRACKER_JIRA_WEBHOOK_TOKEN", "")
 
 LOGIN_URL = "sign_in"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 30

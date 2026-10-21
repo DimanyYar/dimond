@@ -78,6 +78,12 @@ class SyncRun(models.Model):
         max_length=20, choices=SyncOutcome.choices, default=SyncOutcome.RUNNING
     )
     manual = models.BooleanField(default=False, help_text="Asked for with Sync now.")
+    webhook_keys = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Tasks a Jira webhook said changed while this run waited, in arrival order. "
+        "The run still reads every linked task: the webhook only made it start sooner.",
+    )
     checked = models.PositiveIntegerField(default=0, help_text="Linked tasks read from Jira.")
     error = models.TextField(blank=True, help_text="Why the run failed, as the tracker said.")
     jira_silent = models.BooleanField(
