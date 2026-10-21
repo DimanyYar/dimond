@@ -605,3 +605,31 @@ def test_send_to_jira_names_a_file_jira_refused_in_the_comment(client, jira, ann
     body = jira.added[0][1]
     assert "big.png (Jira didn't take this file; it is in the request)" in body
     assert request.notes.get().text.startswith("Couldn't attach big.png from the message")
+
+
+def test_jira_chosen_without_its_settings_is_a_reason_for_the_pm_not_a_crash(
+    client, anna, pm, settings
+):
+    request = linked(anna)
+    message = services.post_message(anna, request, "One more thing.")
+    settings.TRACKER_JIRA_URL = ""
+    TrackerSettings.objects.update_or_create(pk=1, defaults={"tracker": TrackerKind.JIRA})
+    client.force_login(pm)
+
+    response = client.post(send_url(request, message))
+
+    assert response.status_code == 302
+    message.refresh_from_db()
+    assert "empty in .env" in message.jira_error
+
+
+def test_a_message_sent_meanwhile_is_not_sent_again(jira, anna, pm):
+    request = linked(anna)
+    message = services.post_message(anna, request, "One more thing.")
+    stale = request.messages.get(pk=message.pk)
+    services.send_to_jira(pm, message)
+
+    # The second click still holds the page as it was before the first one finished.
+    with pytest.raises(services.NotAllowedError):
+        services.send_to_jira(pm, stale)
+    assert len(jira.added) == 1

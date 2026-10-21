@@ -272,10 +272,15 @@ def _save_answer(
     return message
 
 
+@transaction.atomic
 def send_to_jira(pm: User, message: Message) -> Message:
     """The PM's "Send to Jira" on a message of the thread, theirs or the client's, and "Send
     again" on an answer to the team that did not get there (PRD: Jira sync, team questions).
-    A message already in Jira is not sent twice; the team's own questions came from there."""
+    A message already in Jira is not sent twice; the team's own questions came from there.
+
+    The message stays locked while Jira answers, so a double click waits and then finds it
+    already sent instead of adding a second comment."""
+    message = Message.objects.select_for_update().select_related("request").get(pk=message.pk)
     if not can_send_to_jira(pm, message.request) or message.jira_comment_id:
         raise NotAllowedError
     return _pass_to_jira(message, sender=pm)
@@ -301,20 +306,23 @@ def _pass_to_jira(message: Message, sender: User) -> Message:
         # Another try would spend one more of Jira's password attempts (ADR 0019).
         error = "Jira rejected dimond's login and the sync is paused. See Logs."
     else:
-        error = _send(current_tracker(), message, author, sender)
+        error = _send(message, author, sender)
     message.jira_error = error
     message.jira_sent_at = None if error else timezone.now()
     message.save(update_fields=["jira_comment_id", "jira_error", "jira_sent_at"])
     return message
 
 
-def _send(tracker: Tracker, message: Message, author: User, sender: User) -> str:
+def _send(message: Message, author: User, sender: User) -> str:
     """Uploads the files, then adds the comment, written once Jira has answered for each file
     so it can name the ones Jira refused. Returns why it stopped, or "" when it all got
     there."""
     key = message.request.jira_key
     sending = "the comment"
     try:
+        # Inside the try: Jira chosen in the admin with an incomplete .env is a reason to show
+        # the PM too.
+        tracker = current_tracker()
         for file in message.attachments.filter(jira_copy=JiraCopy.NONE):
             if file.kind in ("video", "audio"):
                 continue
