@@ -1,5 +1,9 @@
+from django.db.models import Q
+
 from apps.accounts.models import Notify, Role, User
 from apps.requests.models import Request
+
+from .models import Email
 
 
 def update_recipients(request: Request) -> list[User]:
@@ -29,3 +33,18 @@ def pm_recipient(request: Request) -> User | None:
     if not pm.is_active or pm.notify == Notify.NONE:
         return None
     return pm
+
+
+# The Emails tab shows the latest emails; older ones stay in the admin.
+EMAILS_SHOWN = 200
+
+
+def emails_for(pm: User) -> list[Email]:
+    """Logs · Emails: every email sent, or tried, to this PM's clients' people and to the PM
+    (ADR 0014). An email to someone since deleted (a cancelled invite) has no owner to show
+    it to; the admin still lists it."""
+    return list(
+        Email.objects.filter(Q(user=pm) | Q(user__company__owner=pm))
+        .select_related("user__company")
+        .order_by("-created_at", "-pk")[:EMAILS_SHOWN]
+    )

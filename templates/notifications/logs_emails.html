@@ -1,0 +1,45 @@
+{% extends "layouts/pm.html" %}
+{% load static %}
+{% comment %}
+Logs · Emails (mockup 5.5 · Logs · Emails): every email dimond sent or tried to send to the
+PM's clients and to the PM, newest first. The text of an email is never kept. Delivered,
+Bounced and Marked spam join with Resend's reports (#19g). On a phone each row stacks.
+{% endcomment %}
+{% block title %}Emails · Logs · dimon.d{% endblock %}
+
+{% block content %}
+<div class="logs">
+  {% include "tracker/logs_top.html" with tab="emails" note="Every email dimond sends to your clients and to you. Its text is never kept here." %}
+
+  {% if emails %}
+    <section class="card email-log" aria-label="Emails">
+      <div class="email-log-row email-log-head" aria-hidden="true">
+        <span>Time</span><span>Event</span><span>Who</span><span>Details</span><span>Technical</span>
+      </div>
+      <ol class="email-log-list">
+        {% for email in emails %}
+          <li class="email-log-row{% if email.status == 'failed' %} email-log-problem{% endif %}">
+            <time class="email-log-time" datetime="{{ email.created_at|date:'c' }}">{% if email.created_at|date:"Ymd" == today %}{{ email.created_at|date:"H:i" }}{% else %}{{ email.created_at|date:"M j" }}{% endif %}</time>
+            <span><span class="email-status email-status-{{ email.status }}">{{ email.get_status_display }}</span></span>
+            <span class="email-log-who">{{ email.to }}</span>
+            <span class="email-log-details">
+              {% if email.kind == "pm_update" %}To you: {{ email.subject }}
+              {% elif email.kind == "invite" %}Invite{% if email.user.company %} to {{ email.user.company }}{% endif %}
+              {% elif email.kind == "sign_in_link" %}Sign-in link
+              {% else %}{{ email.subject }}{% endif %}
+            </span>
+            <span class="email-log-tech">{% if email.error %}{{ email.error }}{% elif email.provider_id %}resend id {{ email.provider_id }}{% else %}—{% endif %}</span>
+          </li>
+        {% endfor %}
+      </ol>
+    </section>
+    <p class="muted logs-note">The latest {{ emails|length }} email{{ emails|length|pluralize }}. An email that was not sent is tried again on the next round, a few seconds later.</p>
+  {% else %}
+    <section class="card empty-state">
+      <h2>No emails yet</h2>
+      <p class="muted">Sign-in links, invites and request updates to your clients show up here.</p>
+    </section>
+  {% endif %}
+</div>
+<script type="module" src="{% static 'js/busy-button.js' %}"></script>
+{% endblock %}
