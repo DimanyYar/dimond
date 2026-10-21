@@ -273,10 +273,13 @@ def _webhooks_trusted(run: SyncRun) -> bool:
     return previous is not None and previous.outcome != SyncOutcome.FAILED
 
 
+@transaction.atomic
 def _flag_missed_webhooks(run: SyncRun, changed: list[Request]) -> None:
     """News no webhook announced: the webhook in Jira is off, its JQL filter leaves the project
     out, or dimond was down when Jira called. The client got it up to 15 minutes late, and the
     PM learns it from the log rather than from a client (PRD: Jira sync; ADR 0020)."""
+    # Taken like a webhook takes it: one arriving right now either is in a run below or waits.
+    _lock_queue()
     run.refresh_from_db(fields=["webhook_keys"])
     announced = set(run.webhook_keys)
     # A webhook that came while this run read Jira woke the next run instead: not missed.
