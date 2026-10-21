@@ -75,7 +75,8 @@ def ask_for_sync(pm: User) -> SyncRun:
     not wait for Jira itself. A second press while one is waiting joins it."""
     if not has_clients_page(pm):
         raise NotAllowedError
-    run = SyncRun.objects.select_for_update().filter(outcome=SyncOutcome.QUEUED).first()
+    _lock_queue()
+    run = SyncRun.objects.filter(outcome=SyncOutcome.QUEUED).first()
     if run is None:
         return SyncRun.objects.create(outcome=SyncOutcome.QUEUED, manual=True)
     if not run.manual:
@@ -95,10 +96,7 @@ def wake_for_webhook(task_key: str) -> SyncRun | None:
     None: nothing to do. The key is not a task of a followed request (another Shakuro project,
     a request closed long ago), or the sync is paused, where a run would only try the login
     Jira rejected again."""
-    TrackerSettings.load()
-    # Locked so webhooks arriving at the same moment join one run instead of queueing two.
-    locked = TrackerSettings.objects.select_for_update().get(pk=1)
-    if locked.tracker != TrackerKind.JIRA or sync_paused():
+    if _lock_queue().tracker != TrackerKind.JIRA or sync_paused():
         return None
     if not followed_requests().filter(jira_key=task_key).exists():
         return None
@@ -109,6 +107,14 @@ def wake_for_webhook(task_key: str) -> SyncRun | None:
         run.webhook_keys.append(task_key)
         run.save(update_fields=["webhook_keys"])
     return run
+
+
+def _lock_queue() -> TrackerSettings:
+    """Locks the settings row until the transaction ends. Sync now and webhooks both take it
+    before looking for a waiting run, so pressed or sent at the same moment they join one run
+    instead of each queueing their own: a run that does not exist yet cannot be locked."""
+    TrackerSettings.load()
+    return TrackerSettings.objects.select_for_update().get(pk=1)
 
 
 def followed_requests() -> QuerySet[Request]:
