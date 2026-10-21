@@ -367,7 +367,7 @@ def _log_question(run: SyncRun, followed: QuestionFollowed) -> None:
         )
         effect = (
             f"{message.team_author} asked: “{quote}” Shown to {request.company} in "
-            f"{request.key}; {moved}."
+            f"{request.key}; {moved}.{_who_gets_an_email(request)}"
         )
         if message.files_not_shown:
             effect += f" Not shown to the client: {', '.join(message.files_not_shown)}."
@@ -442,17 +442,23 @@ def _log(run: SyncRun, followed: TaskFollowed) -> None:
         request=followed.request,
         task_key=followed.request.jira_key,
         what=what,
-        effect=_fit(followed.effect + _who_gets_an_email(followed), 300),
+        effect=_fit(
+            followed.effect
+            + (
+                _who_gets_an_email(followed.request)
+                if followed.status_from != followed.status_to
+                else ""
+            ),
+            300,
+        ),
         needs_attention=followed.unmapped,
     )
 
 
-def _who_gets_an_email(followed: TaskFollowed) -> str:
-    """ " Anna K. and Mark T. will get an email." after a status change, so the PM sees who
-    hears about it. The email itself leaves a few minutes later (PRD: email notifications)."""
-    if followed.status_from == followed.status_to:
-        return ""
-    names = [person.name or person.email for person in update_recipients(followed.request)]
+def _who_gets_an_email(request: Request) -> str:
+    """ " Anna K. and Mark T. will get an email." after news the client hears about, so the PM
+    sees who. The email itself leaves a few minutes later (PRD: email notifications)."""
+    names = [person.name or person.email for person in update_recipients(request)]
     if not names:
         return ""
     listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]

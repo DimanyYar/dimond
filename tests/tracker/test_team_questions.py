@@ -4,6 +4,7 @@ questions; ADR 0010). A fake tracker answers; no test reaches Jira."""
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from django.utils import timezone
 
 from apps.accounts.models import Company, User
 from apps.files.uploads import MAX_VIDEO_SIZE
@@ -132,6 +133,18 @@ def test_a_comment_tagged_client_reaches_the_client_as_a_question_from_the_team(
         f"{request.key}; In progress → Needs your input."
     )
     assert run.outcome == SyncOutcome.SUCCEEDED
+
+
+def test_sync_log_names_who_will_get_an_email_about_the_question(jira, anna):
+    User.objects.filter(pk=anna.pk).update(last_login=timezone.now())
+    request = linked(anna)
+    jira.comments = [comment("#client Which sources should the list show?")]
+
+    run = sync_tasks()
+
+    assert run.events.get(request=request).effect.endswith(
+        "In progress → Needs your input. Anna K. will get an email."
+    )
 
 
 def test_a_comment_without_the_tag_never_reaches_the_client(jira, anna):

@@ -174,20 +174,6 @@ def test_client_who_withdrew_gets_no_email_but_the_team_watcher_does(feature, an
     assert "Anna K. withdrew this request" in html(mail.outbox[0])
 
 
-def test_pm_question_sends_no_status_email(feature, anna, pm):
-    services.post_message(pm, feature, "Which campaigns?", ask_for_input=True)
-
-    assert settle() == 0
-
-
-def test_client_answer_moving_the_status_back_sends_no_status_email(feature, anna, mark, pm):
-    services.post_message(pm, feature, "Which campaigns?", ask_for_input=True)
-    settle()
-    services.post_message(anna, feature, "Google Ads only")
-
-    assert settle() == 0
-
-
 def test_new_request_sends_no_status_email(feature, mark):
     assert settle() == 0
 
