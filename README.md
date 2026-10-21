@@ -28,6 +28,8 @@ docker compose up --build
 - Sign in: open http://localhost:8000/, enter the email of a person added in the admin, then open
   the link from Mailpit. The `worker` container sends emails every 5 seconds; its log is
   `docker compose logs -f worker`
+- Every email the app tried to send, sent or not, is listed in the admin under Notifications →
+  Emails (who, what kind, subject, why it failed). The body is never kept.
 
 Attached files land in `uploads/` in the project folder (ignored by git; `FILES_ROOT` moves
 it). No address serves that folder: a file opens only through `/files/<id>/` after an access

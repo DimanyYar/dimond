@@ -11,6 +11,7 @@ dependencies = [
     "pillow>=11",
     "pypdfium2>=4.30",
     "httpx>=0.28.1",
+    "django-anymail>=15",
 ]
 
 [dependency-groups]
@@ -71,6 +72,11 @@ disable_error_code = ["type-arg"]
 # PDFium's Python wrapper ships no type information (ADR 0013).
 [[tool.mypy.overrides]]
 module = ["pypdfium2"]
+ignore_missing_imports = true
+
+# django-anymail ships no type information (ADR 0009).
+[[tool.mypy.overrides]]
+module = ["anymail.*"]
 ignore_missing_imports = true
 
 [tool.django-stubs]
