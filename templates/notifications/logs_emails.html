@@ -28,7 +28,7 @@ Bounced and Marked spam join with Resend's reports (#19g). On a phone each row s
               {% elif email.kind == "sign_in_link" %}Sign-in link
               {% else %}{{ email.subject }}{% endif %}
             </span>
-            <span class="email-log-tech">{% if email.error %}{{ email.error }}{% elif email.provider_id %}resend id {{ email.provider_id|truncatechars:12 }}{% else %}—{% endif %}</span>
+            <span class="email-log-tech">{% if email.error %}{{ email.error }}{% elif email.provider_id %}resend id {{ email.provider_id }}{% else %}—{% endif %}</span>
           </li>
         {% endfor %}
       </ol>

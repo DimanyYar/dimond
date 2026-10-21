@@ -85,3 +85,15 @@ def test_both_logs_tabs_link_to_each_other(client, pm):
 
     assert 'href="/logs/emails/"' in jira
     assert 'href="/logs/"' in emails
+
+
+def test_resend_id_is_shown_whole_to_copy(client, pm, anna):
+    journal(
+        anna,
+        EmailKind.SIGN_IN_LINK,
+        "Your dimon.d sign-in link",
+        provider_id="4ef9a417-02e9-4d39-ad75-9611e0fcc33c",
+    )
+    client.force_login(pm)
+
+    assert "4ef9a417-02e9-4d39-ad75-9611e0fcc33c" in client.get("/logs/emails/").content.decode()

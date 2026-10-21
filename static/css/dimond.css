@@ -6110,9 +6110,7 @@ details[open] .run-chevron {
 }
 
 .email-log-who {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .email-log-details {
@@ -6124,9 +6122,7 @@ details[open] .run-chevron {
   font-family: ui-monospace, Menlo, monospace;
   font-size: 11px;
   color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .email-status {
@@ -6157,9 +6153,9 @@ details[open] .run-chevron {
 
   .email-log-time { grid-area: time; }
   .email-log-row > :nth-child(2) { grid-area: status; }
-  .email-log-who { grid-area: who; white-space: normal; overflow-wrap: anywhere; }
+  .email-log-who { grid-area: who; }
   .email-log-details { grid-area: details; }
-  .email-log-tech { grid-area: tech; white-space: normal; overflow-wrap: anywhere; }
+  .email-log-tech { grid-area: tech; }
 }
 
 .logs-note {
