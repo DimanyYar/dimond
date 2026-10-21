@@ -13,7 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import Notify, Role, User
-from apps.requests.models import ClientStatus, Request, StatusEvent
+from apps.requests.models import ClientStatus, Message, Request, StatusEvent
 
 from .models import Email, EmailKind, EmailStatus
 from .selectors import update_recipients
@@ -62,6 +62,16 @@ def _provider_id(message: EmailMessage) -> str:
     return str(status.message_id)
 
 
+# The colour of the status label at the top of an email, as on the board.
+PILLS = {
+    ClientStatus.NEEDS_INPUT: "#ff5600",
+    ClientStatus.IN_PROGRESS: "#d9f4f8",
+    ClientStatus.READY_TO_CHECK: "#fff1e8",
+    ClientStatus.DONE: "#e3f7ea",
+}
+PLAIN_PILL = "#ebe7e1"
+
+
 @dataclass(frozen=True)
 class StatusNews:
     """How one status reads in an email: the headline, a line under it, the end of the subject.
@@ -70,7 +80,6 @@ class StatusNews:
     headline: str
     body: str
     subject: str
-    pill: str
 
 
 STATUS_NEWS = {
@@ -78,81 +87,128 @@ STATUS_NEWS = {
         "It’s planned",
         "It’s now a task for the team. We’ll email you when work starts.",
         "planned",
-        "#ebe7e1",
     ),
     ClientStatus.IN_PROGRESS: StatusNews(
         "The team started on it",
         "It’s in progress now. We’ll email you when it’s ready to check.",
         "in progress",
-        "#d9f4f8",
     ),
     ClientStatus.READY_TO_CHECK: StatusNews(
         "Ready for you to check",
         "The team finished the work. Have a look, and if something is off, say so in the request.",
         "ready to check",
-        "#fff1e8",
     ),
     ClientStatus.DONE: StatusNews(
         "It’s done",
         "The work is released. If something is still off, write in the request.",
         "done",
-        "#e3f7ea",
     ),
     ClientStatus.LATER: StatusNews(
         "{who} moved it to Later",
         "It stays on the list but isn’t planned for now. If it matters more than it looks, "
         "say so in the request.",
         "moved to Later",
-        "#ebe7e1",
     ),
     ClientStatus.DECLINED: StatusNews(
         "{who} declined this request",
         "The reason is in the request. If you see it differently, reply there.",
         "declined",
-        "#ebe7e1",
     ),
     ClientStatus.WITHDRAWN: StatusNews(
         "{who} withdrew this request",
         "It’s closed and won’t be worked on.",
         "withdrawn",
-        "#ebe7e1",
     ),
     ClientStatus.RECEIVED: StatusNews(
         "{who} brought it back",
         "It’s back in the queue to be planned.",
         "back in the queue",
-        "#ebe7e1",
     ),
 }
 
+# What a message says in an email: never its text, which stays in dimond (PRD: email
+# notifications), only who wrote and what kind of message it is.
+TEAM_QUESTION = StatusNews(
+    "The team has a question",
+    "Someone on the team needs a detail from you before they go on. Open the request to read "
+    "the question. Your answer goes straight to them.",
+    "the team has a question",
+)
+PM_QUESTION = StatusNews(
+    "{who} has a question",
+    "Open the request to read it and answer.",
+    "a question from {who}",
+)
+PM_REPLY = StatusNews("{who} replied", "Open the request to read the reply.", "{who} replied")
+CLIENT_MESSAGE = StatusNews(
+    "{who} wrote in the request", "Open the request to read it.", "new message from {who}"
+)
 
-def _worth_an_email(event: StatusEvent) -> bool:
-    """Status changes the client hears about by email. A question (Needs your input) comes
-    with its message; a client's own answer moving the status back is told by that answer."""
+
+@dataclass(frozen=True)
+class News:
+    """One thing that happened to a request, as a line of an email."""
+
+    at: datetime
+    actor_id: int | None
+    headline: str
+    body: str
+    subject: str
+
+
+def _who(person: User | None) -> str:
+    return (person.name or person.email) if person else "The team"
+
+
+def _news(kind: StatusNews, at: datetime, actor: User | None) -> News:
+    who = _who(actor)
+    return News(
+        at=at,
+        actor_id=actor.pk if actor else None,
+        headline=kind.headline.format(who=who),
+        body=kind.body,
+        subject=kind.subject.format(who=who),
+    )
+
+
+def _status_news(event: StatusEvent) -> News | None:
+    """Status changes the client hears about by email. A question (Needs your input) is told
+    by its message; a client's own answer moving the status back is told by that answer."""
     if not event.from_status or event.to_status not in STATUS_NEWS:
-        return False
-    if event.to_status == ClientStatus.WITHDRAWN:
-        return True
-    return event.actor is None or event.actor.role == Role.PM
+        return None
+    if event.to_status != ClientStatus.WITHDRAWN and (
+        event.actor is not None and event.actor.role != Role.PM
+    ):
+        return None
+    return _news(STATUS_NEWS[ClientStatus(event.to_status)], event.created_at, event.actor)
 
 
-def _headline(event: StatusEvent) -> str:
-    who = (event.actor.name or event.actor.email) if event.actor else "The team"
-    return STATUS_NEWS[ClientStatus(event.to_status)].headline.format(who=who)
+def _message_news(message: Message) -> News:
+    if message.from_team:
+        kind = TEAM_QUESTION
+    elif message.author is not None and message.author.role == Role.PM:
+        kind = PM_QUESTION if message.asks_for_input else PM_REPLY
+    else:
+        kind = CLIENT_MESSAGE
+    return _news(kind, message.created_at, message.author)
 
 
 def send_request_updates(now: datetime | None = None) -> int:
-    """Email clients about status changes that have settled for GROUPING. Returns how many
-    emails went out."""
+    """Email clients about what happened to their requests once it has settled for
+    GROUPING: status changes and new messages. Returns how many emails went out."""
     settled = (now or timezone.now()) - GROUPING
-    due = (
-        StatusEvent.objects.filter(emailed=False)
-        .values("request")
-        .annotate(first=Min("created_at"))
-        .filter(first__lte=settled)
-        .values_list("request", flat=True)
-    )
-    return sum(_send_updates_for(request_id) for request_id in due)
+    first_news: dict[int, datetime] = {}
+    for model in (StatusEvent, Message):
+        pending = (
+            model.objects.filter(emailed=False)
+            .values("request")
+            .annotate(first=Min("created_at"))
+            .values_list("request", "first")
+        )
+        for request_id, first in pending:
+            first_news[request_id] = min(first, first_news.get(request_id, first))
+    due = [request_id for request_id, first in first_news.items() if first <= settled]
+    return sum(_send_updates_for(request_id) for request_id in sorted(due))
 
 
 def _send_updates_for(request_id: int) -> int:
@@ -161,39 +217,45 @@ def _send_updates_for(request_id: int) -> int:
         events = list(
             StatusEvent.objects.select_for_update(skip_locked=True, of=("self",))
             .filter(request_id=request_id, emailed=False)
-            .select_related("actor", "request__company__owner")
-            .order_by("created_at", "pk")
+            .select_related("actor")
         )
-        if not events:
+        messages = list(
+            Message.objects.select_for_update(skip_locked=True, of=("self",))
+            .filter(request_id=request_id, emailed=False)
+            .select_related("author")
+        )
+        if not events and not messages:
             return 0
-        news = [event for event in events if _worth_an_email(event)]
-        request = events[0].request
+        found = [_status_news(event) for event in events] + [_message_news(m) for m in messages]
+        news = sorted((item for item in found if item is not None), key=lambda item: item.at)
+        request = Request.objects.select_related("company").get(pk=request_id)
         attempts = [
             _send_update(person, request, theirs)
             for person in (update_recipients(request) if news else [])
-            if (theirs := [event for event in news if event.actor_id != person.pk])
+            if (theirs := [item for item in news if item.actor_id != person.pk])
         ]
         if attempts and not any(attempts):
             # The mail server took none of them: try the whole batch again next round.
             return 0
         StatusEvent.objects.filter(pk__in=[event.pk for event in events]).update(emailed=True)
+        Message.objects.filter(pk__in=[message.pk for message in messages]).update(emailed=True)
     return sum(attempts)
 
 
-def _send_update(person: User, request: Request, events: list[StatusEvent]) -> bool:
-    """One email about the latest change a person did not make themselves, with the earlier
-    ones of the same few minutes under it."""
-    latest = events[-1]
-    news = STATUS_NEWS[ClientStatus(latest.to_status)]
-    subject = f"{request.key} · {request.title} — {news.subject}"
+def _send_update(person: User, request: Request, news: list[News]) -> bool:
+    """One email about the latest news a person did not make themselves, with the earlier
+    news of the same few minutes under it."""
+    latest = news[-1]
+    status = ClientStatus(request.status)
+    subject = f"{request.key} · {request.title} — {latest.subject}"
     context = {
         "request": request,
         "company": request.company,
-        "status_label": ClientStatus(latest.to_status).label,
-        "pill": news.pill,
-        "headline": _headline(latest),
-        "body": news.body,
-        "also": [_headline(event) for event in events[:-1]],
+        "status_label": status.label,
+        "pill": PILLS.get(status, PLAIN_PILL),
+        "headline": latest.headline,
+        "body": latest.body,
+        "also": [item.headline for item in news[:-1]],
         "url": settings.SITE_URL + request.get_absolute_url(),
         "account_url": settings.SITE_URL + reverse("account"),
         "for_team": person.notify == Notify.COMPANY,

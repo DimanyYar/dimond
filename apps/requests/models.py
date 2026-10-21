@@ -371,6 +371,10 @@ class Message(models.Model):
     team_edited_at = models.DateTimeField(
         null=True, blank=True, help_text="When the comment last changed in Jira."
     )
+    emailed = models.BooleanField(
+        default=False,
+        help_text="The worker has taken it into a notification email (PRD: email notifications).",
+    )
     files_not_shown = models.JSONField(
         default=list,
         blank=True,
