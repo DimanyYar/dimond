@@ -1,7 +1,7 @@
 import logging
 
 from django.contrib import messages
-from django.contrib.auth import login, logout
+from django.contrib.auth import HASH_SESSION_KEY, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -12,6 +12,8 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from . import selectors, services
 from .forms import (
     CLIENT_COLORS,
+    AccountEmailsForm,
+    AccountNameForm,
     EmailForm,
     InviteForm,
     JiraProjectForm,
@@ -384,3 +386,75 @@ def sign_out_devices(request: HttpRequest, pk: int, person_pk: int) -> HttpRespo
         "sign in again with an email link.",
     )
     return redirect("person", pk, person_pk)
+
+
+def _me(request: HttpRequest) -> User:
+    """The signed-in client. Everyone else gets "not found": this page is a client's own."""
+    assert isinstance(request.user, User)  # login_required lets only signed-in people in
+    try:
+        return selectors.account_owner(request.user)
+    except User.DoesNotExist:
+        raise Http404 from None
+
+
+def _account_screen(
+    request: HttpRequest,
+    name_form: AccountNameForm | None = None,
+    emails_form: AccountEmailsForm | None = None,
+) -> HttpResponse:
+    page = selectors.account_page(_me(request), request.session.session_key)
+    person = page.person
+    return render(
+        request,
+        "accounts/account.html",
+        {
+            "page": page,
+            "name_form": name_form or AccountNameForm(initial={"name": person.name}),
+            "emails_form": emails_form or AccountEmailsForm(initial={"notify": person.notify}),
+        },
+    )
+
+
+@require_GET
+@login_required
+def account(request: HttpRequest) -> HttpResponse:
+    """A client's own account: name, which emails, devices (PRD: email notifications)."""
+    return _account_screen(request)
+
+
+@require_POST
+@login_required
+def save_account_name(request: HttpRequest) -> HttpResponse:
+    me = _me(request)
+    form = AccountNameForm(request.POST)
+    if not form.is_valid():
+        return _account_screen(request, name_form=form)
+    services.rename_myself(me, form.cleaned_data["name"])
+    messages.success(request, "Name saved.")
+    return redirect("account")
+
+
+@require_POST
+@login_required
+def save_account_emails(request: HttpRequest) -> HttpResponse:
+    me = _me(request)
+    form = AccountEmailsForm(request.POST)
+    if not form.is_valid():
+        return _account_screen(request, emails_form=form)
+    services.choose_emails(me, Notify(form.cleaned_data["notify"]))
+    messages.success(request, "Email settings saved.")
+    return redirect("account")
+
+
+@require_POST
+@login_required
+def sign_out_other_devices(request: HttpRequest) -> HttpResponse:
+    me = _me(request)
+    session_key = request.session.session_key
+    assert session_key is not None  # a signed-in person always has a session
+    services.sign_out_other_devices(me, session_key)
+    # The new fingerprint keeps this browser signed in. Not update_session_auth_hash: it
+    # would also change this session's key, and the device list knows it by that key.
+    request.session[HASH_SESSION_KEY] = me.get_session_auth_hash()
+    messages.success(request, "Signed out on your other devices.")
+    return redirect("account")

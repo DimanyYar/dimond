@@ -31,7 +31,7 @@ domain come back with a warning and a "Send anyway" button: allowed, but checked
     {% for value, label in form.fields.notify.choices %}
       <label class="choice-inline">
         <input type="radio" name="notify" value="{{ value }}"{% if form.notify.value|default:"own" == value %} checked{% endif %}>
-        {% if value == "company" %}Everything at {{ company.name }}{% else %}{{ label }}{% endif %}
+        {{ label }}
       </label>
     {% endfor %}
   </fieldset>

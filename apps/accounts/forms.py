@@ -32,6 +32,16 @@ class PersonForm(forms.Form):
     notify = forms.ChoiceField(choices=Notify.choices)
 
 
+class AccountNameForm(forms.Form):
+    name = forms.CharField(
+        max_length=120, error_messages={"required": "Your name shows on your requests."}
+    )
+
+
+class AccountEmailsForm(forms.Form):
+    notify = forms.ChoiceField(choices=Notify.choices)
+
+
 # A team's worth at once; a bigger list is more likely a paste mistake than a plan.
 MAX_INVITES_AT_ONCE = 20
 EMAIL_SEPARATORS = re.compile(r"[\s,;]+")
@@ -49,7 +59,10 @@ class InviteForm(forms.Form):
         label="Work emails", widget=forms.Textarea, error_messages={"required": "Add an email."}
     )
     notify = forms.ChoiceField(
-        choices=[(Notify.OWN, "Their own requests"), (Notify.COMPANY, "Everything at the company")],
+        choices=[
+            (Notify.OWN, "Their requests"),
+            (Notify.COMPANY, "Their requests and their team’s"),
+        ],
         initial=Notify.OWN,
     )
     send_anyway = forms.BooleanField(required=False)
@@ -186,7 +199,10 @@ class NewClientForm(forms.Form):
     jira_project = forms.ChoiceField(error_messages=JIRA_PROJECT_ERRORS)
     emails = forms.CharField(widget=forms.Textarea, required=False)
     notify = forms.ChoiceField(
-        choices=[(Notify.OWN, "Their own requests"), (Notify.COMPANY, "Everything at the company")],
+        choices=[
+            (Notify.OWN, "Their requests"),
+            (Notify.COMPANY, "Their requests and their team’s"),
+        ],
         initial=Notify.OWN,
     )
     send_anyway = forms.BooleanField(required=False)
