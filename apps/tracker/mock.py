@@ -172,9 +172,10 @@ class MockTracker:
         if not self._has_project(key.split("-")[0]):
             raise IssueNotFound(key)
 
-    def add_comment(self, key: str, body: str) -> None:
+    def add_comment(self, key: str, body: str) -> str:
         """The demo keeps no comments: a known task is enough to say it went well."""
         self.issue(key)
+        return str(next(_new_numbers))
 
     def file_content(self, file: TaskFile) -> bytes:
         if file.id not in FILES:

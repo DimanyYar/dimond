@@ -128,6 +128,13 @@
           </div>
           {% if m.text %}<p class="message-text">{{ m.text }}</p>{% endif %}
           {% with files=m.attachments.all %}{% if files %}{% include "files/file_list.html" with small=True %}{% endif %}{% endwith %}
+          {% if m.answers_team %}
+            {% if m.jira_error and not is_client %}
+              <p class="jira-note jira-note-failed" role="status">Not passed to {{ r.jira_key|default:"Jira" }}: {{ m.jira_error }}</p>
+            {% else %}
+              <p class="jira-note"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>Passed to the team · {{ m.created_at|date:"M j, H:i" }}</p>
+            {% endif %}
+          {% endif %}
         </article>
         {% endif %}
         {% endwith %}

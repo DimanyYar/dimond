@@ -17,7 +17,10 @@ questions for the client: comments tagged `#client` outside a quote, with the fi
 (changed Oct 20, 2026, from comments mentioning a dimond service user). A plain-text tag needs
 no service account; a mention would have pointed at Dmitry while the sync signs in as him, and
 every mention of him would have reached the client. dimond's own answers quote the question,
-so the tag inside a quote never counts. Descriptions are never synced
+so the tag inside a quote never counts. The answer goes as soon as the client sends it, without the
+PM (decided Oct 20, 2026); the client's words are escaped so they never mention anyone or
+open a new question. If Jira does not take it, nothing retries by itself: the PM sees why and
+sends it again. Descriptions are never synced
 in either direction. Polling every 15 minutes is the source of truth; a Jira webhook only
 triggers an early fetch and its payload is not trusted.
 
