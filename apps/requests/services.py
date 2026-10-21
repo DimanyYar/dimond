@@ -10,7 +10,7 @@ from django.db.models import Max
 from django.utils import timezone
 
 from apps.accounts.models import Role, User
-from apps.files.models import Attachment
+from apps.files.models import Attachment, JiraCopy
 from apps.files.services import attach_files, public_link, removable_files, remove_files
 from apps.files.uploads import CheckedFile
 from apps.tracker.base import (
@@ -20,6 +20,7 @@ from apps.tracker.base import (
     Release,
     Tracker,
     TrackerError,
+    TrackerRefused,
     TrackerUnreachable,
 )
 from apps.tracker.connection import current_tracker, jira_login_paused
@@ -276,8 +277,10 @@ def pass_answer_to_jira(answer: Message, sender: User) -> Message:
     and text uploaded to the task, video and voice as public links. Records the comment's id,
     or why it did not get there.
 
-    The files go first and the comment only once they all did: Send again then repeats the
-    whole answer, at worst uploading a file Jira already took a second time."""
+    The files go first and the comment once Jira has answered for each. A file Jira refuses for
+    good (over its size limit, say) is left out and named in the comment, and the PM gets a
+    note to attach it by hand, as when a task is created; Send again then skips it and the
+    files already in Jira."""
     request = answer.request
     error = ""
     if not request.jira_key:
@@ -298,13 +301,11 @@ def _send_answer(tracker: Tracker, answer: Message, sender: User) -> str:
     key = answer.request.jira_key
     sending = "the comment"
     try:
-        for file in answer.attachments.all():
+        for file in answer.attachments.filter(jira_copy=JiraCopy.NONE):
             if file.kind in ("video", "audio"):
                 continue
             sending = file.name
-            with file.file.open("rb") as stored:
-                content = stored.read()
-            tracker.attach_file(key, file.name, content, file.content_type)
+            _upload_answer_file(tracker, answer, file, sender)
         sending = "the comment"
         answer.jira_comment_id = tracker.add_comment(key, answer_comment(answer, sender))
     except TrackerUnreachable as error:
@@ -315,6 +316,24 @@ def _send_answer(tracker: Tracker, answer: Message, sender: User) -> str:
     except (TrackerError, OSError) as error:
         return f"{sending}: {error}"
     return ""
+
+
+def _upload_answer_file(tracker: Tracker, answer: Message, file: Attachment, sender: User) -> None:
+    with file.file.open("rb") as stored:
+        content = stored.read()
+    try:
+        tracker.attach_file(answer.request.jira_key, file.name, content, file.content_type)
+    except TrackerRefused as error:
+        file.jira_copy = JiraCopy.REFUSED
+        InternalNote.objects.create(
+            request=answer.request,
+            author=sender if sender.role == Role.PM else None,
+            text=f"Couldn't attach {file.name} from the answer to {answer.request.jira_key}: "
+            f"{error} Attach it in Jira by hand.",
+        )
+    else:
+        file.jira_copy = JiraCopy.UPLOADED
+    file.save(update_fields=["jira_copy"])
 
 
 # Jira's wiki markup reads these as links, mentions, macros, pictures and table cells; a
@@ -478,6 +497,8 @@ def _jira_file(file: Attachment) -> str:
     that plays video and voice without signing in."""
     if file.kind in ("video", "audio"):
         return f"[{_link_text(file.name)}|{public_link(file)}]"
+    if file.jira_copy == JiraCopy.REFUSED:
+        return f"{_link_text(file.name)} (Jira didn't take this file; it is in the request)"
     return _attachment_markup(file)
 
 

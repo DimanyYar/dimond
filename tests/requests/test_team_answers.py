@@ -432,7 +432,7 @@ def test_the_answers_video_goes_as_a_link_that_plays_without_signing_in(jira, an
     assert f"[repro.mp4|{video.public_url}]" in jira.added[0][1]
 
 
-def test_a_file_jira_refuses_stops_the_answer_and_names_the_file(jira, anna, pm):
+def test_a_file_jira_refuses_for_good_is_left_out_and_the_pm_attaches_it_by_hand(jira, anna, pm):
     request = linked(anna)
     jira.ask("Which screen?")
     jira.refuses_files = TrackerRefused("Jira said the file is larger than its attachment limit.")
@@ -440,9 +440,32 @@ def test_a_file_jira_refuses_stops_the_answer_and_names_the_file(jira, anna, pm)
     answer = services.answer_team(anna, request, "This one.", files=[checked("leads.png", PNG)])
 
     answer.refresh_from_db()
-    assert answer.jira_error.startswith("leads.png: Jira said the file is larger")
-    assert jira.added == []
-    assert pm_reasons(requests_for(pm))[request.pk] == "not_sent"
+    assert answer.jira_error == ""
+    body = jira.added[0][1]
+    assert "leads.png (Jira didn't take this file; it is in the request)" in body
+    assert "!leads.png" not in body
+    note = request.notes.get()
+    assert note.text.startswith("Couldn't attach leads.png from the answer to FI-2214:")
+    assert note.text.endswith("Attach it in Jira by hand.")
+    assert pm_reasons(requests_for(pm))[request.pk] == "replied"
+
+
+def test_sending_again_skips_the_files_jira_already_has(jira, anna):
+    request = linked(anna)
+    jira.ask("Which screens?")
+    jira.refuses = TrackerUnreachable("Jira did not answer.")
+    answer = services.answer_team(
+        anna, request, "These.", files=[checked("a.png", PNG), checked("b.png", PNG)]
+    )
+    assert len(jira.uploaded) == 2
+    jira.refuses = None
+
+    services.pass_answer_to_jira(answer, sender=anna)
+
+    assert len(jira.uploaded) == 2
+    answer.refresh_from_db()
+    assert answer.jira_error == ""
+    assert "!a.png|thumbnail!\n!b.png|thumbnail!" in jira.added[0][1]
 
 
 def test_the_client_answers_with_a_screenshot_alone(client, jira, anna):
