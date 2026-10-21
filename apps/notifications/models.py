@@ -6,6 +6,7 @@ from apps.accounts.models import User
 class EmailKind(models.TextChoices):
     SIGN_IN_LINK = "sign_in_link", "Sign-in link"
     INVITE = "invite", "Invite"
+    REQUEST_UPDATE = "request_update", "Request update"
 
 
 class EmailStatus(models.TextChoices):
