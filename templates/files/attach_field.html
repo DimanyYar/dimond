@@ -2,18 +2,19 @@
 note, or take a photo or video on a phone. Needs `field`, the form's AttachmentsField; `compact` swaps the drop zone
 for a small "Attach or paste" button and icon-only record buttons, for the reply box. static/js/attach-files.js turns
 the plain file input into the drop zone or button with a list of chosen files, and shows each record button only
-where the browser can do it; without the script the browser's own file input still works.{% endcomment %}
+where the browser can do it; without the script the browser's own file input still works. `prefix` keeps the ids
+apart when a page has two pickers (the request card: the answer to the team and the reply).{% endcomment %}
 <div class="attach{% if compact %} attach-compact{% else %} field{% endif %}" data-attach>
   {% if not compact %}
-  <label for="f-files">Screenshots &amp; files <span class="optional">optional</span></label>
-  <label class="dropzone" for="f-files">
+  <label for="{{ prefix }}f-files">Screenshots &amp; files <span class="optional">optional</span></label>
+  <label class="dropzone" for="{{ prefix }}f-files">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12l-8.5 8.5a5 5 0 0 1-7-7L14 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 8"/></svg>
     <span>Paste <kbd>⌘V</kbd> or drop here, or <span class="dropzone-pick">choose files</span></span>
   </label>
   {% endif %}
   <div class="attach-actions">
     {% if compact %}
-    <label class="attach-button" for="f-files">
+    <label class="attach-button" for="{{ prefix }}f-files">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12l-8.5 8.5a5 5 0 0 1-7-7L14 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 8"/></svg>
       Attach or paste
     </label>
@@ -39,16 +40,16 @@ where the browser can do it; without the script the browser's own file input sti
     <span class="recording-time" data-recording-time></span>
     <button type="button" class="btn btn-dark recording-stop" data-recording-stop>Stop</button>
   </div>
-  <input type="file" id="f-files" name="{{ field.html_name }}" multiple data-attach-input
+  <input type="file" id="{{ prefix }}f-files" name="{{ field.html_name }}" multiple data-attach-input
          accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/webm,audio/mpeg,audio/mp4,audio/x-m4a,audio/webm,audio/ogg,audio/wav,.m4a,application/pdf,text/plain,.txt,.log,.csv"
-         aria-describedby="files-hint{% if field.errors %} files-error{% endif %}"
+         aria-describedby="{{ prefix }}files-hint{% if field.errors %} {{ prefix }}files-error{% endif %}"
          {% if field.errors %}aria-invalid="true"{% endif %}>
   {# Frames of the chosen videos, filled by attach-files.js: they become the videos' previews. #}
   <input type="file" name="{{ field.html_name }}_posters" multiple hidden data-attach-posters>
   <ul class="tiles tiles-form" data-attach-list aria-label="Chosen files"></ul>
-  <span class="hint" id="files-hint">Images, video, audio, PDF or plain text: up to 5 files, 10 MB each. Video and recordings up to 2 minutes: we compress them in your browser. Word, Excel and archives can hide macros, so share a link to them instead.</span>
+  <span class="hint" id="{{ prefix }}files-hint">Images, video, audio, PDF or plain text: up to 5 files, 10 MB each. Video and recordings up to 2 minutes: we compress them in your browser. Word, Excel and archives can hide macros, so share a link to them instead.</span>
   {% if field.errors %}
-    <div class="error-text" id="files-error">{% for error in field.errors %}<p>{{ error }}</p>{% endfor %}</div>
+    <div class="error-text" id="{{ prefix }}files-error">{% for error in field.errors %}<p>{{ error }}</p>{% endfor %}</div>
   {% elif reattach %}
     <span class="error-text" data-reattach>Attach your files again: they aren’t kept after an error.</span>
   {% endif %}

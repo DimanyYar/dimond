@@ -1,5 +1,9 @@
-// Request card: the files picker in the reply box. Sending is a plain POST.
+// Request card: the files pickers in the answer to the team and in the reply box. Sending is
+// a plain POST.
 
 import { watchFiles } from "./attach-files.js";
 
-watchFiles(document.getElementById("reply"));
+for (const id of ["answer", "reply"]) {
+  const form = document.getElementById(id);
+  if (form !== null) watchFiles(form);
+}

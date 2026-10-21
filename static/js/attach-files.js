@@ -159,6 +159,9 @@ export function watchFiles(form) {
   document.addEventListener("paste", (event) => {
     const pasted = [...(event.clipboardData?.files ?? [])];
     if (pasted.length === 0 || !document.contains(box)) return;
+    // With two pickers on the page, the screenshot goes to the form being written in.
+    const pickers = document.querySelectorAll("[data-attach]").length;
+    if (pickers > 1 && !form.contains(document.activeElement)) return;
     event.preventDefault();
     add(pasted);
   });

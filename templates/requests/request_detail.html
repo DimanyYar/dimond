@@ -104,13 +104,14 @@
           {% with files=m.attachments.all %}{% if files %}{% include "files/file_list.html" with small=True %}{% endif %}{% endwith %}
           {% if m.files_not_shown %}<p class="message-files-not-shown">{% if m.files_not_shown|length == 1 %}A file from the team couldn’t be shown here{% else %}{{ m.files_not_shown|length }} files from the team couldn’t be shown here{% endif %}: {{ m.files_not_shown|join:", " }}. {% if is_client %}Ask Dimon if you need it.{% else %}Open the task in Jira to see it.{% endif %}</p>{% endif %}
         {% if page.can_answer_team and m == page.question %}
-            <form id="answer" class="team-answer" method="post" action="{% url 'request_answer' r.pk %}">
+            <form id="answer" class="team-answer" method="post" action="{% url 'request_answer' r.pk %}" enctype="multipart/form-data">
               {% csrf_token %}
               <label for="id_answer">Answer the team</label>
               <textarea name="answer" id="id_answer" class="input" rows="2" maxlength="5000"
                 placeholder="Your answer goes straight to the team"
                 {% if answer_form.answer.errors %}aria-invalid="true" aria-describedby="answer-error"{% endif %}>{{ answer_form.answer.value|default_if_none:"" }}</textarea>
               {% if answer_form.answer.errors %}<span class="error-text" id="answer-error">{{ answer_form.answer.errors.0 }}</span>{% endif %}
+              {% include "files/attach_field.html" with field=answer_form.attachments compact=True prefix="answer-" reattach=reattach_answer %}
               <div class="team-answer-row">
                 <span class="hint">Only this answer is passed to the team. Messages to Dimon below stay with your PM.</span>
                 <button class="btn btn-primary" type="submit">Send answer</button>

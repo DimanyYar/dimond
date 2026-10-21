@@ -164,6 +164,7 @@ def _render_card(
         "form": form or MessageForm(),
         # Sent files are dropped when the form comes back with errors; this asks for them again.
         "reattach": bool(form and form.errors and request.FILES),
+        "reattach_answer": bool(answer_form and answer_form.errors and request.FILES),
         "withdraw_form": withdraw_form or WithdrawForm(reason_required=page.can_ask_to_withdraw),
         "decline_form": decline_form or DeclineForm(),
         "answer_form": answer_form or AnswerForm(),
@@ -234,11 +235,16 @@ def request_detail(request: HttpRequest, pk: int) -> HttpResponse:
 def request_answer(request: HttpRequest, pk: int) -> HttpResponse:
     """The client's "Send answer" to the team's questions from Jira."""
     page = _card_page(request, pk)
-    form = AnswerForm(request.POST)
+    form = AnswerForm(request.POST, request.FILES)
     if not form.is_valid():
         return _render_card(request, page, answer_form=form, status=422)
     try:
-        message = services.answer_team(page.viewer, page.request, form.cleaned_data["answer"])
+        message = services.answer_team(
+            page.viewer,
+            page.request,
+            form.cleaned_data["answer"],
+            files=form.cleaned_data["attachments"],
+        )
     except services.NotAllowedError:
         raise PermissionDenied from None
     return redirect(f"{page.request.get_absolute_url()}#message-{message.pk}")

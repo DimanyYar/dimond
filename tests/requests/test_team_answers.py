@@ -6,10 +6,12 @@ sync with a fake tracker; no test reaches Jira."""
 from datetime import UTC, datetime
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import Company, User
+from apps.files.uploads import CheckedFile, check_upload
 from apps.requests import services
 from apps.requests.models import ClientStatus, Message, Request, RequestType, WhenNeeded
 from apps.requests.selectors import (
@@ -24,6 +26,7 @@ from apps.tracker.base import (
     Comment,
     Issue,
     TrackerForbidden,
+    TrackerRefused,
     TrackerUnreachable,
     tags_the_client,
 )
@@ -40,12 +43,19 @@ class FakeJira:
         self.comments: list[Comment] = []
         self.added: list[tuple[str, str]] = []
         self.refuses: Exception | None = None
+        self.uploaded: list[tuple[str, str, str]] = []
+        self.refuses_files: Exception | None = None
 
     def add_comment(self, key: str, body: str) -> str:
         if self.refuses:
             raise self.refuses
         self.added.append((key, body))
         return f"9{len(self.added)}"
+
+    def attach_file(self, key: str, name: str, content: bytes, content_type: str) -> None:
+        if self.refuses_files:
+            raise self.refuses_files
+        self.uploaded.append((key, name, content_type))
 
     def account(self) -> Account:
         return Account("dsmirnov", "Dmitry Smirnov")
@@ -198,7 +208,7 @@ def test_an_empty_answer_is_sent_back_with_a_hint(client, jira, anna):
     response = client.post(reverse("request_answer", args=[request.pk]), {"answer": ""})
 
     assert response.status_code == 422
-    assert "Write your answer." in response.content.decode()
+    assert "Write your answer or attach a file." in response.content.decode()
 
 
 def test_the_client_sees_the_banner_the_form_and_where_the_work_stopped(client, jira, anna):
@@ -389,3 +399,95 @@ def test_only_people_who_may_see_the_request_read_which_questions_an_answer_cove
     assert [q.text for q in questions_answered_by(pm, answer)] == ["Which sources?"]
     with pytest.raises(Message.DoesNotExist):
         questions_answered_by(nina, answer)
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+MP4 = b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2" + b"hdlr" + b"\x00" * 8 + b"vide"
+
+
+def checked(name: str, content: bytes) -> CheckedFile:
+    return check_upload(SimpleUploadedFile(name, content))
+
+
+def test_the_answers_picture_is_uploaded_and_shown_in_the_comment(jira, anna):
+    request = linked(anna)
+    jira.ask("Which screen?")
+
+    answer = services.answer_team(anna, request, "This one.", files=[checked("leads.png", PNG)])
+
+    assert jira.uploaded == [("FI-2214", "leads.png", "image/png")]
+    body = jira.added[0][1]
+    assert "This one.\n!leads.png|thumbnail!\n" in body
+    assert answer.attachments.get().uploaded_by == anna
+
+
+def test_the_answers_video_goes_as_a_link_that_plays_without_signing_in(jira, anna):
+    request = linked(anna)
+    jira.ask("Can you show it?")
+
+    answer = services.answer_team(anna, request, "", files=[checked("repro.mp4", MP4)])
+
+    assert jira.uploaded == []
+    video = answer.attachments.get()
+    assert f"[repro.mp4|{video.public_url}]" in jira.added[0][1]
+
+
+def test_a_file_jira_refuses_for_good_is_left_out_and_the_pm_attaches_it_by_hand(jira, anna, pm):
+    request = linked(anna)
+    jira.ask("Which screen?")
+    jira.refuses_files = TrackerRefused("Jira said the file is larger than its attachment limit.")
+
+    answer = services.answer_team(anna, request, "This one.", files=[checked("leads.png", PNG)])
+
+    answer.refresh_from_db()
+    assert answer.jira_error == ""
+    body = jira.added[0][1]
+    assert "leads.png (Jira didn't take this file; it is in the request)" in body
+    assert "!leads.png" not in body
+    note = request.notes.get()
+    assert note.text.startswith("Couldn't attach leads.png from the answer to FI-2214:")
+    assert note.text.endswith("Attach it in Jira by hand.")
+    assert pm_reasons(requests_for(pm))[request.pk] == "replied"
+
+
+def test_sending_again_skips_the_files_jira_already_has(jira, anna):
+    request = linked(anna)
+    jira.ask("Which screens?")
+    jira.refuses = TrackerUnreachable("Jira did not answer.")
+    answer = services.answer_team(
+        anna, request, "These.", files=[checked("a.png", PNG), checked("b.png", PNG)]
+    )
+    assert len(jira.uploaded) == 2
+    jira.refuses = None
+
+    services.pass_answer_to_jira(answer, sender=anna)
+
+    assert len(jira.uploaded) == 2
+    answer.refresh_from_db()
+    assert answer.jira_error == ""
+    assert "!a.png|thumbnail!\n!b.png|thumbnail!" in jira.added[0][1]
+
+
+def test_the_client_answers_with_a_screenshot_alone(client, jira, anna):
+    request = linked(anna)
+    jira.ask("Which screen?")
+    client.force_login(anna)
+
+    response = client.post(
+        reverse("request_answer", args=[request.pk]),
+        {"answer": "", "attachments": SimpleUploadedFile("leads.png", PNG)},
+    )
+
+    assert response.status_code == 302
+    assert request.messages.get(answers_team=True).attachments.get().name == "leads.png"
+
+
+def test_the_answer_form_has_its_own_files_picker(client, jira, anna):
+    request = linked(anna)
+    jira.ask("Which screen?")
+    client.force_login(anna)
+
+    page = client.get(request.get_absolute_url()).content.decode()
+
+    assert 'id="answer-f-files"' in page
+    assert 'id="f-files"' in page

@@ -22,6 +22,14 @@ def _preview_name(attachment: "Attachment", filename: str) -> str:
     return f"previews/{attachment.id}{Path(filename).suffix}"
 
 
+class JiraCopy(models.TextChoices):
+    """What became of a file of the client's answer to the team in the Jira task."""
+
+    NONE = "", "Not sent yet"
+    UPLOADED = "uploaded", "Uploaded"
+    REFUSED = "refused", "Jira refused it"
+
+
 class PreviewStatus(models.TextChoices):
     """Whether a small picture of the file exists for its tile (PRD: attachments, previews)."""
 
@@ -110,6 +118,13 @@ class Attachment(models.Model):
         help_text="The edit that removed it from the card. The file itself is kept.",
     )
 
+    jira_copy = models.CharField(
+        max_length=10,
+        choices=JiraCopy.choices,
+        blank=True,
+        help_text="For a file of an answer to the team: sending the answer again skips a file "
+        "Jira already has, or one it refused for good (the PM attaches that by hand).",
+    )
     public_token = models.CharField(
         max_length=64,
         unique=True,

@@ -18,13 +18,6 @@ WEBM_VIDEO = WEBM + b"\x86\x85V_VP8"
 WEBM_AUDIO = WEBM + b"\x86\x86A_OPUS"
 
 
-@pytest.fixture(autouse=True)
-def private_folder(settings, tmp_path):
-    """Every test writes files to its own temporary folder, never to uploads/."""
-    settings.MEDIA_ROOT = tmp_path
-    return tmp_path
-
-
 def upload(name: str, content: bytes) -> SimpleUploadedFile:
     return SimpleUploadedFile(name, content)
 
