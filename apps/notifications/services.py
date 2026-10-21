@@ -217,28 +217,30 @@ def _message_news(message: Message) -> News:
 
 
 def _pm_news(request: Request, events: list[StatusEvent], messages: list[Message]) -> list[News]:
-    """What the PM hears about: a new request, and in an open request a client's reply or ask
-    to withdraw. A closed request leaves Needs you, so a client's last word there is not news."""
+    """What the PM hears about: a new request, a client's reply or ask to withdraw. A closed
+    request has left Needs you, so nothing about it is news, even a request created and
+    withdrawn within the same few minutes."""
+    if request.status in CLOSED_STATUSES:
+        return []
     news = [
         _news(NEW_REQUEST, event.created_at, event.actor)
         for event in events
         if not event.from_status
     ]
-    if request.status not in CLOSED_STATUSES:
-        asks = set(
-            WithdrawalRequest.objects.filter(
-                reason__in=[message.pk for message in messages]
-            ).values_list("reason_id", flat=True)
+    asks = set(
+        WithdrawalRequest.objects.filter(
+            reason__in=[message.pk for message in messages]
+        ).values_list("reason_id", flat=True)
+    )
+    news += [
+        _news(
+            WITHDRAW_ASK if message.pk in asks else CLIENT_REPLY,
+            message.created_at,
+            message.author,
         )
-        news += [
-            _news(
-                WITHDRAW_ASK if message.pk in asks else CLIENT_REPLY,
-                message.created_at,
-                message.author,
-            )
-            for message in messages
-            if message.author is not None and message.author.role == Role.CLIENT
-        ]
+        for message in messages
+        if message.author is not None and message.author.role == Role.CLIENT
+    ]
     return sorted(news, key=lambda item: item.at)
 
 

@@ -112,6 +112,15 @@ def test_instant_withdrawal_sends_the_pm_nothing(mark):
     assert to_pm() == []
 
 
+def test_request_created_and_withdrawn_within_minutes_sends_the_pm_nothing(mark):
+    request = new_request(mark)
+    services.withdraw_request(mark, request, "Sent it by mistake")
+
+    settle()
+
+    assert to_pm() == []
+
+
 def test_pm_who_turned_emails_off_gets_none(mark, pm):
     pm.notify = Notify.NONE
     pm.save()
