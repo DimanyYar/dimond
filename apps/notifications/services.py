@@ -21,7 +21,9 @@ from .selectors import update_recipients
 logger = logging.getLogger(__name__)
 
 # Changes to one request this close together go out as one email (PRD: email notifications):
-# a bulk edit in Jira, then the webhook run and the poll, make one email, not three.
+# a bulk edit in Jira, then the webhook run and the poll, make one email, not three. The window
+# opens with the first change and does not restart with later ones, so a request that keeps
+# changing still reaches the client within GROUPING of the first news.
 GROUPING = timedelta(minutes=3)
 
 

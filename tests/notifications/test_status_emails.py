@@ -99,6 +99,15 @@ def test_changes_of_one_request_within_three_minutes_make_one_email(feature, ann
     assert "It’s planned" in html(message)
 
 
+def test_a_change_late_in_the_window_does_not_hold_the_email_back(feature, anna, pm):
+    services.change_status(feature, ClientStatus.PLANNED, pm)
+    StatusEvent.objects.update(created_at=timezone.now() - timedelta(minutes=2))
+    services.change_status(feature, ClientStatus.IN_PROGRESS, None)
+
+    assert send_request_updates(now=timezone.now() + timedelta(minutes=1, seconds=1)) == 1
+    assert mail.outbox[0].subject.endswith("— in progress")
+
+
 def test_each_change_is_emailed_once(feature, anna):
     services.change_status(feature, ClientStatus.IN_PROGRESS, None)
     settle()
