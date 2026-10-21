@@ -251,7 +251,7 @@ def answer_team(client: User, request: Request, text: str) -> Message:
     The answer is saved before Jira is asked, so Jira failing never loses it: the PM sees why
     it did not get there and sends it again."""
     message = _save_answer(client, request, text)
-    pass_answer_to_jira(message)
+    pass_answer_to_jira(message, sender=client)
     return message
 
 
@@ -265,7 +265,7 @@ def _save_answer(client: User, request: Request, text: str) -> Message:
     return message
 
 
-def pass_answer_to_jira(answer: Message) -> Message:
+def pass_answer_to_jira(answer: Message, sender: User) -> Message:
     """Add the client's answer to the request's task, quoting the questions and mentioning who
     asked. Records the comment's id, or why it did not get there."""
     request = answer.request
@@ -278,7 +278,7 @@ def pass_answer_to_jira(answer: Message) -> Message:
     else:
         try:
             answer.jira_comment_id = current_tracker().add_comment(
-                request.jira_key, answer_comment(answer)
+                request.jira_key, answer_comment(answer, sender)
             )
         except TrackerUnreachable as error_from_jira:
             error = (
@@ -305,18 +305,16 @@ def _jira_text(text: str) -> str:
     return CLIENT_TAG_TYPED.sub(r"\\#\1", JIRA_MARKUP.sub(r"\\\1", text))
 
 
-def answer_comment(answer: Message) -> str:
+def answer_comment(answer: Message, sender: User) -> str:
     """The answer in Jira's markup: each question quoted (the #client tag inside a quote is
     never read as a new question), who asked mentioned, then the answer and where it came
     from."""
     request = answer.request
-    questions = questions_answered_by(answer)
+    questions = questions_answered_by(sender, answer)
     lines = [f"{{quote}}{_jira_text(q.text)}{{quote}}" for q in questions]
     logins = dict.fromkeys(q.team_author_login for q in questions if q.team_author_login)
     mentions = " ".join(f"[~{login}]" for login in logins)
-    author = answer.author
-    company = author.company if author is not None else request.company
-    lines.append(f"{mentions} {author} ({company}) answered via dimond:".strip())
+    lines.append(f"{mentions} {answer.author} ({request.company}) answered via dimond:".strip())
     lines.append(_jira_text(answer.text))
     lines.append(f"[{request.key}|{settings.SITE_URL}{request.get_absolute_url()}]")
     return "\n".join(lines)

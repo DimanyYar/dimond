@@ -888,16 +888,19 @@ def open_team_questions(request: Request) -> list[Message]:
     return list(questions)
 
 
-def questions_answered_by(answer: Message) -> list[Message]:
-    """The team questions one answer covers: those asked since the answer before it."""
+def questions_answered_by(user: User, answer: Message) -> list[Message]:
+    """The team questions one answer covers: those asked since the answer before it. Only in a
+    request the person may see; raises Message.DoesNotExist otherwise."""
+    messages = Message.objects.filter(request__in=requests_for(user))
+    answer = messages.get(pk=answer.pk)
     earlier = (
-        Message.objects.filter(
+        messages.filter(
             request=answer.request_id, answers_team=True, created_at__lt=answer.created_at
         )
         .order_by("-created_at")
         .first()
     )
-    questions = Message.objects.filter(request=answer.request_id, created_at__lte=answer.created_at)
+    questions = messages.filter(request=answer.request_id, created_at__lte=answer.created_at)
     questions = questions.exclude(team_comment_id="")
     if earlier is not None:
         questions = questions.filter(created_at__gt=earlier.created_at)

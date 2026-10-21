@@ -11,8 +11,14 @@ from django.utils import timezone
 
 from apps.accounts.models import Company, User
 from apps.requests import services
-from apps.requests.models import ClientStatus, Request, RequestType, WhenNeeded
-from apps.requests.selectors import open_team_questions, pm_reasons, request_page, requests_for
+from apps.requests.models import ClientStatus, Message, Request, RequestType, WhenNeeded
+from apps.requests.selectors import (
+    open_team_questions,
+    pm_reasons,
+    questions_answered_by,
+    request_page,
+    requests_for,
+)
 from apps.tracker.base import (
     Account,
     Comment,
@@ -371,3 +377,15 @@ def test_an_answer_that_got_there_does_not_wait_for_the_pm(jira, anna, pm):
     services.answer_team(anna, request, "Only active ones.")
 
     assert pm_reasons(requests_for(pm))[request.pk] == "replied"
+
+
+def test_only_people_who_may_see_the_request_read_which_questions_an_answer_covers(jira, anna, pm):
+    request = linked(anna)
+    jira.ask("Which sources?")
+    answer = services.answer_team(anna, request, "Only active ones.")
+    other = Company.objects.create(name="Northwind", owner=pm, jira_project="NW")
+    nina = User.objects.create_user("nina@northwind.test", company=other)
+
+    assert [q.text for q in questions_answered_by(pm, answer)] == ["Which sources?"]
+    with pytest.raises(Message.DoesNotExist):
+        questions_answered_by(nina, answer)
