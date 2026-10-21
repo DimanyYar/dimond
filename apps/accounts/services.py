@@ -1,18 +1,19 @@
 import hashlib
 import logging
 import secrets
-import smtplib
 from collections.abc import Iterable
 from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.sessions.models import Session
-from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
+
+from apps.notifications.models import EmailKind
+from apps.notifications.services import send_email
 
 from .models import Company, Device, LinkKind, Notify, Role, SignInLink, User
 
@@ -23,8 +24,12 @@ LIFETIME = {LinkKind.SIGN_IN: timedelta(minutes=15), LinkKind.INVITE: timedelta(
 MAX_SIGN_IN_LINKS_PER_LIFETIME = 3
 
 EMAIL = {
-    LinkKind.SIGN_IN: ("Your dimon.d sign-in link", "accounts/email/sign_in_link.txt"),
-    LinkKind.INVITE: ("You're invited to dimon.d", "accounts/email/invite.txt"),
+    LinkKind.SIGN_IN: (
+        EmailKind.SIGN_IN_LINK,
+        "Your dimon.d sign-in link",
+        "accounts/email/sign_in_link.txt",
+    ),
+    LinkKind.INVITE: (EmailKind.INVITE, "You're invited to dimon.d", "accounts/email/invite.txt"),
 }
 
 
@@ -143,27 +148,19 @@ def _send_one(link_id: int) -> bool:
             return False
 
         token = secrets.token_urlsafe(32)
+        kind, subject, template = EMAIL[LinkKind(link.kind)]
+        url = settings.SITE_URL + reverse("sign_in_link", args=[token])
+        context = {"user": link.user, "url": url, "invited_by": link.invited_by}
+        # The link is marked sent only after the mail server took it: a failed attempt
+        # leaves it queued, and the next round tries again with a fresh token.
+        if not send_email(link.user, kind, subject, render_to_string(template, context)):
+            return False
+
         now = timezone.now()
         link.token_hash = hash_token(token)
         link.sent_at = now
         link.expires_at = now + LIFETIME[LinkKind(link.kind)]
         link.save(update_fields=["token_hash", "sent_at", "expires_at"])
-
-        subject, template = EMAIL[LinkKind(link.kind)]
-        url = settings.SITE_URL + reverse("sign_in_link", args=[token])
-        context = {"user": link.user, "url": url, "invited_by": link.invited_by}
-        try:
-            send_mail(
-                subject=subject,
-                message=render_to_string(template, context),
-                from_email=None,
-                recipient_list=[link.user.email],
-            )
-        except (smtplib.SMTPException, OSError):
-            # Undo the "sent" mark so the next run tries this link again.
-            logger.exception("Email to user %s failed; will retry", link.user.pk)
-            transaction.set_rollback(True)
-            return False
     return True
 
 

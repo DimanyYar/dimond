@@ -181,7 +181,7 @@ def test_failed_email_is_retried_on_the_next_round(client, anna, monkeypatch):
     def mail_server_down(*args, **kwargs):
         raise ConnectionRefusedError
 
-    monkeypatch.setattr("apps.accounts.services.send_mail", mail_server_down)
+    monkeypatch.setattr("apps.notifications.services.EmailMessage.send", mail_server_down)
     assert send_queued_links() == 0
     monkeypatch.undo()
 
