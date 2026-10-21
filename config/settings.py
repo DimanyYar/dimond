@@ -107,6 +107,10 @@ DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "Dimon <dimon@localhost>")
 # (ADR 0009). Switching providers is this setting, not code.
 RESEND_API_KEY = env("RESEND_API_KEY", "")
 if RESEND_API_KEY:
+    # Resend refuses any sender outside a verified domain, so the local default would make
+    # every email fail quietly; stop at start-up instead.
+    if DEFAULT_FROM_EMAIL.rstrip(">").endswith("@localhost"):
+        raise RuntimeError("Set DEFAULT_FROM_EMAIL to an address on the domain verified in Resend")
     EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
     ANYMAIL = {"RESEND_API_KEY": RESEND_API_KEY}
 
