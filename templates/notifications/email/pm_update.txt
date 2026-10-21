@@ -1,0 +1,16 @@
+{% autoescape off %}{{ headline }}
+
+{{ request.key }} · {{ request.title }}
+{{ company.name }} · {{ meta }}
+
+{{ body }}
+{% if also %}
+Also in the last few minutes:
+{% for line in also %}- {{ line }}
+{% endfor %}{% endif %}
+Open in dimon.d: {{ url }}
+
+—
+You get this as the PM of {{ company.name }}: new requests, client replies and requests to withdraw. To turn these emails off, open your account settings: {{ account_url }}
+Replies to this email don’t reach anyone.
+{% endautoescape %}

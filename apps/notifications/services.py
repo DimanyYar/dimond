@@ -13,10 +13,17 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import Notify, Role, User
-from apps.requests.models import ClientStatus, Message, Request, StatusEvent
+from apps.requests.models import (
+    CLOSED_STATUSES,
+    ClientStatus,
+    Message,
+    Request,
+    StatusEvent,
+    WithdrawalRequest,
+)
 
 from .models import Email, EmailKind, EmailStatus
-from .selectors import update_recipients
+from .selectors import pm_recipient, update_recipients
 
 logger = logging.getLogger(__name__)
 
@@ -145,10 +152,25 @@ CLIENT_MESSAGE = StatusNews(
 )
 
 
+# What the PM hears about (PRD: email notifications): the same things Needs you shows.
+NEW_REQUEST = StatusNews(
+    "New request from {who}", "It waits in Needs you until you triage it.", "new request"
+)
+CLIENT_REPLY = StatusNews(
+    "{who} replied", "The request is back in Needs you with “Client replied”.", "{who} replied"
+)
+WITHDRAW_ASK = StatusNews(
+    "{who} asks to withdraw",
+    "The team may have started on it. Decide in the request: Withdraw it or Keep it going.",
+    "asks to withdraw",
+)
+
+
 @dataclass(frozen=True)
 class News:
     """One thing that happened to a request, as a line of an email."""
 
+    kind: StatusNews
     at: datetime
     actor_id: int | None
     headline: str
@@ -163,6 +185,7 @@ def _who(person: User | None) -> str:
 def _news(kind: StatusNews, at: datetime, actor: User | None) -> News:
     who = _who(actor)
     return News(
+        kind=kind,
         at=at,
         actor_id=actor.pk if actor else None,
         headline=kind.headline.format(who=who),
@@ -193,8 +216,36 @@ def _message_news(message: Message) -> News:
     return _news(kind, message.created_at, message.author)
 
 
+def _pm_news(request: Request, events: list[StatusEvent], messages: list[Message]) -> list[News]:
+    """What the PM hears about: a new request, a client's reply or ask to withdraw. A closed
+    request has left Needs you, so nothing about it is news, even a request created and
+    withdrawn within the same few minutes."""
+    if request.status in CLOSED_STATUSES:
+        return []
+    news = [
+        _news(NEW_REQUEST, event.created_at, event.actor)
+        for event in events
+        if not event.from_status
+    ]
+    asks = set(
+        WithdrawalRequest.objects.filter(
+            reason__in=[message.pk for message in messages]
+        ).values_list("reason_id", flat=True)
+    )
+    news += [
+        _news(
+            WITHDRAW_ASK if message.pk in asks else CLIENT_REPLY,
+            message.created_at,
+            message.author,
+        )
+        for message in messages
+        if message.author is not None and message.author.role == Role.CLIENT
+    ]
+    return sorted(news, key=lambda item: item.at)
+
+
 def send_request_updates(now: datetime | None = None) -> int:
-    """Email clients about what happened to their requests once it has settled for
+    """Email clients and their PM about what happened to requests once it has settled for
     GROUPING: status changes and new messages. Returns how many emails went out."""
     settled = (now or timezone.now()) - GROUPING
     first_news: dict[int, datetime] = {}
@@ -218,22 +269,28 @@ def _send_updates_for(request_id: int) -> int:
             StatusEvent.objects.select_for_update(skip_locked=True, of=("self",))
             .filter(request_id=request_id, emailed=False)
             .select_related("actor")
+            .order_by("created_at", "pk")
         )
         messages = list(
             Message.objects.select_for_update(skip_locked=True, of=("self",))
             .filter(request_id=request_id, emailed=False)
             .select_related("author")
+            .order_by("created_at", "pk")
         )
         if not events and not messages:
             return 0
+        request = Request.objects.select_related("company__owner").get(pk=request_id)
         found = [_status_news(event) for event in events] + [_message_news(m) for m in messages]
         news = sorted((item for item in found if item is not None), key=lambda item: item.at)
-        request = Request.objects.select_related("company").get(pk=request_id)
         attempts = [
             _send_update(person, request, theirs)
             for person in (update_recipients(request) if news else [])
             if (theirs := [item for item in news if item.actor_id != person.pk])
         ]
+        pm = pm_recipient(request)
+        pm_news = _pm_news(request, events, messages) if pm else []
+        if pm and pm_news:
+            attempts.append(_send_pm_update(pm, request, pm_news))
         if attempts and not any(attempts):
             # The mail server took none of them: try the whole batch again next round.
             return 0
@@ -242,28 +299,49 @@ def _send_updates_for(request_id: int) -> int:
     return sum(attempts)
 
 
-def _send_update(person: User, request: Request, news: list[News]) -> bool:
-    """One email about the latest news a person did not make themselves, with the earlier
-    news of the same few minutes under it."""
+def _context(request: Request, news: list[News]) -> dict[str, object]:
     latest = news[-1]
-    status = ClientStatus(request.status)
-    subject = f"{request.key} · {request.title} — {latest.subject}"
-    context = {
+    return {
         "request": request,
         "company": request.company,
-        "status_label": status.label,
-        "pill": PILLS.get(status, PLAIN_PILL),
         "headline": latest.headline,
         "body": latest.body,
         "also": [item.headline for item in news[:-1]],
         "url": settings.SITE_URL + request.get_absolute_url(),
         "account_url": settings.SITE_URL + reverse("account"),
+    }
+
+
+def _send_update(person: User, request: Request, news: list[News]) -> bool:
+    """One email about the latest news a person did not make themselves, with the earlier
+    news of the same few minutes under it."""
+    status = ClientStatus(request.status)
+    context = _context(request, news) | {
+        "status_label": status.label,
+        "pill": PILLS.get(status, PLAIN_PILL),
         "for_team": person.notify == Notify.COMPANY,
     }
     return send_email(
         person,
         EmailKind.REQUEST_UPDATE,
-        subject,
+        f"{request.key} · {request.title} — {news[-1].subject}",
         render_to_string("notifications/email/request_update.txt", context),
         render_to_string("notifications/email/request_update.html", context),
+    )
+
+
+def _send_pm_update(pm: User, request: Request, news: list[News]) -> bool:
+    """The PM's email about their client's request (mockup 5.7 · Email to the PM)."""
+    status = ClientStatus(request.status)
+    if news[-1].kind is NEW_REQUEST:
+        meta = f"{request.get_type_display()} · asked for: {request.get_when_needed_display()}"
+    else:
+        meta = status.label + (f" · {request.jira_key}" if request.jira_key else "")
+    context = _context(request, news) | {"meta": meta}
+    return send_email(
+        pm,
+        EmailKind.PM_UPDATE,
+        f"{request.company.name} · {request.key} · {request.title} — {news[-1].subject}",
+        render_to_string("notifications/email/pm_update.txt", context),
+        render_to_string("notifications/email/pm_update.html", context),
     )

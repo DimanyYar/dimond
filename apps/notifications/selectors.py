@@ -20,3 +20,12 @@ def update_recipients(request: Request) -> list[User]:
         for person in people.order_by("pk")
         if person.notify == Notify.COMPANY or person.pk == request.author_id
     ]
+
+
+def pm_recipient(request: Request) -> User | None:
+    """The PM who owns the request's client (ADR 0014), unless they turned these emails off
+    on their account page."""
+    pm = request.company.owner
+    if not pm.is_active or pm.notify == Notify.NONE:
+        return None
+    return pm

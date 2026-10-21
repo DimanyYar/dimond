@@ -1,7 +1,7 @@
 import pytest
 from django.test import Client
 
-from apps.accounts.models import Company, Device, Notify, SignInLink, User
+from apps.accounts.models import Company, Device, Notify, Role, SignInLink, User
 
 pytestmark = pytest.mark.django_db
 
@@ -54,8 +54,9 @@ def test_client_menu_leads_to_the_account(client, anna):
     assert 'href="/account/"' in page
 
 
-def test_pm_has_no_client_account_page(client, pm):
-    client.force_login(pm)
+def test_team_member_has_no_account_page(client):
+    olga = User.objects.create_user("olga@shakuro.com", role=Role.TEAM)
+    client.force_login(olga)
 
     assert client.get("/account/").status_code == 404
 

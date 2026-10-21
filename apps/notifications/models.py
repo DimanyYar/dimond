@@ -7,6 +7,7 @@ class EmailKind(models.TextChoices):
     SIGN_IN_LINK = "sign_in_link", "Sign-in link"
     INVITE = "invite", "Invite"
     REQUEST_UPDATE = "request_update", "Request update"
+    PM_UPDATE = "pm_update", "To the PM"
 
 
 class EmailStatus(models.TextChoices):
