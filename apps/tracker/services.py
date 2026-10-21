@@ -4,6 +4,7 @@ ADR 0010, 0019)."""
 import re
 from datetime import datetime, timedelta
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
@@ -198,6 +199,7 @@ def sync_tasks(queued: SyncRun | None = None) -> SyncRun:
         run.outcome, run.started_at = SyncOutcome.RUNNING, timezone.now()
         run.save(update_fields=["outcome", "started_at"])
     linked = list(followed_requests())
+    webhooks_trusted = _webhooks_trusted(run)
     if _login_known_wrong():
         return _finish(run, SyncOutcome.FAILED, error=STILL_PAUSED)
     try:
@@ -207,8 +209,7 @@ def sync_tasks(queued: SyncRun | None = None) -> SyncRun:
             tracker.account()
         issues = tracker.issues([request.jira_key for request in linked])
         by_key = {issue.key: issue for issue in issues}
-        for request in linked:
-            _sync_one(run, tracker, request, by_key.get(request.jira_key))
+        changed = [r for r in linked if _sync_one(run, tracker, r, by_key.get(r.jira_key))]
     except TrackerSignInFailed as error:
         _pause(str(error), captcha=isinstance(error, TrackerCaptcha))
         return _finish(run, SyncOutcome.FAILED, error=str(error))
@@ -216,25 +217,30 @@ def sync_tasks(queued: SyncRun | None = None) -> SyncRun:
         silent = isinstance(error, TrackerUnreachable)
         return _finish(run, SyncOutcome.FAILED, error=str(error), jira_silent=silent)
     _resume()
+    if webhooks_trusted:
+        _flag_missed_webhooks(run, changed)
     problems = run.events.filter(needs_attention=True).exists()
     outcome = SyncOutcome.PROBLEMS if problems else SyncOutcome.SUCCEEDED
     return _finish(run, outcome, checked=len(issues))
 
 
-def _sync_one(run: SyncRun, tracker: Tracker, request: Request, issue: Issue | None) -> None:
+def _sync_one(run: SyncRun, tracker: Tracker, request: Request, issue: Issue | None) -> bool:
+    """Brings one task's news to its request. True: the team changed the task's status or asked
+    the client something, the news a Jira webhook announces (ADR 0020)."""
+    moved = False
     if issue is None:
         if request.status in CLOSED_STATUSES:
             # The request is over: a task gone from Jira afterwards changes nothing.
-            return
+            return False
         lost, found = _find_lost(tracker, request)
         if lost is not None:
             _log_lost(run, lost)
             if lost.needs_attention:
-                return
+                return False
             # Moved within the client's project: follow the task under its new key.
-            request = lost.request
+            request, moved = lost.request, True
         if found is None:
-            return
+            return False
         issue = found
     followed = follow_task(request, issue.status)
     if followed is not None:
@@ -242,12 +248,62 @@ def _sync_one(run: SyncRun, tracker: Tracker, request: Request, issue: Issue | N
     planned = follow_releases(request, issue.releases)
     if planned is not None:
         _log_releases(run, planned)
-    _follow_questions(run, tracker, request, issue)
+    asked = _follow_questions(run, tracker, request, issue)
+    # The first status of a newly linked task is no news from Jira; a move, a deletion or a
+    # release date may well reach dimond without a webhook, so they never count as missed.
+    status_moved = followed is not None and followed.jira_from not in ("", followed.jira_to)
+    return not moved and (status_moved or asked)
 
 
-def _follow_questions(run: SyncRun, tracker: Tracker, request: Request, issue: Issue) -> None:
+def _webhooks_trusted(run: SyncRun) -> bool:
+    """Whether this run may blame the webhook for news it finds. Only with the webhook on and
+    Jira chosen, and only after a run that succeeded: a failed or paused run before it may
+    have used up the webhook calls without reading Jira."""
+    if not settings.TRACKER_JIRA_WEBHOOK_TOKEN:
+        return False
+    if TrackerSettings.load().tracker != TrackerKind.JIRA:
+        return False
+    finished = (SyncOutcome.SUCCEEDED, SyncOutcome.PROBLEMS, SyncOutcome.FAILED)
+    previous = (
+        SyncRun.objects.filter(outcome__in=finished)
+        .exclude(pk=run.pk)
+        .order_by("-started_at", "-pk")
+        .first()
+    )
+    return previous is not None and previous.outcome != SyncOutcome.FAILED
+
+
+@transaction.atomic
+def _flag_missed_webhooks(run: SyncRun, changed: list[Request]) -> None:
+    """News no webhook announced: the webhook in Jira is off, its JQL filter leaves the project
+    out, or dimond was down when Jira called. The client got it up to 15 minutes late, and the
+    PM learns it from the log rather than from a client (PRD: Jira sync; ADR 0020)."""
+    # Taken like a webhook takes it: one arriving right now either is in a run below or waits.
+    _lock_queue()
+    run.refresh_from_db(fields=["webhook_keys"])
+    announced = set(run.webhook_keys)
+    # A webhook that came while this run read Jira woke the next run instead: not missed.
+    for waiting in SyncRun.objects.filter(outcome=SyncOutcome.QUEUED):
+        announced.update(waiting.webhook_keys)
+    for request in changed:
+        if request.jira_key in announced:
+            continue
+        project = request.jira_key.split("-")[0]
+        SyncEvent.objects.create(
+            run=run,
+            request=request,
+            task_key=request.jira_key,
+            what="Webhook missed this change",
+            effect=f"Jira did not call dimond about {request.jira_key}, so the client saw it up "
+            f"to 15 minutes late. Is the webhook in Jira on, and does its JQL include {project}?",
+            needs_attention=True,
+        )
+
+
+def _follow_questions(run: SyncRun, tracker: Tracker, request: Request, issue: Issue) -> bool:
     """Comments tagged #client become questions in the request's thread, once each; an edit
-    in Jira rewords the question (PRD: Jira sync, team questions)."""
+    in Jira rewords the question (PRD: Jira sync, team questions). True: any was new or
+    edited."""
     known = dict(
         Message.objects.filter(request=request)
         .exclude(team_comment_id="")
@@ -261,15 +317,19 @@ def _follow_questions(run: SyncRun, tracker: Tracker, request: Request, issue: I
         .exclude(request=request)
         .values_list("team_comment_id", flat=True)
     )
+    news = False
     for comment in asked:
         if comment.id in elsewhere:
             continue
         if comment.id in known:
             if known[comment.id] != comment.updated:
                 _log_question(run, edit_team_question(request, comment))
+                news = True
             continue
         files, not_shown = _question_files(tracker, comment)
         _log_question(run, add_team_question(request, comment, files, not_shown))
+        news = True
+    return news
 
 
 def _question_files(tracker: Tracker, comment: Comment) -> tuple[list[CheckedFile], list[str]]:
