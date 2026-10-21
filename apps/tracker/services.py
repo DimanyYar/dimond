@@ -14,6 +14,7 @@ from django.utils import timezone
 from apps.accounts.models import User
 from apps.accounts.selectors import has_clients_page
 from apps.files.uploads import MAX_VIDEO_SIZE, CheckedFile, check_upload
+from apps.notifications.selectors import update_recipients
 from apps.requests.models import CLOSED_STATUSES, ClientStatus, Message, Request
 from apps.requests.services import (
     QuestionFollowed,
@@ -441,9 +442,21 @@ def _log(run: SyncRun, followed: TaskFollowed) -> None:
         request=followed.request,
         task_key=followed.request.jira_key,
         what=what,
-        effect=followed.effect,
+        effect=_fit(followed.effect + _who_gets_an_email(followed), 300),
         needs_attention=followed.unmapped,
     )
+
+
+def _who_gets_an_email(followed: TaskFollowed) -> str:
+    """ " Anna K. and Mark T. will get an email." after a status change, so the PM sees who
+    hears about it. The email itself leaves a few minutes later (PRD: email notifications)."""
+    if followed.status_from == followed.status_to:
+        return ""
+    names = [person.name or person.email for person in update_recipients(followed.request)]
+    if not names:
+        return ""
+    listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    return f" {listed} will get an email."
 
 
 def _finish(

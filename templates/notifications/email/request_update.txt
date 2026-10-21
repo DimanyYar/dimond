@@ -1,0 +1,16 @@
+{% autoescape off %}{{ headline }}
+
+{{ request.key }} · {{ request.title }}
+{{ company.name }} · {{ status_label }}
+
+{{ body }}
+{% if also %}
+Also in the last few minutes:
+{% for line in also %}- {{ line }}
+{% endfor %}{% endif %}
+Open the request: {{ url }}
+
+—
+{% if for_team %}You get these emails for every request from {{ company.name }}.{% else %}You get these emails for requests you created.{% endif %} To change that or turn emails off, open your account settings: {{ account_url }}
+Replies to this email don’t reach anyone. Write in the request instead.
+{% endautoescape %}

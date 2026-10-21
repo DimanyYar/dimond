@@ -85,6 +85,21 @@ def linked(
     return request
 
 
+def test_sync_log_names_who_will_get_an_email(jira, anna, pm):
+    mark = User.objects.create_user(
+        "mark@atlas.test", company=anna.company, name="Mark T.", notify="company"
+    )
+    User.objects.filter(pk__in=[anna.pk, mark.pk]).update(last_login=timezone.now())
+    request = linked(anna, "FI-2214")
+    jira.statuses["FI-2214"] = "Code review"
+
+    run = sync_tasks()
+
+    assert run.events.get(request=request).effect == (
+        "Client status: Planned → In progress. Anna K. and Mark T. will get an email."
+    )
+
+
 def status_of(request: Request) -> ClientStatus:
     request.refresh_from_db()
     return ClientStatus(request.status)

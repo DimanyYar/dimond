@@ -228,6 +228,10 @@ class StatusEvent(models.Model):
         related_name="+",
         help_text="Empty when the Jira sync changed the status.",
     )
+    emailed = models.BooleanField(
+        default=False,
+        help_text="The worker has taken it into a notification email, or decided none is due.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
