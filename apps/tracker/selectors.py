@@ -21,6 +21,8 @@ from .models import SyncEvent, SyncOutcome, SyncRun, TrackerKind, TrackerSetting
 from .services import STUCK_AFTER
 
 RUNS_SHOWN = 50
+# Tasks named in a webhook run's subtitle; a bulk edit names the first ones and counts the rest.
+KEYS_NAMED = 2
 DONE_RUNS = (SyncOutcome.SUCCEEDED, SyncOutcome.PROBLEMS, SyncOutcome.FAILED)
 
 
@@ -36,6 +38,15 @@ class LoggedRun:
     events: list[SyncEvent]
     # The newest run that changed something opens by itself: that is what the PM came for.
     open: bool = False
+    # The tasks of this PM's clients whose webhook woke the run; other PMs' stay unnamed.
+    webhook_keys: tuple[str, ...] = ()
+
+    @property
+    def trigger(self) -> str:
+        """What started the run, as the page says it: manual, webhook or auto."""
+        if self.run.manual:
+            return "manual"
+        return "webhook" if self.run.webhook_keys else "auto"
 
     @property
     def problems(self) -> int:
@@ -70,7 +81,16 @@ class LoggedRun:
             return self.run.error
         if self.problems:
             return "Sync finished, problems need you"
+        if self.trigger == "webhook":
+            return f"{self._webhook_for()}, then a full check"
         return f"{self.run.checked} linked task{'s' if self.run.checked != 1 else ''} checked"
+
+    def _webhook_for(self) -> str:
+        if not self.webhook_keys:
+            return "webhook"
+        named = ", ".join(self.webhook_keys[:KEYS_NAMED])
+        more = len(self.webhook_keys) - KEYS_NAMED
+        return f"webhook for {named} and {more} more" if more > 0 else f"webhook for {named}"
 
     @property
     def seconds(self) -> float:
@@ -141,8 +161,22 @@ def logs_page(pm: User, show: RunFilter) -> LogsPage:
         )[:RUNS_SHOWN]
     ]
     first_with_events = next((item for item in listed if item.events), None)
+    own_keys = set(
+        Request.objects.filter(
+            company__owner=pm,
+            jira_key__in=[key for item in listed for key in item.run.webhook_keys],
+        ).values_list("jira_key", flat=True)
+    )
     return LogsPage(
-        runs=[LoggedRun(item.run, item.events, open=item is first_with_events) for item in listed],
+        runs=[
+            LoggedRun(
+                item.run,
+                item.events,
+                open=item is first_with_events,
+                webhook_keys=tuple(key for key in item.run.webhook_keys if key in own_keys),
+            )
+            for item in listed
+        ],
         problem_runs=_runs(pm, RunFilter.PROBLEMS).count(),
         attention=needs_attention(pm),
         mapping=list(JIRA_STATUSES.items()),
@@ -150,8 +184,11 @@ def logs_page(pm: User, show: RunFilter) -> LogsPage:
 
 
 def _runs(pm: User, show: RunFilter) -> QuerySet[SyncRun]:
-    """Finished runs, newest first, that the filter keeps for this PM."""
-    runs = SyncRun.objects.filter(outcome__in=DONE_RUNS)
+    """Finished runs, newest first, that the filter keeps for this PM. A webhook run that found
+    nothing is left out: Jira calls on every edit of a task, and those runs say nothing new."""
+    runs = SyncRun.objects.filter(outcome__in=DONE_RUNS).exclude(
+        Q(manual=False, outcome=SyncOutcome.SUCCEEDED, events__isnull=True) & ~Q(webhook_keys=[])
+    )
     if show == RunFilter.CHANGES:
         return runs.filter(events__in=_own_events(pm)).distinct()
     if show == RunFilter.PROBLEMS:

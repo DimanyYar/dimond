@@ -2,20 +2,20 @@
 source of truth (PRD: Jira sync; ADR 0010, 0020). Nothing here reaches Jira: a fake tracker
 answers the runs."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from django.core.management import call_command
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.accounts.models import Company, User
+from apps.accounts.models import Company, Role, User
 from apps.requests import services
 from apps.requests.models import ClientStatus, Request, RequestType, WhenNeeded
-from apps.tracker.base import Issue
+from apps.tracker.base import Comment, Issue, TrackerUnreachable
 from apps.tracker.connection import login_fingerprint
-from apps.tracker.models import SyncOutcome, SyncRun, TrackerKind, TrackerSettings
-from apps.tracker.services import ask_for_sync
+from apps.tracker.models import SyncEvent, SyncOutcome, SyncRun, TrackerKind, TrackerSettings
+from apps.tracker.services import ask_for_sync, sync_tasks
 
 pytestmark = pytest.mark.django_db
 
@@ -25,10 +25,24 @@ TOKEN = "s3cret-token-from-env"
 class FakeJira:
     def __init__(self) -> None:
         self.statuses: dict[str, str] = {}
+        self.comments: dict[str, tuple[Comment, ...]] = {}
+        self.fails: Exception | None = None
 
     def issues(self, keys: list[str]) -> list[Issue]:
+        if self.fails:
+            raise self.fails
         return [
-            Issue(key, "", self.statuses[key], "Story", "FI", False, "")
+            Issue(
+                key,
+                "",
+                self.statuses[key],
+                "Story",
+                "FI",
+                False,
+                "",
+                (),
+                self.comments.get(key, ()),
+            )
             for key in keys
             if key in self.statuses
         ]
@@ -49,11 +63,15 @@ def anna(pm) -> User:
     return User.objects.create_user("anna@atlas.test", company=atlas, name="Anna K.")
 
 
-def linked(author: User, key: str, status: ClientStatus = ClientStatus.PLANNED) -> Request:
+def linked(
+    author: User, key: str, status: ClientStatus = ClientStatus.PLANNED, jira_status: str = "To Do"
+) -> Request:
     request = services.create_request(
         author, RequestType.IMPROVEMENT, f"Request {key}", "Context", WhenNeeded.NEXT_RELEASE
     )
-    Request.objects.filter(pk=request.pk).update(jira_key=key, jira_status="To Do", status=status)
+    Request.objects.filter(pk=request.pk).update(
+        jira_key=key, jira_status=jira_status, status=status
+    )
     return request
 
 
@@ -205,3 +223,166 @@ def test_with_the_demo_tracker_a_webhook_starts_no_run(client, jira, anna):
     webhook(client)
 
     assert not SyncRun.objects.exists()
+
+
+# Logs: how a webhook run reads (mockup PMSyncLog: "webhook for FI-2214, then a full check").
+
+
+def logs(client, pm: User) -> str:
+    client.force_login(pm)
+    return client.get(reverse("logs")).content.decode()
+
+
+def test_a_webhook_run_says_which_task_woke_it(client, jira, anna, pm):
+    linked(anna, "FI-2214")
+    jira.statuses["FI-2214"] = "Code review"
+
+    webhook(client)
+    call_command("sync_tracker")
+
+    page = logs(client, pm)
+    assert "webhook for FI-2214, then a full check" in page
+    assert "webhook ·" in page
+
+
+def test_a_bulk_edit_names_two_tasks_and_counts_the_rest(client, jira, anna, pm):
+    for key in ("FI-2214", "FI-2215", "FI-2216", "FI-2217"):
+        linked(anna, key)
+        jira.statuses[key] = "Code review"
+        webhook(client, key)
+
+    call_command("sync_tracker")
+
+    assert "webhook for FI-2214, FI-2215 and 2 more, then a full check" in logs(client, pm)
+
+
+def test_a_webhook_run_that_changed_nothing_is_not_listed(client, jira, anna, pm):
+    linked(anna, "FI-2214")
+    jira.statuses["FI-2214"] = "To Do"
+
+    webhook(client)
+    call_command("sync_tracker")
+
+    page = logs(client, pm)
+    assert SyncRun.objects.get().outcome == SyncOutcome.SUCCEEDED
+    assert "webhook" not in page
+    assert "No runs yet" in page
+    assert "Jira synced" in page
+
+
+def test_a_run_the_pm_asked_for_says_manual_even_if_a_webhook_joined_it(client, jira, anna, pm):
+    linked(anna, "FI-2214")
+    jira.statuses["FI-2214"] = "To Do"
+    webhook(client)
+    ask_for_sync(pm)
+
+    call_command("sync_tracker")
+
+    page = logs(client, pm)
+    assert "manual ·" in page
+    assert "webhook ·" not in page
+
+
+def test_another_pms_tasks_are_not_named_in_a_webhook_run(client, jira, anna, pm):
+    olga = User.objects.create_user("olga@shakuro.com", name="Olga", role=Role.PM)
+    northwind = Company.objects.create(name="Northwind", owner=olga, jira_project="NW")
+    bob = User.objects.create_user("bob@northwind.test", company=northwind, name="Bob")
+    linked(anna, "FI-2214")
+    linked(bob, "NW-88")
+    jira.statuses.update({"FI-2214": "Code review", "NW-88": "Code review"})
+
+    webhook(client, "NW-88")
+    call_command("sync_tracker")
+
+    page = logs(client, pm)
+    assert "NW-88" not in page
+    assert "webhook, then a full check" in page
+
+
+# Webhook missed: a change the webhook should have brought arrives with the poll (ADR 0020).
+
+
+@pytest.fixture
+def synced_once(jira, anna) -> Request:
+    """FI-2214 is linked and the last run succeeded, as on any ordinary day."""
+    request = linked(anna, "FI-2214")
+    jira.statuses["FI-2214"] = "To Do"
+    sync_tasks()
+    return request
+
+
+def missed() -> list[SyncEvent]:
+    return list(SyncEvent.objects.filter(what="Webhook missed this change"))
+
+
+def test_a_status_change_no_webhook_announced_needs_attention(jira, synced_once, client, pm):
+    jira.statuses["FI-2214"] = "Code review"
+
+    run = sync_tasks()
+
+    [event] = missed()
+    assert event.task_key == "FI-2214"
+    assert event.needs_attention
+    assert "does its JQL include FI?" in event.effect
+    assert run.outcome == SyncOutcome.PROBLEMS
+    synced_once.refresh_from_db()
+    assert synced_once.status == ClientStatus.IN_PROGRESS
+    assert "Webhook missed this change" in logs(client, pm)
+
+
+def test_a_team_question_no_webhook_announced_needs_attention(jira, synced_once):
+    at = datetime(2026, 10, 21, 9, 0, tzinfo=UTC)
+    jira.comments["FI-2214"] = (
+        Comment("10501", "olga", "Olga", "#client Which lead sources?", at, at, (), (), True),
+    )
+
+    sync_tasks()
+
+    assert [event.task_key for event in missed()] == ["FI-2214"]
+
+
+def test_a_change_the_webhook_announced_is_not_flagged(client, jira, synced_once):
+    jira.statuses["FI-2214"] = "Code review"
+
+    webhook(client)
+    call_command("sync_tracker")
+
+    assert missed() == []
+
+
+def test_a_webhook_that_arrives_while_the_run_reads_jira_is_not_missed(jira, synced_once):
+    jira.statuses["FI-2214"] = "Code review"
+    SyncRun.objects.create(outcome=SyncOutcome.QUEUED, webhook_keys=["FI-2214"])
+
+    sync_tasks()
+
+    assert missed() == []
+
+
+def test_without_the_webhook_on_nothing_is_flagged(jira, synced_once, settings):
+    settings.TRACKER_JIRA_WEBHOOK_TOKEN = ""
+    jira.statuses["FI-2214"] = "Code review"
+
+    sync_tasks()
+
+    assert missed() == []
+
+
+def test_after_a_failed_run_news_is_not_blamed_on_the_webhook(jira, synced_once):
+    jira.fails = TrackerUnreachable("Jira did not answer in 30 seconds.")
+    sync_tasks()
+    jira.fails = None
+    jira.statuses["FI-2214"] = "Code review"
+
+    sync_tasks()
+
+    assert missed() == []
+
+
+def test_the_first_status_of_a_newly_linked_task_is_not_flagged(jira, synced_once, anna):
+    linked(anna, "FI-2230", jira_status="")
+    jira.statuses["FI-2230"] = "To Do"
+
+    sync_tasks()
+
+    assert missed() == []

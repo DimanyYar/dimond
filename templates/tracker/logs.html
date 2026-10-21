@@ -69,7 +69,7 @@ the right; on a phone they stack.
                     <span class="run-title">{{ item.title }}</span>
                     <span class="run-sub muted">{{ item.subtitle }}</span>
                   </span>
-                  <span class="run-meta muted">{% if item.run.manual %}manual{% else %}auto{% endif %} · {{ item.seconds|floatformat:1 }} s</span>
+                  <span class="run-meta muted">{{ item.trigger }} · {{ item.seconds|floatformat:1 }} s</span>
                   {% if item.events %}<svg class="run-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>{% endif %}
                 </summary>
                 {% if item.events %}

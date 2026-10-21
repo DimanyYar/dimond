@@ -34,6 +34,15 @@ One webhook serves the whole Jira, which already sends dozens to other tools on 
   be filtered and would arrive for every release in Jira; release dates keep arriving with the
   15-minute poll.
 - Polling stays the source of truth (ADR 0010, 0019) and catches anything a webhook missed.
+- The Logs page names the tasks that woke a run ("webhook for FI-2214, then a full check");
+  a webhook run that found nothing is not listed, since Jira calls on every edit. It still
+  counts as the last sync.
+- A run that brings a status change or a team question no webhook announced logs "Webhook
+  missed this change" as a problem (added Oct 21, 2026): the webhook in Jira is off, its JQL
+  filter leaves the project out, or dimond was down when Jira called. A first status of a newly
+  linked task, a moved or deleted task and release dates never count. Nothing is blamed while
+  the webhook token is empty, with the demo tracker, or right after a failed run, which may
+  have used up the webhook calls without reading Jira.
 
 ## Consequences
 
@@ -42,6 +51,6 @@ One webhook serves the whole Jira, which already sends dozens to other tools on 
 − The token sits in the webhook address, which every Jira administrator can read, and in web
   server access logs unless the production proxy drops that path (#21).
 − A new client project needs adding to the webhook's JQL filter in Jira by hand; until then its
-  tasks still arrive with the poll.
+  tasks still arrive with the poll, and the log flags each change as missed.
 − Webhooks only work once dimond has a public address (#21); on a laptop they are tried by hand
   with curl.

@@ -50,7 +50,9 @@ curl -i -X POST "http://localhost:8000/jira/webhook/<your token>/?key=FI-2214"
 ```
 
 answers `204` and the Logs page shows the run a few seconds later. A key no open request is
-linked to, or a sync paused for a wrong Jira password, answers `204` and runs nothing.
+linked to, or a sync paused for a wrong Jira password, answers `204` and runs nothing. With the
+token set, a change the poll finds that no webhook announced is logged as "Webhook missed this
+change": on a laptop that is every change you did not curl, so clear the token after trying.
 
 Stop with `Ctrl+C`; `docker compose down` removes the containers (data stays in a volume).
 
