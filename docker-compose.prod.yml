@@ -1,6 +1,6 @@
 # Production (ADR 0022): one server, behind Shakuro's proxy, which holds the HTTPS certificate
-# and passes requests to Caddy on HTTP_PORT. Started and updated by deploy/deploy.sh, never
-# by hand. The local compose is docker-compose.yml.
+# and passes requests to Caddy on HTTP_PORT. On the server it is started and updated by
+# deploy/deploy.sh. The local compose is docker-compose.yml.
 
 # Its own name, so on a laptop it never takes over the containers and database of the local
 # compose.
