@@ -127,9 +127,15 @@ def _queued() -> QuerySet[SignInLink]:
     return SignInLink.objects.filter(still_fresh, sent_at__isnull=True, user__is_active=True)
 
 
-def send_queued_links() -> int:
-    """Email every queued link. Returns how many went out."""
-    return sum(_send_one(link_id) for link_id in _queued().values_list("pk", flat=True))
+def links_queued() -> bool:
+    return _queued().exists()
+
+
+def send_queued_links(limit: int | None = None) -> int:
+    """Email the queued links, oldest first, all of them or only `limit` while emails are
+    paused. Returns how many went out."""
+    ids = _queued().order_by("created_at", "pk").values_list("pk", flat=True)[:limit]
+    return sum(_send_one(link_id) for link_id in ids)
 
 
 def _send_one(link_id: int) -> bool:

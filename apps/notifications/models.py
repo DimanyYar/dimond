@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 from apps.accounts.models import User
 
@@ -16,7 +17,8 @@ class EmailStatus(models.TextChoices):
 
 
 class Email(models.Model):
-    """One attempt to send one email: the journal behind Logs → Emails (PRD: notifications).
+    """One email and every try to send it: the journal behind Logs → Emails (PRD:
+    notifications). Tries of the same email update its row instead of adding rows.
 
     Only what the PM needs to answer "did it go out?" is kept: never the body, so a sign-in
     link or a message never lands here.
@@ -39,8 +41,13 @@ class Email(models.Model):
         blank=True,
         help_text="The id Resend gave the email; empty for Mailpit, which gives none.",
     )
-    error = models.TextField(blank=True, help_text="Why the mail server did not take it.")
-    created_at = models.DateTimeField(auto_now_add=True)
+    error = models.CharField(
+        max_length=100, blank=True, help_text="Why it did not go out, in plain words."
+    )
+    error_detail = models.TextField(blank=True, help_text="The error as the mail server put it.")
+    attempts = models.PositiveIntegerField(default=1, help_text="Tries so far, this one included.")
+    created_at = models.DateTimeField(auto_now_add=True, help_text="The first try.")
+    tried_at = models.DateTimeField(default=timezone.now, help_text="The latest try.")
 
     class Meta:
         ordering = ["-created_at", "-pk"]

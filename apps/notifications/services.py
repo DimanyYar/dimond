@@ -1,9 +1,10 @@
 import logging
 import smtplib
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from anymail.exceptions import AnymailError
+from anymail.exceptions import AnymailAPIError, AnymailError
 from django.conf import settings
 from django.core.mail import EmailMessage, EmailMultiAlternatives
 from django.db import transaction
@@ -23,7 +24,13 @@ from apps.requests.models import (
 )
 
 from .models import Email, EmailKind, EmailStatus
-from .selectors import pm_recipient, update_recipients
+from .selectors import (
+    DAILY_LIMIT_REACHED,
+    SERVER_UNREACHABLE,
+    mail_pause,
+    pm_recipient,
+    update_recipients,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,18 +41,34 @@ logger = logging.getLogger(__name__)
 GROUPING = timedelta(minutes=3)
 
 
+# A failed email that is tried again within this long keeps its row in the journal.
+SAME_EMAIL = timedelta(days=1)
+
+
 def send_email(
     user: User, kind: EmailKind, subject: str, body: str, html: str | None = None
 ) -> bool:
     """Send one email, plain text and optionally HTML, and write it in the journal, whether it
-    went out or not.
+    went out or not. Another try of an email that did not go out (same person, kind and
+    subject, within a day) updates its row: one row per email, with the number of tries.
 
     Returns False when the mail server did not take it; the caller decides whether to retry.
     """
     message = EmailMultiAlternatives(subject=subject, body=body, to=[user.email])
     if html is not None:
         message.attach_alternative(html, "text/html")
-    journal = Email(user=user, to=user.email, kind=kind, subject=subject)
+    now = timezone.now()
+    journal = Email.objects.filter(
+        user=user,
+        kind=kind,
+        subject=subject,
+        status=EmailStatus.FAILED,
+        created_at__gte=now - SAME_EMAIL,
+    ).order_by("-tried_at").first() or Email(
+        user=user, to=user.email, kind=kind, subject=subject, attempts=0
+    )
+    journal.attempts += 1
+    journal.tried_at = now
     try:
         message.send()
     # Mailpit or an SMTP server answers with SMTP errors or a dropped connection; Resend,
@@ -53,12 +76,42 @@ def send_email(
     except (smtplib.SMTPException, OSError, AnymailError) as error:
         logger.warning("Email to user %s failed: %s", user.pk, error)
         journal.status = EmailStatus.FAILED
-        journal.error = str(error) or type(error).__name__
+        journal.error = in_plain_words(error)
+        journal.error_detail = str(error) or type(error).__name__
     else:
         journal.status = EmailStatus.SENT
         journal.provider_id = _provider_id(message)
+        journal.error = ""
+        journal.error_detail = ""
     journal.save()
     return journal.status == EmailStatus.SENT
+
+
+def in_plain_words(error: Exception) -> str:
+    """What went wrong, for the PM's eyes: the mail server's own words stay in the details."""
+    # Resend answers 429 for a few things; only the daily quota waits for tomorrow. The
+    # monthly quota and a burst over the per-second rate read as an ordinary refusal.
+    if isinstance(error, AnymailAPIError) and _resend_error_name(error) == "daily_quota_exceeded":
+        return DAILY_LIMIT_REACHED
+    if isinstance(error, AnymailAPIError) and error.status_code is not None:
+        return "Resend refused it"
+    if isinstance(error, smtplib.SMTPRecipientsRefused):
+        return "The mail server refused the address"
+    if isinstance(error, smtplib.SMTPAuthenticationError):
+        return "The mail server refused the login"
+    if isinstance(error, smtplib.SMTPException):
+        return "The mail server refused it"
+    # No such host, connection refused, timed out, or Resend not answering at all.
+    return SERVER_UNREACHABLE
+
+
+def _resend_error_name(error: AnymailAPIError) -> str:
+    try:
+        answer = error.response.json()
+    # Not every refusal comes with a JSON body, e.g. an error page from a proxy.
+    except (AttributeError, ValueError):
+        return ""
+    return str(answer.get("name", "")) if isinstance(answer, dict) else ""
 
 
 def _provider_id(message: EmailMessage) -> str:
@@ -67,6 +120,41 @@ def _provider_id(message: EmailMessage) -> str:
     if status is None or status.message_id is None:
         return ""
     return str(status.message_id)
+
+
+def send_queued_emails(now: datetime | None = None) -> int:
+    """The worker's round: sign-in links first, someone is waiting at the sign-in page for
+    them, then request updates. While emails are paused (PRD: email notifications), only one
+    email is tried, once every PROBE_EVERY. Returns how many went out."""
+    # Imported here: accounts sends its emails through this module, so a top-level import
+    # would go round in a circle.
+    from apps.accounts.services import send_queued_links
+
+    now = now or timezone.now()
+    pause = mail_pause(now)
+    if pause is None:
+        return send_queued_links() + send_request_updates(now)
+    if now < pause.next_try:
+        return 0
+    return _try_one_email(now)
+
+
+def try_emails_now() -> bool:
+    """The PM's "Try now" on a pause: one email at once instead of at the next try. Returns
+    whether emails are going out again."""
+    now = timezone.now()
+    _try_one_email(now)
+    return mail_pause(now) is None
+
+
+def _try_one_email(now: datetime) -> int:
+    """While paused, one try tells whether the mail server is back: a queued sign-in link if
+    there is one, else the first request's updates, stopping at the first that fails."""
+    from apps.accounts.services import links_queued, send_queued_links
+
+    if links_queued():
+        return send_queued_links(limit=1)
+    return send_request_updates(now, limit=1, stop_on_failure=True)
 
 
 # The colour of the status label at the top of an email, as on the board.
@@ -244,7 +332,9 @@ def _pm_news(request: Request, events: list[StatusEvent], messages: list[Message
     return sorted(news, key=lambda item: item.at)
 
 
-def send_request_updates(now: datetime | None = None) -> int:
+def send_request_updates(
+    now: datetime | None = None, limit: int | None = None, stop_on_failure: bool = False
+) -> int:
     """Email clients and their PM about what happened to requests once it has settled for
     GROUPING: status changes and new messages. Returns how many emails went out."""
     settled = (now or timezone.now()) - GROUPING
@@ -259,10 +349,10 @@ def send_request_updates(now: datetime | None = None) -> int:
         for request_id, first in pending:
             first_news[request_id] = min(first, first_news.get(request_id, first))
     due = [request_id for request_id, first in first_news.items() if first <= settled]
-    return sum(_send_updates_for(request_id) for request_id in sorted(due))
+    return sum(_send_updates_for(request_id, stop_on_failure) for request_id in sorted(due)[:limit])
 
 
-def _send_updates_for(request_id: int) -> int:
+def _send_updates_for(request_id: int, stop_on_failure: bool) -> int:
     with transaction.atomic():
         # skip_locked: a second worker, if one ever runs, takes other requests instead.
         events = list(
@@ -282,15 +372,20 @@ def _send_updates_for(request_id: int) -> int:
         request = Request.objects.select_related("company__owner").get(pk=request_id)
         found = [_status_news(event) for event in events] + [_message_news(m) for m in messages]
         news = sorted((item for item in found if item is not None), key=lambda item: item.at)
-        attempts = [
-            _send_update(person, request, theirs)
+        emails: list[tuple[Callable[[User, Request, list[News]], bool], User, list[News]]] = [
+            (_send_update, person, theirs)
             for person in (update_recipients(request) if news else [])
             if (theirs := [item for item in news if item.actor_id != person.pk])
         ]
         pm = pm_recipient(request)
         pm_news = _pm_news(request, events, messages) if pm else []
         if pm and pm_news:
-            attempts.append(_send_pm_update(pm, request, pm_news))
+            emails.append((_send_pm_update, pm, pm_news))
+        attempts: list[bool] = []
+        for send, person, theirs in emails:
+            attempts.append(send(person, request, theirs))
+            if stop_on_failure and not attempts[-1]:
+                break
         if attempts and not any(attempts):
             # The mail server took none of them: try the whole batch again next round.
             return 0

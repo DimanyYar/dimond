@@ -70,6 +70,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "apps.tracker.context_processors.sync",
+                "apps.notifications.context_processors.mail",
             ],
         },
     },
@@ -105,6 +106,10 @@ EMAIL_PORT = int(env("EMAIL_PORT", "1025"))
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "Dimon <dimon@localhost>")
 # Mail goes over SMTP (Mailpit locally) until a Resend key is set; then through Resend's API
 # (ADR 0009). Switching providers is this setting, not code.
+# Resend's free plan sends up to 100 emails a day; Logs · Emails counts against this number.
+EMAIL_DAILY_LIMIT = int(env("EMAIL_DAILY_LIMIT", "100"))
+# Seconds to wait for the mail server: "Try now" on Logs runs in the page's request.
+EMAIL_TIMEOUT = 10
 RESEND_API_KEY = env("RESEND_API_KEY", "")
 if RESEND_API_KEY:
     # Resend refuses any sender outside a verified domain, so the local default would make
@@ -112,7 +117,8 @@ if RESEND_API_KEY:
     if DEFAULT_FROM_EMAIL.rstrip(">").endswith("@localhost"):
         raise RuntimeError("Set DEFAULT_FROM_EMAIL to an address on the domain verified in Resend")
     EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
-    ANYMAIL = {"RESEND_API_KEY": RESEND_API_KEY}
+    # EMAIL_TIMEOUT covers SMTP only; anymail's own default is 30 seconds.
+    ANYMAIL = {"RESEND_API_KEY": RESEND_API_KEY, "REQUESTS_TIMEOUT": EMAIL_TIMEOUT}
 
 # Jira access for every client project. Which tracker is used is switched in the admin
 # (TrackerSettings); only the address and the account live here, never in the database.

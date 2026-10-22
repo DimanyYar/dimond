@@ -41,5 +41,5 @@ sync box, the paused banner, messages and the tabs. `tab` is the open tab, `note
 
   <nav class="log-tabs" aria-label="Logs">
     <a href="{% url 'logs' %}"{% if tab == "jira" %} aria-current="page"{% endif %}>Jira sync{% if sync.attention %} <span class="nav-badge" aria-label="{{ sync.attention }} need attention">{{ sync.attention }}</span>{% endif %}</a>
-    <a href="{% url 'logs_emails' %}"{% if tab == "emails" %} aria-current="page"{% endif %}>Emails</a>
+    <a href="{% url 'logs_emails' %}"{% if tab == "emails" %} aria-current="page"{% endif %}>Emails{% if mail_paused %} <span class="nav-badge" aria-label="Emails are paused">!</span>{% endif %}</a>
   </nav>

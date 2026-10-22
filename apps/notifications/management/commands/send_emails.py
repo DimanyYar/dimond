@@ -3,8 +3,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandParser
 
-from apps.accounts.services import send_queued_links
-from apps.notifications.services import send_request_updates
+from apps.notifications.services import send_queued_emails
 
 
 class Command(BaseCommand):
@@ -15,8 +14,7 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, every: int | None, **options: Any) -> None:
         while True:
-            # Sign-in links first: someone is waiting at the sign-in page for them.
-            sent = send_queued_links() + send_request_updates()
+            sent = send_queued_emails()
             if sent:
                 self.stdout.write(f"Sent {sent} email(s)")
             if every is None:

@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from anymail.exceptions import AnymailAPIError
 from django.conf import settings
@@ -58,32 +60,73 @@ def test_email_the_server_refused_is_journaled_as_not_sent(anna, mail_server_dow
 
     email = Email.objects.get()
     assert email.status == EmailStatus.FAILED
-    assert email.error == "ConnectionRefusedError"
+    assert email.error == "Mail server unreachable"
+    assert email.error_detail == "ConnectionRefusedError"
 
 
-def test_refused_link_goes_out_on_the_next_round_and_both_attempts_are_journaled(
-    anna, mail_server_down
-):
+def test_tries_of_one_email_share_one_row_until_it_goes_out(anna, mail_server_down):
     accounts.request_sign_in_link(anna.email)
     accounts.send_queued_links()
+    accounts.send_queued_links()
+    accounts.send_queued_links()
+    assert Email.objects.get().attempts == 3
+
     mail_server_down.undo()
 
     assert accounts.send_queued_links() == 1
-    assert list(Email.objects.values_list("status", flat=True)) == [
-        EmailStatus.SENT,
-        EmailStatus.FAILED,
-    ]
+    email = Email.objects.get()
+    assert (email.status, email.attempts, email.error) == (EmailStatus.SENT, 4, "")
+    assert email.error_detail == ""
 
 
 def test_resend_error_is_journaled_with_its_reason(anna, monkeypatch):
     def resend_refuses(*args, **kwargs):
-        raise AnymailAPIError("Resend API response 422: domain is not verified")
+        answer = SimpleNamespace(
+            status_code=422, reason="Unprocessable Entity", text="domain is not verified"
+        )
+        raise AnymailAPIError("Resend refused", status_code=422, response=answer)
 
     monkeypatch.setattr("apps.notifications.services.EmailMessage.send", resend_refuses)
     accounts.request_sign_in_link(anna.email)
     accounts.send_queued_links()
 
-    assert "domain is not verified" in Email.objects.get().error
+    email = Email.objects.get()
+    assert email.error == "Resend refused it"
+    assert "domain is not verified" in email.error_detail
+
+
+def resend_answers_429(name: str):
+    def refuse(*args, **kwargs):
+        answer = SimpleNamespace(
+            status_code=429,
+            reason="Too Many Requests",
+            text=name,
+            json=lambda: {"statusCode": 429, "name": name, "message": "Quota exceeded"},
+        )
+        raise AnymailAPIError("Resend refused", status_code=429, response=answer)
+
+    return refuse
+
+
+def test_resend_daily_quota_reads_as_the_daily_limit(anna, monkeypatch):
+    monkeypatch.setattr(
+        "apps.notifications.services.EmailMessage.send", resend_answers_429("daily_quota_exceeded")
+    )
+    accounts.request_sign_in_link(anna.email)
+    accounts.send_queued_links()
+
+    assert Email.objects.get().error == "Daily limit reached"
+
+
+@pytest.mark.parametrize("name", ["monthly_quota_exceeded", "rate_limit_exceeded"])
+def test_other_resend_429s_are_not_called_the_daily_limit(anna, monkeypatch, name):
+    monkeypatch.setattr("apps.notifications.services.EmailMessage.send", resend_answers_429(name))
+    accounts.request_sign_in_link(anna.email)
+    accounts.send_queued_links()
+
+    email = Email.objects.get()
+    assert email.error == "Resend refused it"
+    assert name in email.error_detail
 
 
 def test_journal_keeps_the_id_the_provider_gave_the_email(anna, settings):
