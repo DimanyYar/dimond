@@ -127,6 +127,10 @@ def _queued() -> QuerySet[SignInLink]:
     return SignInLink.objects.filter(still_fresh, sent_at__isnull=True, user__is_active=True)
 
 
+def links_queued() -> bool:
+    return _queued().exists()
+
+
 def send_queued_links(limit: int | None = None) -> int:
     """Email the queued links, oldest first, all of them or only `limit` while emails are
     paused. Returns how many went out."""

@@ -76,6 +76,7 @@ def test_tries_of_one_email_share_one_row_until_it_goes_out(anna, mail_server_do
     assert accounts.send_queued_links() == 1
     email = Email.objects.get()
     assert (email.status, email.attempts, email.error) == (EmailStatus.SENT, 4, "")
+    assert email.error_detail == ""
 
 
 def test_resend_error_is_journaled_with_its_reason(anna, monkeypatch):
@@ -92,6 +93,40 @@ def test_resend_error_is_journaled_with_its_reason(anna, monkeypatch):
     email = Email.objects.get()
     assert email.error == "Resend refused it"
     assert "domain is not verified" in email.error_detail
+
+
+def resend_answers_429(name: str):
+    def refuse(*args, **kwargs):
+        answer = SimpleNamespace(
+            status_code=429,
+            reason="Too Many Requests",
+            text=name,
+            json=lambda: {"statusCode": 429, "name": name, "message": "Quota exceeded"},
+        )
+        raise AnymailAPIError("Resend refused", status_code=429, response=answer)
+
+    return refuse
+
+
+def test_resend_daily_quota_reads_as_the_daily_limit(anna, monkeypatch):
+    monkeypatch.setattr(
+        "apps.notifications.services.EmailMessage.send", resend_answers_429("daily_quota_exceeded")
+    )
+    accounts.request_sign_in_link(anna.email)
+    accounts.send_queued_links()
+
+    assert Email.objects.get().error == "Daily limit reached"
+
+
+@pytest.mark.parametrize("name", ["monthly_quota_exceeded", "rate_limit_exceeded"])
+def test_other_resend_429s_are_not_called_the_daily_limit(anna, monkeypatch, name):
+    monkeypatch.setattr("apps.notifications.services.EmailMessage.send", resend_answers_429(name))
+    accounts.request_sign_in_link(anna.email)
+    accounts.send_queued_links()
+
+    email = Email.objects.get()
+    assert email.error == "Resend refused it"
+    assert name in email.error_detail
 
 
 def test_journal_keeps_the_id_the_provider_gave_the_email(anna, settings):

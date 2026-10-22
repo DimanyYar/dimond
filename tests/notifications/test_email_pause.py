@@ -9,10 +9,12 @@ from django.core import mail
 from django.utils import timezone
 
 from apps.accounts import services as accounts
-from apps.accounts.models import Company, User
+from apps.accounts.models import Company, Notify, User
 from apps.notifications.models import Email, EmailKind, EmailStatus
 from apps.notifications.selectors import PROBE_EVERY, mail_pause, sent_today
 from apps.notifications.services import send_queued_emails
+from apps.requests import services as requests
+from apps.requests.models import ClientStatus, RequestType, StatusEvent, WhenNeeded
 
 pytestmark = pytest.mark.django_db
 
@@ -72,6 +74,25 @@ def test_paused_worker_tries_nothing_until_the_next_try(anna, server_down):
 def test_paused_worker_tries_one_email_every_five_minutes(anna, mark, server_down):
     accounts.request_sign_in_link(anna.email)
     accounts.request_sign_in_link(mark.email)
+    send_queued_emails()
+    failing_for(minutes=6)
+
+    send_queued_emails()
+
+    assert sorted(Email.objects.values_list("attempts", flat=True)) == [1, 2]
+
+
+def test_paused_worker_tries_one_email_even_when_a_request_has_several(pm, anna, mark, server_down):
+    pm.notify = Notify.NONE
+    pm.save(update_fields=["notify"])
+    User.objects.filter(pk__in=[anna.pk, mark.pk]).update(
+        notify=Notify.COMPANY, last_login=timezone.now()
+    )
+    feature = requests.create_request(
+        anna, RequestType.FEATURE, "Dark mode", why="Night shifts", when_needed=WhenNeeded.NOT_SURE
+    )
+    requests.change_status(feature, ClientStatus.IN_PROGRESS, None)
+    StatusEvent.objects.update(created_at=timezone.now() - timedelta(minutes=10))
     send_queued_emails()
     failing_for(minutes=6)
 

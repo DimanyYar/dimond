@@ -117,7 +117,8 @@ if RESEND_API_KEY:
     if DEFAULT_FROM_EMAIL.rstrip(">").endswith("@localhost"):
         raise RuntimeError("Set DEFAULT_FROM_EMAIL to an address on the domain verified in Resend")
     EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
-    ANYMAIL = {"RESEND_API_KEY": RESEND_API_KEY}
+    # EMAIL_TIMEOUT covers SMTP only; anymail's own default is 30 seconds.
+    ANYMAIL = {"RESEND_API_KEY": RESEND_API_KEY, "REQUESTS_TIMEOUT": EMAIL_TIMEOUT}
 
 # Jira access for every client project. Which tracker is used is switched in the admin
 # (TrackerSettings); only the address and the account live here, never in the database.
