@@ -1,0 +1,30 @@
+# Production front of dimond (ADR 0022). Shakuro's proxy in front holds the HTTPS certificate;
+# Caddy serves CSS and scripts itself and passes everything else to Django.
+{
+	auto_https off
+	servers {
+		# Requests arrive from Shakuro's proxy on a private address. Trusting it keeps its
+		# X-Forwarded-Proto: https, which Django needs for secure cookies and form checks.
+		trusted_proxies static private_ranges
+	}
+}
+
+:80 {
+	encode zstd gzip
+
+	# The largest real request: 5 videos of 20 MB each (apps/files/uploads.py), plus the form.
+	request_body {
+		max_size 128MB
+	}
+
+	handle_path /static/* {
+		root * /srv/static
+		# File names carry no version, so browsers ask each time; unchanged files answer 304.
+		header Cache-Control "no-cache"
+		file_server
+	}
+
+	handle {
+		reverse_proxy web:8000
+	}
+}
