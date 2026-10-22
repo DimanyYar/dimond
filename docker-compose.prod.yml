@@ -1,0 +1,94 @@
+# Production (ADR 0022): one server, behind Shakuro's proxy, which holds the HTTPS certificate
+# and passes requests to Caddy on HTTP_PORT. Started and updated by deploy/deploy.sh, never
+# by hand. The local compose is docker-compose.yml.
+
+name: dimond
+
+x-app: &app
+  build: .
+  image: dimond-app
+  env_file: .env
+  environment:
+    POSTGRES_HOST: db
+  volumes:
+    - files:/app/uploads
+  restart: unless-stopped
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 2s
+      retries: 15
+
+  # Migrations run here, before the site starts, so every deploy brings the database along.
+  # Collected CSS and scripts go to a volume Caddy serves from.
+  web:
+    <<: *app
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             exec gunicorn config.wsgi:application --bind 0.0.0.0:8000
+             --workers 3 --threads 4 --timeout 300 --access-logfile -"
+    volumes:
+      - files:/app/uploads
+      - static:/app/staticfiles
+    # Asks as the site's own host name: Django answers 400 to any host not in ALLOWED_HOSTS.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, urllib.parse as p, urllib.request as r; host = p.urlsplit(os.environ['SITE_URL']).netloc; r.urlopen(r.Request('http://localhost:8000/healthz', headers={'Host': host}), timeout=5)"]
+      interval: 5s
+      start_period: 60s
+      retries: 5
+
+  # The background processes wait for web, so they never start on a database whose
+  # migrations have not run yet.
+  worker:
+    <<: *app
+    command: python manage.py send_emails --every 5
+    depends_on:
+      web:
+        condition: service_healthy
+
+  previews:
+    <<: *app
+    command: python manage.py make_previews --every 5
+    depends_on:
+      web:
+        condition: service_healthy
+
+  sync:
+    <<: *app
+    command: python manage.py sync_tracker --every 900
+    depends_on:
+      web:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2.10-alpine
+    ports:
+      - "${HTTP_PORT:-127.0.0.1:8080}:80"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - static:/srv/static:ro
+      - caddy_data:/data
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  files:
+  static:
+  caddy_data:
