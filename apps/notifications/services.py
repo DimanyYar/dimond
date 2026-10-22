@@ -443,11 +443,12 @@ def _send_pm_update(pm: User, request: Request, news: list[News]) -> bool:
 
 
 # A report never moves an email back: "delivered" arriving after "marked spam" changes nothing.
+# A spam mark outranks a bounce, so it still switches the person's emails off.
 REPORT_RANK = {
     EmailStatus.SENT: 0,
     EmailStatus.DELIVERED: 1,
     EmailStatus.BOUNCED: 2,
-    EmailStatus.SPAM: 2,
+    EmailStatus.SPAM: 3,
 }
 
 

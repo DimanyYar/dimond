@@ -26,14 +26,15 @@ report.
   links in a client's email.
 - A report changes the email's own row in the journal, found by the id Resend gave it. There
   are no extra rows per report. The status only moves forward: Sent, then Delivered, then
-  Bounced or Marked spam. A late "delivered" never hides a spam mark. A report for an id not in
-  the journal, such as another copy of dimond on the same Resend account, is ignored.
+  Bounced, then Marked spam. A late "delivered" never hides a spam mark, and a spam mark after
+  a bounce still stops that person's emails. A report for an id not in the journal, such as
+  another copy of dimond on the same Resend account, is ignored.
 - A bounce is only logged, with the reason in plain words and Resend's own words on hover.
   dimond keeps emailing that address: Resend itself stops after repeated bounces, and then
   says so ("suppressed").
 - A spam mark switches that person's emails to Nothing and stores when it happened. Their
-  account page and the PM's person page say so until someone picks an option again. Sign-in
-  links still go out.
+  account page and the PM's person page say so until someone picks an option other than
+  Nothing. Sign-in links still go out.
 
 ## Consequences
 

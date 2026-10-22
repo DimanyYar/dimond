@@ -95,7 +95,8 @@ def update_person(person: User, *, name: str, notify: Notify) -> None:
     """The PM corrects a person's name or what they get emails about (PRD: person page)."""
     person.name = name
     person.notify = notify
-    person.emails_off_at = None
+    if notify != Notify.NONE:
+        person.emails_off_at = None
     person.full_clean()
     person.save(update_fields=["name", "notify", "emails_off_at"])
 
@@ -266,7 +267,8 @@ def rename_myself(person: User, name: str) -> None:
 def choose_emails(person: User, notify: Notify) -> None:
     """A person picks which requests they get emails about (PRD: email notifications)."""
     person.notify = notify
-    person.emails_off_at = None
+    if notify != Notify.NONE:
+        person.emails_off_at = None
     person.save(update_fields=["notify", "emails_off_at"])
 
 

@@ -115,6 +115,16 @@ def test_late_delivered_report_does_not_hide_a_spam_mark(client, email):
     assert email.status == EmailStatus.SPAM
 
 
+def test_spam_mark_after_a_bounce_still_switches_emails_off(client, email, mark):
+    report(client, "email.bounced", email.provider_id, bounce={"message": "hard bounce message"})
+    report(client, "email.complained", email.provider_id)
+
+    email.refresh_from_db()
+    mark.refresh_from_db()
+    assert email.status == EmailStatus.SPAM
+    assert mark.notify == Notify.NONE
+
+
 def test_opens_and_clicks_are_not_kept(client, email):
     report(client, "email.opened", email.provider_id)
 
@@ -172,6 +182,16 @@ def test_picking_again_clears_the_spam_note(client, email, mark):
 
     mark.refresh_from_db()
     assert mark.emails_off_at is None
+
+
+def test_renaming_the_person_keeps_the_spam_note(client, email, mark):
+    report(client, "email.complained", email.provider_id)
+    mark.refresh_from_db()
+
+    accounts.update_person(mark, name="Mark Thompson", notify=Notify.NONE)
+
+    mark.refresh_from_db()
+    assert mark.emails_off_at is not None
 
 
 def test_pm_sees_the_spam_note_on_the_person_page(client, pm, email, mark):
