@@ -70,6 +70,9 @@ off, a client picks which requests. Changing the email comes with #26.
             <label class="choice choice-with-hint"><input type="radio" name="notify" value="none"{% if notify == "none" %} checked{% endif %}><span><span class="choice-title">Nothing</span><span class="hint">Check the portal yourself. Sign-in links still arrive</span></span></label>
           {% endif %}
           {% endwith %}
+          {% if person.emails_off_at and person.notify == "none" %}
+            <span class="notify-auto-off" role="status">Switched to Nothing automatically on {{ person.emails_off_at|date:"M j" }}: one of our emails was marked as spam. Pick another option to get emails again.</span>
+          {% endif %}
         </fieldset>
         <div class="person-profile-actions">
           <button class="btn btn-dark" type="submit">Save</button>

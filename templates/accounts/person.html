@@ -61,6 +61,9 @@ on the right; one column on a phone. ?revoke asks before revoking, without scrip
           <label class="choice choice-with-hint"><input type="radio" name="notify" value="company"{% if notify == "company" %} checked{% endif %}><span><span class="choice-title">Their requests and their team’s</span><span class="hint">Every request from anyone at {{ company.name }}</span></span></label>
           <label class="choice choice-with-hint"><input type="radio" name="notify" value="none"{% if notify == "none" %} checked{% endif %}><span><span class="choice-title">Nothing</span><span class="hint">They check the portal themselves. Sign-in links still arrive</span></span></label>
         {% endwith %}
+        {% if person.emails_off_at and person.notify == "none" %}
+          <span class="notify-auto-off" role="status">Switched to Nothing automatically on {{ person.emails_off_at|date:"M j" }}: an email to {{ person.name|default:person.email }} was marked as spam. Pick another option if they want emails again.</span>
+        {% endif %}
       </fieldset>
       <div class="person-profile-actions">
         <button class="btn btn-dark" type="submit">Save</button>

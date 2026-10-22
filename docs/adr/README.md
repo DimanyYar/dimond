@@ -22,3 +22,4 @@ Why the project is built the way it is. Read the record before changing what it 
 - [0018. Public links for video and voice in Jira tasks](0018-public-links-for-media-in-jira.md)
 - [0019. Status sync by polling, forward only](0019-status-sync-by-polling.md)
 - [0020. A Jira webhook only wakes the sync](0020-jira-webhook-wakes-the-sync.md)
+- [0021. Resend's delivery reports through a signed webhook](0021-resend-delivery-reports.md)

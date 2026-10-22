@@ -119,6 +119,9 @@ if RESEND_API_KEY:
     EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
     # EMAIL_TIMEOUT covers SMTP only; anymail's own default is 30 seconds.
     ANYMAIL = {"RESEND_API_KEY": RESEND_API_KEY, "REQUESTS_TIMEOUT": EMAIL_TIMEOUT}
+# Resend's delivery reports (ADR 0021): the signing secret of the webhook set up in Resend.
+# Empty turns the webhook off.
+ANYMAIL_RESEND_SIGNING_SECRET = env("RESEND_WEBHOOK_SECRET", "")
 
 # Jira access for every client project. Which tracker is used is switched in the admin
 # (TrackerSettings); only the address and the account live here, never in the database.
