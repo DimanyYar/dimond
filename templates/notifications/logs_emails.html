@@ -3,7 +3,7 @@
 {% comment %}
 Logs · Emails (mockup 5.5 · Logs · Emails): every email dimond sent or tried to send to the
 PM's clients and to the PM, newest first. The text of an email is never kept. Delivered,
-Bounced and Marked spam join with Resend's reports (#19g). On a phone each row stacks.
+Bounced and Marked spam come from Resend's reports (ADR 0021). On a phone each row stacks.
 {% endcomment %}
 {% block title %}Emails · Logs · dimon.d{% endblock %}
 
@@ -37,22 +37,19 @@ Bounced and Marked spam join with Resend's reports (#19g). On a phone each row s
       </div>
       <ol class="email-log-list">
         {% for email in emails %}
-          <li class="email-log-row{% if email.status == 'failed' %} email-log-problem{% endif %}">
+          <li class="email-log-row{% if email.status == 'failed' or email.status == 'bounced' or email.status == 'spam' %} email-log-problem{% endif %}">
             <time class="email-log-time" datetime="{{ email.tried_at|date:'c' }}">{% if email.tried_at|date:"Ymd" == today %}{{ email.tried_at|date:"H:i" }}{% else %}{{ email.tried_at|date:"M j" }}{% endif %}</time>
             <span><span class="email-status email-status-{{ email.status }}">{{ email.get_status_display }}</span></span>
             <span class="email-log-who">{{ email.to }}</span>
             <span class="email-log-details">
-              {% if email.kind == "pm_update" %}To you: {{ email.subject }}
-              {% elif email.kind == "invite" %}Invite{% if email.user.company %} to {{ email.user.company }}{% endif %}
-              {% elif email.kind == "sign_in_link" %}Sign-in link
-              {% else %}{{ email.subject }}{% endif %}
+              {% if email.kind == "pm_update" %}To you: {{ email.subject }}{% elif email.kind == "invite" %}Invite{% if email.user.company %} to {{ email.user.company }}{% endif %}{% elif email.kind == "sign_in_link" %}Sign-in link{% else %}{{ email.subject }}{% endif %}{% if email.status == "bounced" %}. {{ email.error }}{% elif email.status == "spam" and email.user %}. Emails for {{ email.user.name|default:email.user.email }} switched to Nothing{% endif %}
             </span>
-            <span class="email-log-tech"{% if email.error_detail %} title="{{ email.error_detail }}"{% endif %}>{% if email.status == "failed" %}{{ email.attempts }} tr{{ email.attempts|pluralize:"y,ies" }} since {{ email.created_at|date:"H:i" }} · {{ email.error }}{% else %}{% if email.attempts > 1 %}sent on try {{ email.attempts }}{% if email.provider_id %} · {% endif %}{% endif %}{% if email.provider_id %}resend id {{ email.provider_id }}{% elif email.attempts == 1 %}—{% endif %}{% endif %}</span>
+            <span class="email-log-tech"{% if email.error_detail %} title="{{ email.error_detail }}"{% endif %}>{% if email.status == "bounced" %}{{ email.error_detail|default:"bounce" }}{% elif email.status == "spam" %}spam complaint{% elif email.status == "failed" %}{{ email.attempts }} tr{{ email.attempts|pluralize:"y,ies" }} since {{ email.created_at|date:"H:i" }} · {{ email.error }}{% else %}{% if email.attempts > 1 %}sent on try {{ email.attempts }}{% if email.provider_id %} · {% endif %}{% endif %}{% if email.provider_id %}resend id {{ email.provider_id }}{% if email.delivered_at %} · {{ email.delivery_seconds|floatformat:1 }} s{% endif %}{% elif email.attempts == 1 %}—{% endif %}{% endif %}</span>
           </li>
         {% endfor %}
       </ol>
     </section>
-    <p class="muted logs-note">The latest {{ emails|length }} email{{ emails|length|pluralize }}, one row each however many tries it took. Times are UTC.</p>
+    <p class="muted logs-note">The latest {{ emails|length }} email{{ emails|length|pluralize }}, one row each however many tries it took. A bounce is only logged: check the address with the client. A spam mark switches that person to Nothing and says so on their page. Times are UTC.</p>
   {% else %}
     <section class="card empty-state">
       <h2>No emails yet</h2>

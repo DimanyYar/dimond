@@ -117,6 +117,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         Company, null=True, blank=True, on_delete=models.PROTECT, related_name="people"
     )
     notify = models.CharField(max_length=10, choices=Notify.choices, default=Notify.OWN)
+    emails_off_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When a spam mark switched their emails to Nothing; cleared once they or "
+        "the PM pick again.",
+    )
     is_active = models.BooleanField(
         default=True, help_text="Off means access is revoked; requests and replies stay."
     )

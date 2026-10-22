@@ -112,5 +112,5 @@ def sent_today(now: datetime | None = None) -> DailyCount:
     every PM together: the limit is one for the whole of dimond."""
     now = now or timezone.now()
     midnight = now.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    sent = Email.objects.filter(status=EmailStatus.SENT, tried_at__gte=midnight).count()
+    sent = Email.objects.exclude(status=EmailStatus.FAILED).filter(tried_at__gte=midnight).count()
     return DailyCount(sent=sent, limit=settings.EMAIL_DAILY_LIMIT)

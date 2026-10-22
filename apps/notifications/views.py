@@ -1,8 +1,11 @@
+from anymail.webhooks.resend import ResendTrackingWebhookView
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.models import User
@@ -46,3 +49,16 @@ def try_emails_now(request: HttpRequest) -> HttpResponse:
     else:
         messages.error(request, "Still not sent. dimond keeps trying every 5 minutes.")
     return redirect("logs_emails")
+
+
+_resend_reports = ResendTrackingWebhookView.as_view()
+
+
+@csrf_exempt
+def resend_webhook(request: HttpRequest) -> HttpResponse:
+    """Resend's delivery reports (ADR 0021). anymail checks the signature and answers 400 to a
+    wrong one; with no secret set the address does not exist."""
+    if not settings.ANYMAIL_RESEND_SIGNING_SECRET:
+        raise Http404
+    response: HttpResponse = _resend_reports(request)
+    return response

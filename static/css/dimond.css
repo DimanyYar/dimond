@@ -6227,8 +6227,21 @@ details[open] .run-chevron {
   white-space: nowrap;
 }
 
-.email-status-sent { background: var(--success-soft); color: var(--success-text); }
-.email-status-failed { background: #fdecec; color: #c41c1c; }
+.email-status-failed,
+.email-status-bounced { background: #fdecec; color: #c41c1c; }
+.email-status-delivered { background: var(--success-soft); color: var(--success-text); }
+.email-status-sent { background: var(--surface-2); color: var(--ink); }
+.email-status-spam { background: var(--accent-soft); color: #b33a00; }
+
+.notify-auto-off {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #8a2c00;
+  background: var(--accent-soft);
+  border: 1px solid #ffc9a8;
+  border-radius: var(--radius-m);
+  padding: 10px 12px;
+}
 
 @media (max-width: 720px) {
   .email-log-head {

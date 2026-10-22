@@ -14,6 +14,10 @@ class EmailKind(models.TextChoices):
 class EmailStatus(models.TextChoices):
     SENT = "sent", "Sent"
     FAILED = "failed", "Not sent"
+    # What Resend reported afterwards (ADR 0021).
+    DELIVERED = "delivered", "Delivered"
+    BOUNCED = "bounced", "Bounced"
+    SPAM = "spam", "Marked spam"
 
 
 class Email(models.Model):
@@ -48,9 +52,19 @@ class Email(models.Model):
     attempts = models.PositiveIntegerField(default=1, help_text="Tries so far, this one included.")
     created_at = models.DateTimeField(auto_now_add=True, help_text="The first try.")
     tried_at = models.DateTimeField(default=timezone.now, help_text="The latest try.")
+    delivered_at = models.DateTimeField(
+        null=True, blank=True, help_text="When Resend reported it reached the inbox."
+    )
 
     class Meta:
         ordering = ["-created_at", "-pk"]
 
     def __str__(self) -> str:
         return f"{self.get_kind_display()} to {self.to}"
+
+    @property
+    def delivery_seconds(self) -> float | None:
+        """From the last try to Resend's "delivered" report, as Logs shows it."""
+        if self.delivered_at is None:
+            return None
+        return (self.delivered_at - self.tried_at).total_seconds()

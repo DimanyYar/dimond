@@ -440,3 +440,54 @@ def _send_pm_update(pm: User, request: Request, news: list[News]) -> bool:
         render_to_string("notifications/email/pm_update.txt", context),
         render_to_string("notifications/email/pm_update.html", context),
     )
+
+
+# A report never moves an email back: "delivered" arriving after "marked spam" changes nothing.
+# A spam mark outranks a bounce, so it still switches the person's emails off.
+REPORT_RANK = {
+    EmailStatus.SENT: 0,
+    EmailStatus.DELIVERED: 1,
+    EmailStatus.BOUNCED: 2,
+    EmailStatus.SPAM: 3,
+}
+
+
+def record_delivery_report(
+    provider_id: str, status: EmailStatus, at: datetime, detail: str = ""
+) -> None:
+    """What Resend reported about an email after it took it (ADR 0021): delivered, bounced or
+    marked as spam. A spam mark stops that person's emails: they switch to Nothing and their
+    page says why. Reports for emails not in the journal, such as another copy of dimond on
+    the same Resend account, are ignored."""
+    with transaction.atomic():
+        email = (
+            Email.objects.select_for_update(of=("self",))
+            .select_related("user")
+            .filter(provider_id=provider_id)
+            .exclude(provider_id="")
+            .first()
+        )
+        if email is None or REPORT_RANK[status] <= REPORT_RANK.get(EmailStatus(email.status), 0):
+            return
+        email.status = status
+        if status == EmailStatus.DELIVERED:
+            email.delivered_at = at
+        if status == EmailStatus.BOUNCED:
+            email.error = bounce_in_plain_words(detail)
+            email.error_detail = detail
+        email.save(update_fields=["status", "delivered_at", "error", "error_detail"])
+        if status == EmailStatus.SPAM and email.user is not None:
+            email.user.notify = Notify.NONE
+            email.user.emails_off_at = at
+            email.user.save(update_fields=["notify", "emails_off_at"])
+
+
+def bounce_in_plain_words(detail: str) -> str:
+    """Why the receiving side sent it back, for the PM; Resend's own words stay in the details."""
+    if "suppressed" in detail:
+        return "Resend blocks this address after earlier bounces"
+    if "inbox was full" in detail:
+        return "Mailbox is full"
+    if "hard bounce" in detail:
+        return "Mailbox doesn’t exist"
+    return "The receiving server sent it back"
