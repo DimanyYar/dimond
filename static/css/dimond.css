@@ -212,9 +212,20 @@ h2 {
   gap: var(--space-5);
 }
 
-.tabbar,
-.topbar {
+.topbar,
+.menu-close,
+.nav .nav-phone-only {
   display: none;
+}
+
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.sidebar-head .brand {
+  flex-grow: 1;
 }
 
 @media (max-width: 899px) {
@@ -222,27 +233,102 @@ h2 {
     flex-direction: column;
   }
 
+  /* On phones the sidebar is the menu behind the ☰ (mockups PM · phone, Client · phone). */
   .sidebar {
-    display: none;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 50;
+    width: min(300px, 85vw);
+    max-width: none;
+    padding: 18px var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom));
+    gap: 22px;
+    overflow-y: auto;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 200ms ease, visibility 0s 200ms;
   }
 
-  /* The sidebar is hidden on phones, so the brand moves to a slim bar on top. */
+  .app[data-menu-open] .sidebar {
+    transform: none;
+    visibility: visible;
+    transition: transform 200ms ease;
+  }
+
+  .menu-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgb(17 17 17 / 55%);
+  }
+
+  .menu-close {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid #3a3a39;
+    background: transparent;
+    color: #ffffff;
+    cursor: pointer;
+  }
+
+  .nav a {
+    padding: 13px 14px;
+    font-size: 16px;
+  }
+
+  .nav .nav-phone-only {
+    display: flex;
+  }
+
+  .nav-new-mark {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--ink);
+    display: grid;
+    place-items: center;
+  }
+
+  .sidebar-footer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    font-size: 13px;
+  }
+
   .topbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding: var(--space-4) var(--space-4) 0;
+    gap: 10px;
+    padding: 14px var(--space-4);
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .menu-button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
   }
 
   .topbar .brand {
+    flex-grow: 1;
     color: var(--ink);
-    font-size: 17px;
+    font-size: 18px;
   }
 
   .topbar .brand-mark {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     font-size: 13px;
   }
 
@@ -251,62 +337,30 @@ h2 {
     color: var(--muted);
   }
 
+  .topbar-new {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--ink);
+    box-shadow: 0 4px 12px rgb(255 86 0 / 35%);
+  }
+
   .main {
-    padding: var(--space-5) var(--space-4) 112px;
+    padding: var(--space-5) var(--space-4) var(--space-7);
   }
 
   h1 {
     font-size: 30px;
   }
+}
 
-  .tabbar {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    /* Three slots: Requests left, the + in the middle, Account right. */
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-    justify-items: start;
-    background: var(--surface);
-    border-top: 1px solid var(--hairline);
-    padding: var(--space-2) var(--space-5) calc(var(--space-3) + env(safe-area-inset-bottom));
-  }
-
-  .tabbar a {
-    min-width: 72px;
-    min-height: 48px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    color: var(--muted);
-    text-decoration: none;
-    font-size: 12px;
-    font-weight: 500;
-  }
-
-  .tabbar a[aria-current="page"] {
-    color: var(--ink);
-    font-weight: 600;
-  }
-
-  .tabbar .tab-end {
-    justify-self: end;
-  }
-
-  .tabbar .tab-new {
-    min-width: 64px;
-    width: 64px;
-    height: 64px;
-    margin-top: -24px;
-    border-radius: 50%;
-    justify-self: center;
-    background: var(--accent);
-    color: var(--ink);
-    box-shadow: 0 6px 18px rgb(255 86 0 / 35%);
+@media (max-width: 899px) and (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .app[data-menu-open] .sidebar {
+    transition: none;
   }
 }
 
@@ -4382,11 +4436,6 @@ kbd {
 
 /* PM · Clients: companies on the left, the chosen one on the right (mockup 5.0 · Clients).
    Phones show one at a time: the list on /clients/, a company on /clients/<id>/. */
-.tabbar:not(:has(.tab-new)) {
-  grid-template-columns: 1fr 1fr;
-  justify-items: center;
-}
-
 .clients {
   display: grid;
   grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
@@ -5750,23 +5799,6 @@ a.person-name:hover {
   font-weight: 700;
   line-height: 18px;
   text-align: center;
-}
-
-.tabbar .nav-badge {
-  position: absolute;
-  top: 0;
-  margin-left: 30px;
-}
-
-.tabbar a {
-  position: relative;
-}
-
-/* The PM's tabs (no + in the middle) share the bar evenly, however many there are. */
-.tabbar:not(:has(.tab-new)) {
-  grid-template-columns: none;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
 }
 
 .sync-line {

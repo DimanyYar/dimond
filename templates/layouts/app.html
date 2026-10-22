@@ -1,20 +1,31 @@
 {% extends "base.html" %}
+{% load static %}
 {% comment %}
-The signed-in shell. Pages fill `nav` (sidebar links), `tabs` (phone tab bar), `topbar_meta` (right side of the
-phone top bar) and `content`.
+The signed-in shell. Pages fill `nav` (the menu's links), `sidebar_footer`, `topbar_meta` (the
+right side of the phone top bar) and `content`. On a phone the sidebar becomes a menu that
+slides in from the ☰ in the top bar (mockups PM · phone, Client · phone).
 {% endcomment %}
 {% block body %}
-<div class="app">
-  <aside class="sidebar">
-    <a class="brand" href="/"><span class="brand-mark">d.</span>dimon.d</a>
+<div class="app" data-menu>
+  <aside class="sidebar" id="main-menu" aria-label="Menu">
+    <div class="sidebar-head">
+      <a class="brand" href="/"><span class="brand-mark">d.</span>dimon.d</a>
+      <button class="menu-close" type="button" aria-label="Close menu" data-menu-close>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+      </button>
+    </div>
     <nav class="nav" aria-label="Main">{% block nav %}{% endblock %}</nav>
     <div class="sidebar-footer">{% block sidebar_footer %}{% endblock %}</div>
   </aside>
+  <div class="menu-scrim" data-menu-close hidden></div>
   <header class="topbar">
+    <button class="menu-button" type="button" aria-label="Menu" aria-expanded="false" aria-controls="main-menu" data-menu-open>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>
+    </button>
     <a class="brand" href="/"><span class="brand-mark">d.</span>dimon.d</a>
     <span class="topbar-meta">{% block topbar_meta %}{% endblock %}</span>
   </header>
   <main class="main">{% block content %}{% endblock %}</main>
-  <nav class="tabbar" aria-label="Main">{% block tabs %}{% endblock %}</nav>
 </div>
+<script type="module" src="{% static 'js/menu.js' %}"></script>
 {% endblock %}
