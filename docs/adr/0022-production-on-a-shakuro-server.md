@@ -16,7 +16,8 @@ internet. One PM ships a few times a week; clients work while it is night in Mos
 - Caddy listens on HTTP only, on `HTTP_PORT` (`127.0.0.1:8080` by default), for Shakuro's
   proxy. It trusts that proxy's `X-Forwarded-Proto: https` (requests from private addresses
   only), serves CSS and scripts itself, and passes everything else to Django. HTTPS, the
-  certificate and its renewal stay with Shakuro.
+  certificate and its renewal stay with Shakuro. Requests over 128 MB are refused there: the
+  largest real one is 5 videos of 20 MB each.
 - web runs the migrations and collects static files each time it starts, so the database is
   never behind the code. The background processes start only once web answers its health
   check, so none of them runs against a database whose migrations have not run.

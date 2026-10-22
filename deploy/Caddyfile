@@ -12,6 +12,11 @@
 :80 {
 	encode zstd gzip
 
+	# The largest real request: 5 videos of 20 MB each (apps/files/uploads.py), plus the form.
+	request_body {
+		max_size 128MB
+	}
+
 	handle_path /static/* {
 		root * /srv/static
 		# File names carry no version, so browsers ask each time; unchanged files answer 304.
