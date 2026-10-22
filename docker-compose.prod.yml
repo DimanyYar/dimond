@@ -2,7 +2,9 @@
 # and passes requests to Caddy on HTTP_PORT. Started and updated by deploy/deploy.sh, never
 # by hand. The local compose is docker-compose.yml.
 
-name: dimond
+# Its own name, so on a laptop it never takes over the containers and database of the local
+# compose.
+name: dimond-prod
 
 x-app: &app
   build: .
