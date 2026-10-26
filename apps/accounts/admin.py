@@ -68,6 +68,7 @@ class UserAdmin(admin.ModelAdmin):
         "role",
         "company",
         "notify",
+        "time_zone",
         "is_active",
         "is_staff",
         "date_joined",

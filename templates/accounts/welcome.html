@@ -1,4 +1,5 @@
 {% extends "layouts/sign_in.html" %}
+{% load static %}
 {% block title %}Welcome · dimon.d{% endblock %}
 
 {% block content %}
@@ -6,7 +7,7 @@
   <header class="stack auth-header">
     {% if invite.invited_by %}<p class="hint">Invited by {{ invite.invited_by.name|default:invite.invited_by.email }}{% if company %} · {{ company }}{% endif %}</p>{% endif %}
     <h1>Welcome to dimon.d</h1>
-    <p class="muted">{% if company %}This is where {{ company }} sends requests to the team and follows them. {% endif %}Two quick things and you’re in.</p>
+    <p class="muted">{% if company %}This is where {{ company }} sends requests to the team and follows them. {% endif %}A few quick things and you’re in.</p>
   </header>
 
   <form method="post" class="stack" novalidate>
@@ -19,6 +20,13 @@
              {% if form.name.errors %}aria-invalid="true"{% endif %}>
       {% if form.name.errors %}<span class="error-text" id="name-error">Tell us your name so people know who wrote the request.</span>{% endif %}
       <span class="hint" id="name-hint">{% if company %}Your colleagues at {{ company }} and the team{% else %}Everyone you work with here{% endif %} will see it next to your requests.</span>
+    </div>
+
+    <div class="field">
+      <label for="welcome-time-zone">Your time zone</label>
+      {% include "accounts/time_zone_select.html" with field=form.time_zone select_id="welcome-time-zone" %}
+      <span class="hint" id="welcome-time-zone-hint">Dates and times show in it. You can change it later in your account.</span>
+      <span class="hint" id="welcome-time-zone-guess" hidden>Taken from your browser. Change it if it’s wrong.</span>
     </div>
 
     <fieldset class="field choices">
@@ -35,4 +43,5 @@
     <button class="btn btn-primary btn-block" type="submit">Continue to my requests</button>
   </form>
   {% endwith %}
+  <script type="module" src="{% static 'js/time-zone.js' %}"></script>
 {% endblock %}

@@ -565,6 +565,14 @@ textarea.input {
   resize: vertical;
 }
 
+/* A list sizes itself to its longest option ("America/Argentina/ComodRivadavia" in the time
+   zones) and would push a phone page sideways; it takes the column's width instead. */
+select.input {
+  width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
 .input:hover {
   border-color: var(--hairline-strong);
 }

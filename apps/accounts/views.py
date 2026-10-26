@@ -14,6 +14,7 @@ from .forms import (
     CLIENT_COLORS,
     AccountEmailsForm,
     AccountNameForm,
+    AccountTimeZoneForm,
     EmailForm,
     InviteForm,
     JiraProjectForm,
@@ -80,7 +81,10 @@ def _welcome(request: HttpRequest, token: str, invite: SignInLink) -> HttpRespon
     if form.is_valid():
         try:
             user = services.accept_invite(
-                token, form.cleaned_data["name"], Notify(form.cleaned_data["notify"])
+                token,
+                form.cleaned_data["name"],
+                Notify(form.cleaned_data["notify"]),
+                form.cleaned_data["time_zone"],
             )
         except services.SignInLinkRejectedError:
             return _expired(request)
@@ -401,6 +405,7 @@ def _account_screen(
     request: HttpRequest,
     name_form: AccountNameForm | None = None,
     emails_form: AccountEmailsForm | None = None,
+    time_zone_form: AccountTimeZoneForm | None = None,
 ) -> HttpResponse:
     page = selectors.account_page(_me(request), request.session.session_key)
     person = page.person
@@ -416,6 +421,8 @@ def _account_screen(
             "name_form": name_form or AccountNameForm(initial={"name": person.name}),
             "emails_form": emails_form
             or AccountEmailsForm(initial={"notify": emails_on}, person=person),
+            "time_zone_form": time_zone_form
+            or AccountTimeZoneForm(initial={"time_zone": person.time_zone}),
         },
     )
 
@@ -436,6 +443,18 @@ def save_account_name(request: HttpRequest) -> HttpResponse:
         return _account_screen(request, name_form=form)
     services.rename_myself(me, form.cleaned_data["name"])
     messages.success(request, "Name saved.")
+    return redirect("account")
+
+
+@require_POST
+@login_required
+def save_account_time_zone(request: HttpRequest) -> HttpResponse:
+    me = _me(request)
+    form = AccountTimeZoneForm(request.POST)
+    if not form.is_valid():
+        return _account_screen(request, time_zone_form=form)
+    services.choose_time_zone(me, form.cleaned_data["time_zone"])
+    messages.success(request, "Time zone saved.")
     return redirect("account")
 
 

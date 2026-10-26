@@ -1,0 +1,9 @@
+{% comment %}The time zone list (PRD: account). Needs `field` and `select_id`; an empty one is filled
+from the browser by static/js/time-zone.js, which then shows `guess_id`.{% endcomment %}
+<select class="input" id="{{ select_id }}" name="time_zone" data-browser-time-zone="{{ select_id }}-guess"
+        aria-describedby="{{ select_id }}-hint{% if field.errors %} {{ select_id }}-error{% endif %}"{% if field.errors %} aria-invalid="true"{% endif %}>
+  {% for value, label in field.field.choices %}
+    <option value="{{ value }}"{% if field.value == value %} selected{% endif %}>{{ label }}</option>
+  {% endfor %}
+</select>
+{% if field.errors %}<span class="error-text" id="{{ select_id }}-error">{{ field.errors.0 }}</span>{% endif %}
