@@ -1,0 +1,4 @@
+{% comment %}Earlier news of the same few minutes, under the latest (PRD: email notifications).{% endcomment %}{% if also %}
+              <p style="margin:16px 0 8px;padding-top:14px;border-top:1px solid #ebe7e1;font-size:13px;font-weight:600;color:#626260;">Also in the last few minutes</p>
+              {% for line in also %}<p style="margin:0 0 8px;font-size:15px;line-height:1.45;">· {{ line }}</p>{% endfor %}
+{% endif %}

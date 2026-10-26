@@ -1,0 +1,7 @@
+{% comment %}The email's one action: dark in the PM's emails, orange in everyone else's (mockup 5.7).{% endcomment %}<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:22px;">
+  <tr>
+    <td style="border-radius:8px;background:{% if dark %}#111111{% else %}#ff5600{% endif %};">
+      <a href="{{ url }}" style="display:inline-block;padding:14px 22px;font-size:16px;font-weight:600;color:{% if dark %}#ffffff{% else %}#111111{% endif %};text-decoration:none;">{{ label }}</a>
+    </td>
+  </tr>
+</table>
