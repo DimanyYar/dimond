@@ -225,3 +225,6 @@ media/
 uploads/
 staticfiles/
 .DS_Store
+
+# Production database dumps made by deploy/deploy.sh
+backups/

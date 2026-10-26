@@ -14,7 +14,11 @@ RUN uv sync --locked --no-dev
 
 COPY . .
 
-RUN useradd --system --no-create-home app && chown -R app /app /venv
+# The folders exist in the image, owned by the app user, so the volumes mounted over them in
+# production start out writable.
+RUN useradd --system --no-create-home app \
+    && mkdir -p /app/uploads /app/staticfiles \
+    && chown -R app /app /venv
 USER app
 
 EXPOSE 8000
