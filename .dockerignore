@@ -7,8 +7,9 @@
 .env.*
 !.env.example
 
-# Clients' attachments and their previews (FILES_ROOT)
+# Clients' attachments and their previews (FILES_ROOT), and production database dumps
 uploads/
+backups/
 
 # Local tooling and build leftovers
 .git/

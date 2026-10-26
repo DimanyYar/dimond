@@ -1,15 +1,15 @@
-# Production front of dimond (ADR 0022). Shakuro's proxy in front holds the HTTPS certificate;
-# Caddy serves CSS and scripts itself and passes everything else to Django.
+# Production front of dimond (ADR 0022). Caddy serves CSS and scripts itself and passes
+# everything else to Django. SITE_ADDRESS decides who does HTTPS: a domain name makes Caddy
+# get and renew the certificate itself; ":80" leaves HTTPS to a proxy in front of it.
 {
-	auto_https off
 	servers {
-		# Requests arrive from Shakuro's proxy on a private address. Trusting it keeps its
+		# A proxy in front reaches Caddy from a private address. Trusting it keeps its
 		# X-Forwarded-Proto: https, which Django needs for secure cookies and form checks.
 		trusted_proxies static private_ranges
 	}
 }
 
-:80 {
+{$SITE_ADDRESS::80} {
 	encode zstd gzip
 
 	# The largest real request: 5 videos of 20 MB each (apps/files/uploads.py), plus the form.

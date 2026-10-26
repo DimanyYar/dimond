@@ -23,4 +23,4 @@ Why the project is built the way it is. Read the record before changing what it 
 - [0019. Status sync by polling, forward only](0019-status-sync-by-polling.md)
 - [0020. A Jira webhook only wakes the sync](0020-jira-webhook-wakes-the-sync.md)
 - [0021. Resend's delivery reports through a signed webhook](0021-resend-delivery-reports.md)
-- [0022. Production on a Shakuro server, deployed with one command](0022-production-on-a-shakuro-server.md)
+- [0022. Production on a server of its own, deployed with one command](0022-production-on-a-server-of-its-own.md)

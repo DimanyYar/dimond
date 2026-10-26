@@ -1,7 +1,24 @@
 # Production: first start and deploys
 
-How dimond runs on the Shakuro server (ADR 0022). Commands run on the server, in the project
-folder, as a user who may run `docker`.
+How dimond runs in production (ADR 0022): one Linux server of its own, where Caddy gets the
+HTTPS certificate itself. Commands run on the server as `root`.
+
+## Preparing the server
+
+Once, on a fresh Ubuntu 24.04 with your SSH key already added:
+
+```
+apt update && apt upgrade -y
+curl -fsSL https://get.docker.com | sh
+ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
+sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
+systemctl reload ssh
+apt install -y unattended-upgrades
+```
+
+This installs Docker, lets in only SSH and the site, turns off password logins (keys only)
+and installs security updates by itself. Point the domain's A record to the server's IP
+before the first start: Caddy needs it to get the certificate.
 
 ## First start
 
@@ -18,11 +35,12 @@ folder, as a user who may run `docker`.
    |---|---|
    | `DJANGO_DEBUG` | `false` |
    | `DJANGO_SECRET_KEY` | new, from `python3 -c "import secrets; print(secrets.token_urlsafe(50))"` |
-   | `DJANGO_ALLOWED_HOSTS` | the subdomain, e.g. `dimond.experiments.shakuro.info` |
+   | `DJANGO_ALLOWED_HOSTS` | the domain, e.g. `dimond.example.com` |
    | `DJANGO_ADMIN_URL` | a hard-to-guess path ending in `/` |
-   | `SITE_URL` | `https://` + the subdomain |
+   | `SITE_URL` | `https://` + the domain |
+   | `SITE_ADDRESS` | the domain alone: Caddy gets its HTTPS certificate |
+   | `HTTP_PORT`, `HTTPS_PORT` | `80` and `443` |
    | `POSTGRES_PASSWORD` | new, long |
-   | `HTTP_PORT` | where Shakuro's proxy sends requests, `127.0.0.1:8080` unless agreed otherwise |
    | `DEFAULT_FROM_EMAIL`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` | from Resend (ADR 0009, 0021) |
    | `TRACKER_JIRA_*` | the Jira address, account and webhook token (ADR 0020) |
 
@@ -46,7 +64,9 @@ folder, as a user who may run `docker`.
 ```
 
 The script lists the new commits and saves the database to `backups/before-deploy-….dump`.
-Then it switches to the latest main, rebuilds, restarts, and checks the site through Caddy.
+Then it switches to the latest main, rebuilds, restarts, and opens `SITE_URL/healthz`. It
+refuses to start if files in the project folder were edited on the server: what goes live is
+always exactly what is on GitHub.
 Run it when the client's working day is over: a restart takes the site down for a few seconds.
 
 ## Looking around
@@ -62,15 +82,21 @@ If the new version does not come up, the script goes back to the previous commit
 says so. The site then runs the old code.
 
 If a migration of the new version already changed the database and the old code cannot work
-with it, restore the dump from before the deploy. The script printed its name.
+with it, restore the dump from before the deploy. The script printed its name. The database is
+dropped and created again, so nothing the new migrations added stays behind:
 
 ```
 docker compose -f docker-compose.prod.yml stop web worker previews sync caddy
 docker compose -f docker-compose.prod.yml exec -T db sh -c \
-  'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  'dropdb -U "$POSTGRES_USER" "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
+docker compose -f docker-compose.prod.yml exec -T db sh -c \
+  'pg_restore --exit-on-error -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
   < backups/before-deploy-YYYYMMDD-HHMMSS-abc1234.dump
 docker compose -f docker-compose.prod.yml up -d
 ```
+
+If `pg_restore` stops with an error, do not start the site: the database is incomplete. Ask
+for help with the error text.
 
 Anything written to the site between the deploy and the restore is lost, so restore only when
 the old code really cannot run.

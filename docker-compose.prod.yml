@@ -1,6 +1,6 @@
-# Production (ADR 0022): one server, behind Shakuro's proxy, which holds the HTTPS certificate
-# and passes requests to Caddy on HTTP_PORT. On the server it is started and updated by
-# deploy/deploy.sh. The local compose is docker-compose.yml.
+# Production (ADR 0022): one server. Caddy takes requests on HTTP_PORT and HTTPS_PORT and, with
+# SITE_ADDRESS set to the domain, gets the HTTPS certificate itself. On the server it is
+# started and updated by deploy/deploy.sh. The local compose is docker-compose.yml.
 
 # Its own name, so on a laptop it never takes over the containers and database of the local
 # compose.
@@ -80,6 +80,9 @@ services:
     image: caddy:2.10-alpine
     ports:
       - "${HTTP_PORT:-127.0.0.1:8080}:80"
+      - "${HTTPS_PORT:-127.0.0.1:8443}:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - static:/srv/static:ro

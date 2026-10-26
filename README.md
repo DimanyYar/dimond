@@ -95,7 +95,7 @@ uv run pytest
 
 ## Production
 
-One Shakuro server behind its HTTPS proxy, updated with `deploy/deploy.sh` (ADR 0022).
+One server of its own, Caddy does HTTPS, updated with `deploy/deploy.sh` (ADR 0022).
 First start, deploys and what to do when one fails: [docs/deploy.md](docs/deploy.md).
 
 ## How we work

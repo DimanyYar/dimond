@@ -11,19 +11,15 @@ cd "$(dirname "$0")/.."
 
 compose() { docker compose -f docker-compose.prod.yml "$@"; }
 
-# The address Caddy listens on and the site's own host name, both from .env.
-setting() { grep -E "^$1=" .env | tail -n 1 | cut -d= -f2- | tr -d '"'"'" || true; }
-http_port=$(setting HTTP_PORT)
-http_port=${http_port:-127.0.0.1:8080}
-site_host=$(setting SITE_URL | sed -E 's#^https?://##; s#/.*$##')
+# The site's public address from .env: checking it goes the whole way a client's request goes.
+site_url=$(grep -E '^SITE_URL=' .env | tail -n 1 | cut -d= -f2- | tr -d '"'"'")
 
 site_answers() {
-	curl --fail --silent --show-error --max-time 10 \
-		--header "Host: $site_host" "http://$http_port/healthz" >/dev/null
+	curl --fail --silent --show-error --max-time 10 "$site_url/healthz" >/dev/null
 }
 
 start() {
-	compose build --quiet
+	compose build --quiet || return
 	compose up --detach --remove-orphans --wait --wait-timeout 300 && site_answers
 }
 
@@ -31,7 +27,7 @@ previous=$(git rev-parse HEAD)
 git fetch --quiet origin main
 next=$(git rev-parse origin/main)
 
-if [ "$previous" = "$next" ] && compose ps --status running --quiet web | grep -q .; then
+if [ "$previous" = "$next" ] && site_answers 2>/dev/null; then
 	echo "Already on $(git log -1 --format='%h %s' "$next"). Nothing to deploy."
 	exit 0
 fi
@@ -39,15 +35,22 @@ fi
 echo "Deploying:"
 git log --oneline "$previous..$next" || true
 
-# A copy of the database from before this deploy, in case a migration has to be undone.
+# The image is built from this folder, so a local edit would go live unnoticed.
+if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+	echo "The project folder has changes that are not on GitHub:" >&2
+	git status --short >&2
+	exit 1
+fi
+
+# A copy of the database from before this deploy, in case a migration has to be undone. The
+# database starts first if it was stopped, so the copy is always made before new migrations.
 # The last 10 stay; daily backups away from the server are separate (#21).
 mkdir -p backups
-if compose ps --status running --quiet db | grep -q .; then
-	dump="backups/before-deploy-$(date -u +%Y%m%d-%H%M%S)-$(git rev-parse --short "$previous").dump"
-	compose exec -T db sh -c 'pg_dump --format=custom -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >"$dump"
-	echo "Database saved to $dump"
-	ls -1t backups/before-deploy-*.dump | tail -n +11 | xargs -r rm --
-fi
+compose up --detach --wait db
+dump="backups/before-deploy-$(date -u +%Y%m%d-%H%M%S)-$(git rev-parse --short "$previous").dump"
+compose exec -T db sh -c 'pg_dump --format=custom -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >"$dump"
+echo "Database saved to $dump"
+ls -1t backups/before-deploy-*.dump | tail -n +11 | xargs -r rm --
 
 git checkout --quiet --detach "$next"
 if start; then
