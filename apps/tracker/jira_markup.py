@@ -14,9 +14,11 @@ from urllib.parse import urlsplit
 from django.utils.html import escape
 from django.utils.safestring import SafeString, mark_safe
 
-# Pictures and file links: the files are shown beside the text, not inside it.
+# Pictures and file links: the files are shown beside the text, not inside it. In code,
+# "!flag!" is words, not a picture.
 PICTURE = re.compile(r"!([^!\s|][^!|\n]*?)(?:\|[^!\n]*)?!")
 FILE_LINK = re.compile(r"\[\^([^\]\n]+)\]")
+CODE_IN_LINE = re.compile(r"\{\{(?P<code>.+?)\}\}")
 # Code and noformat keep their text exactly: a star in code is a star.
 # Not inside {{…}}, which is code in a line, not a block.
 VERBATIM = re.compile(
@@ -29,7 +31,8 @@ BLANK_LINES = re.compile(r"\n[ \t]*\n")
 INLINE = re.compile(
     r"(?P<br>\\\\)"
     r"|\\(?P<escaped>[^\s\\])"
-    r"|\{\{(?P<code>.+?)\}\}"
+    rf"|{CODE_IN_LINE.pattern}"
+    rf"|(?P<picture>{PICTURE.pattern})"
     r"|\[(?P<bracket>[^\]\n]+)\]"
     r"|(?P<url>(?<![\w/])(?:https?://|mailto:)[^\s\[\]|<>\"]+)"
     r"|(?P<mark>[*_+-])"
@@ -78,7 +81,8 @@ Paragraph = tuple[tuple[Inline, ...], ...]
 def files_shown(body: str) -> list[str]:
     """Names of the files a comment shows or links to, in order, each once."""
     shown: list[str] = []
-    for match in (*PICTURE.finditer(body), *FILE_LINK.finditer(body)):
+    outside_code = CODE_IN_LINE.sub("", VERBATIM.sub("", body))
+    for match in (*PICTURE.finditer(outside_code), *FILE_LINK.finditer(outside_code)):
         name = match.group(1).strip()
         if name not in shown:
             shown.append(name)
@@ -106,7 +110,7 @@ def to_text(markup: str, jira_address: str = "") -> str:
 
 
 def _paragraphs(markup: str) -> list[Paragraph]:
-    markup = PICTURE.sub("", markup.replace("\r\n", "\n"))
+    markup = markup.replace("\r\n", "\n")
     paragraphs: list[Paragraph] = []
     position = 0
     for block in VERBATIM.finditer(markup):
@@ -122,10 +126,16 @@ def _formatted(markup: str) -> list[Paragraph]:
     markup = WRAPPER_MACRO.sub("", markup)
     paragraphs = []
     for chunk in BLANK_LINES.split(markup):
-        lines = [line.strip() for line in chunk.split("\n") if line.strip()]
-        if lines:
-            paragraphs.append(tuple(_inline(line) for line in lines))
+        # A line holding only a picture shows nothing once the picture is beside the text.
+        lines = [_inline(line.strip()) for line in chunk.split("\n")]
+        shown = tuple(line for line in lines if not _blank(line))
+        if shown:
+            paragraphs.append(shown)
     return paragraphs
+
+
+def _blank(pieces: tuple[Inline, ...]) -> bool:
+    return all(isinstance(piece, Text) and not piece.text.strip() for piece in pieces)
 
 
 def _inline(line: str, depth: int = 0) -> tuple[Inline, ...]:
@@ -160,6 +170,8 @@ def _piece(
         return Text(match.group("escaped")), match.end()
     if kind == "code":
         return Code(match.group("code")), match.end()
+    if kind == "picture":
+        return None, match.end()
     if kind == "bracket":
         return _bracket(match.group("bracket"), depth), match.end()
     if kind == "url":
@@ -214,7 +226,11 @@ def _bracket(inside: str, depth: int) -> Inline | None:
 
 
 def _linkable(url: str, jira_address: str) -> bool:
-    parts = urlsplit(url)
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        # "https://[broken": Python cannot read it, so it is not an address to open.
+        return False
     if parts.scheme.lower() not in LINK_SCHEMES:
         return False
     jira_host = urlsplit(jira_address).hostname

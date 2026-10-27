@@ -149,3 +149,19 @@ def test_the_plain_text_has_no_marks_for_previews():
     assert (
         to_text(markup, JIRA) == "Which sources: CRM settings (https://atlas.example.com/s), code?"
     )
+
+
+def test_exclamation_marks_in_code_are_words_not_pictures():
+    markup = "Run {{echo !important!}}\n{code}\nflag = !set!\n{code}\nSee !screen.png!"
+
+    assert html(markup) == (
+        "<p>Run <code>echo !important!</code></p><p>flag = !set!</p><p>See </p>"
+    )
+    assert files_shown(markup) == ["screen.png"]
+
+
+def test_a_broken_address_stays_words_and_does_not_stop_the_sync():
+    markup = "[Docs|https://[broken]"
+
+    assert html(markup) == "<p>Docs</p>"
+    assert to_text(markup, JIRA) == "Docs"
