@@ -2,14 +2,19 @@
 shows in it (PRD: account). Times are stored in UTC."""
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from django.conf import settings
 from django.core import mail
+from django.http import HttpResponse
+from django.test import RequestFactory
+from django.utils import timezone
 
 from apps.accounts import services
-from apps.accounts.models import Company, User
+from apps.accounts.middleware import PersonTimeZone
+from apps.accounts.models import Company, Role, User
+from apps.accounts.time_zones import _choices_on
 from apps.requests import services as requests
 from apps.requests.models import Request, RequestType, WhenNeeded
 
@@ -100,3 +105,32 @@ def test_one_persons_zone_does_not_leak_into_the_next_page(client, anna, pm):
     client.force_login(pm)
 
     assert "Oct 26, 22:30" in client.get(request.get_absolute_url()).content.decode()
+
+
+def zone_on_a_page_for(person: User) -> str:
+    """The time zone the middleware turns on for one page this person opens."""
+    page = RequestFactory().get("/")
+    page.user = person
+    return PersonTimeZone(lambda _: HttpResponse(timezone.get_current_timezone_name()))(
+        page
+    ).content.decode()
+
+
+def test_team_sees_utc_even_with_a_zone_saved():
+    olga = User.objects.create_user("olga@shakuro.com", role=Role.TEAM, time_zone="Europe/Moscow")
+
+    assert zone_on_a_page_for(olga) == "UTC"
+
+
+def test_client_with_a_zone_gets_it_on_every_page(anna):
+    services.choose_time_zone(anna, "Asia/Tokyo")
+
+    assert zone_on_a_page_for(anna) == "Asia/Tokyo"
+
+
+def test_offsets_in_the_list_follow_summer_time():
+    winter = dict(_choices_on(date(2026, 1, 15)))
+    summer = dict(_choices_on(date(2026, 7, 15)))
+
+    assert winter["America/Los_Angeles"] == "UTC−08:00 · America/Los_Angeles"
+    assert summer["America/Los_Angeles"] == "UTC−07:00 · America/Los_Angeles"
