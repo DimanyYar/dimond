@@ -516,19 +516,50 @@ DISCORD_OFF = "Discord was turned off for this client"
 GAVE_UP = "Gave up after a day of tries"
 TASK_CHANGED = "The request got another task before the post went out"
 TEST_TOPIC = "dimond · test"
+NO_TASK = "The request no longer has a Jira task"
+# A reply's text in the topic; the rest of the 2000 characters is for who wrote and the files.
+REPLY_LIMIT = 1500
 
 
 def queue_task_topic(request: Request) -> None:
     """A topic for the request's new Jira task in the client's Discord forum, sent by the
-    worker. Called in the same transaction that links the task, so the two go together. A
-    client without a webhook gets nothing: Discord is optional per client."""
-    if not request.company.discord_webhook:
+    worker. Called in the same transaction that links the task, so the two go together."""
+    _queue(request, DiscordPostKind.TASK)
+
+
+def queue_reply(message: Message) -> None:
+    """A client's reply, into the topic of the request's task (PRD: Discord: details). Called
+    in the transaction that saves the reply."""
+    _queue(message.request, DiscordPostKind.REPLY, message=message)
+
+
+def queue_withdrawal(withdrawal: WithdrawalRequest) -> None:
+    """A line in the task's topic: the client asks to withdraw the request, or, once the PM
+    decided, what they decided. The team may already be working on it."""
+    kind = (
+        DiscordPostKind.WITHDRAW_ASK
+        if withdrawal.confirmed is None
+        else DiscordPostKind.WITHDRAW_DECISION
+    )
+    _queue(withdrawal.request, kind, withdrawal=withdrawal)
+
+
+def _queue(
+    request: Request,
+    kind: DiscordPostKind,
+    message: Message | None = None,
+    withdrawal: WithdrawalRequest | None = None,
+) -> None:
+    # Discord is optional per client, and a request without a task has no topic to go to.
+    if not request.company.discord_webhook or not request.jira_key:
         return
     DiscordPost.objects.create(
         company=request.company,
         request=request,
-        kind=DiscordPostKind.TASK,
+        kind=kind,
         task_key=request.jira_key,
+        message=message,
+        withdrawal=withdrawal,
     )
 
 
@@ -549,7 +580,14 @@ def send_discord_posts(now: datetime | None = None) -> int:
     now = now or timezone.now()
     due = (
         DiscordPost.objects.filter(status=DiscordPostStatus.WAITING, next_try_at__lte=now)
-        .select_related("company", "request")
+        .select_related(
+            "company",
+            "request",
+            "message__author",
+            "withdrawal__requested_by",
+            "withdrawal__decided_by",
+            "withdrawal__reason",
+        )
         .order_by("created_at", "pk")
     )
     return sum(_send_queued(post, now) for post in due)
@@ -557,26 +595,63 @@ def send_discord_posts(now: datetime | None = None) -> int:
 
 def _send_queued(post: DiscordPost, now: datetime) -> bool:
     request = post.request
-    # Only task posts are queued; a test goes out at once.
+    # Only posts about a request are queued; a test goes out at once.
     assert request is not None
+    # Another post of this round may have opened the topic or the PM linked another task.
+    request.refresh_from_db(fields=["jira_key", "jira_url", "discord_topic"])
     webhook = post.company.discord_webhook
     if not webhook:
-        post.status, post.error = DiscordPostStatus.FAILED, DISCORD_OFF
-        post.save(update_fields=["status", "error"])
+        return _give_up(post, DISCORD_OFF)
+    if post.kind == DiscordPostKind.TASK:
+        return _send_task_topic(post, request, webhook, now)
+    if not request.jira_key:
+        return _give_up(post, NO_TASK)
+    # The topic reads in the order things happened: a post waits while an earlier one about
+    # the same request is still waiting, without spending its tries.
+    if DiscordPost.objects.filter(
+        request=request, status=DiscordPostStatus.WAITING, pk__lt=post.pk
+    ).exists():
         return False
+    # A reply belongs to the request, so it goes to the task the request follows now.
+    post.task_key = request.jira_key
+    text = _topic_post(post)
+    return (
+        _try_post(post, partial(_post_in_topic, request, webhook, text), now, retry=True)
+        is not None
+    )
+
+
+def _give_up(post: DiscordPost, error: str) -> bool:
+    post.status, post.error = DiscordPostStatus.FAILED, error
+    post.save(update_fields=["status", "error"])
+    return False
+
+
+def _send_task_topic(post: DiscordPost, request: Request, webhook: str, now: datetime) -> bool:
     # While Discord was down, the task may have been deleted in Jira or replaced: the new
     # task has a post of its own, and an old one would post the wrong key or none.
     if request.jira_key != post.task_key:
-        post.status, post.error = DiscordPostStatus.FAILED, TASK_CHANGED
-        post.save(update_fields=["status", "error"])
-        return False
+        return _give_up(post, TASK_CHANGED)
+    return _try_post(post, partial(_open_topic, request, webhook), now, retry=True) is not None
+
+
+def _open_topic(request: Request, webhook: str) -> str:
     name, text = _task_topic(request)
-    topic = _try_post(post, partial(discord.start_topic, webhook, name, text), now, retry=True)
-    if topic is None:
-        return False
-    request.discord_topic = topic
+    request.discord_topic = discord.start_topic(webhook, name, text)
     request.save(update_fields=["discord_topic"])
-    return True
+    return request.discord_topic
+
+
+def _post_in_topic(request: Request, webhook: str, text: str) -> str:
+    """dimond makes every topic itself: a task linked before the client had Discord, or whose
+    topic someone deleted, gets one now, opened by the task's own first post."""
+    if request.discord_topic:
+        try:
+            return discord.post_in_topic(webhook, request.discord_topic, text)
+        except discord.DiscordError as error:
+            if not error.topic_gone:
+                raise
+    return discord.post_in_topic(webhook, _open_topic(request, webhook), text)
 
 
 def _try_post(
@@ -618,3 +693,35 @@ def _task_topic(request: Request) -> tuple[str, str]:
         lines += ["**Why it matters**", discord.fit(request.why, WHY_LIMIT)]
     lines.append(f"Jira: {request.jira_url}")
     return f"{request.jira_key} · {request.title}", "\n".join(lines)
+
+
+def _topic_post(post: DiscordPost) -> str:
+    """What a reply or a withdrawal reads like in the topic. Never a link: the team cannot
+    open dimond's pages (PRD: Discord: details)."""
+    if post.kind == DiscordPostKind.REPLY:
+        assert post.message is not None
+        return _client_words(f"**{_who(post.message.author)} replied**", post.message)
+    withdrawal = post.withdrawal
+    assert withdrawal is not None
+    if post.kind == DiscordPostKind.WITHDRAW_ASK:
+        return _client_words(
+            f"**{_who(withdrawal.requested_by)} asks to withdraw the request.** "
+            "The PM will decide whether work on it stops.",
+            withdrawal.reason,
+        )
+    if withdrawal.confirmed:
+        return (
+            f"**{_who(withdrawal.decided_by)} withdrew the request.** Work on it stops; "
+            "the Jira task stays as it is."
+        )
+    return f"**{_who(withdrawal.decided_by)} kept the request going.** Work on it goes on."
+
+
+def _client_words(headline: str, message: Message) -> str:
+    lines = [headline]
+    if message.text:
+        lines.append(discord.fit(message.text, REPLY_LIMIT))
+    files = message.attachments.count()
+    if files:
+        lines.append(f"+ {files} file{'s' if files != 1 else ''} in dimond")
+    return "\n".join(lines)

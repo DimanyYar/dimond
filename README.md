@@ -44,7 +44,8 @@ log is `docker compose logs -f sync`, and every finished run is listed on the PM
 does the same from a terminal.
 
 The `discord` container posts a topic to the client's Discord forum for every Jira task the PM
-creates or links, when the client has a webhook on the Clients page (ADR 0024). It tries again
+creates or links, when the client has a webhook on the Clients page, then the client's replies,
+asks to withdraw and the PM's decisions into that topic (ADR 0024). It tries again
 for a day while Discord is down; its log is `docker compose logs -f discord`, and every post is
 listed on Logs · Discord.
 
