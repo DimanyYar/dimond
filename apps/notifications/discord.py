@@ -7,11 +7,13 @@ characters. Only Discord's own hosts are accepted, so a pasted address can never
 call some other server.
 """
 
+import math
 import re
 
 import httpx
 
 TIMEOUT_SECONDS = 10
+MAX_WAIT_SECONDS = 3600.0
 WEBHOOK = re.compile(r"^https://discord\.com/api/webhooks/\d+/[\w-]+$")
 # Discord's own limits: a topic name of 100 characters, a message of 2000.
 TOPIC_NAME_LIMIT = 100
@@ -70,14 +72,18 @@ def _post(webhook: str, body: dict[str, object]) -> str:
         raise _refusal(response)
     # With wait=true Discord returns the message; in a new topic its channel is the topic.
     try:
-        return str(response.json()["channel_id"])
+        topic = response.json()["channel_id"]
     # Discord took the post but its answer is not the message, e.g. a proxy's page. Trying
     # again would open a second topic, so the post is not retried.
     except (ValueError, KeyError, TypeError):
-        raise DiscordError(
-            "Posted, but Discord's answer was unreadable",
-            f"{response.status_code} {response.text[:200]}",
-        ) from None
+        topic = None
+    # Discord's ids are numbers written as strings ("snowflakes").
+    if isinstance(topic, str) and topic.isdecimal():
+        return topic
+    raise DiscordError(
+        "Posted, but Discord's answer was unreadable",
+        f"{response.status_code} {response.text[:200]}",
+    )
 
 
 def _refusal(response: httpx.Response) -> DiscordError:
@@ -102,8 +108,10 @@ def _refusal(response: httpx.Response) -> DiscordError:
 
 
 def _seconds(answer: dict[str, object]) -> float:
-    """How long Discord asks to wait; 5 seconds when the answer does not say it clearly."""
+    """How long Discord asks to wait, up to an hour; 5 seconds when the answer does not say it
+    clearly. Discord asks for seconds; anything longer than the hourly retries is not real."""
     try:
-        return max(0.0, float(str(answer.get("retry_after", 5))))
+        seconds = float(str(answer.get("retry_after", 5)))
     except ValueError:
         return 5.0
+    return min(max(seconds, 0.0), MAX_WAIT_SECONDS) if math.isfinite(seconds) else 5.0

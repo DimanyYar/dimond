@@ -205,8 +205,15 @@ def test_a_post_for_a_task_replaced_while_waiting_is_dropped(pm, anna, fake_disc
     assert [body["thread_name"][:8] for body in fake_discord.bodies()[1:]] == ["FI-2231 "]
 
 
-def test_an_unreadable_answer_after_posting_is_not_tried_again(pm, anna, fake_discord):
-    fake_discord.answers = [httpx.Response(200, text="<html>ok</html>")]
+@pytest.mark.parametrize(
+    "answer",
+    [
+        httpx.Response(200, text="<html>ok</html>"),
+        httpx.Response(200, json={"id": "1", "channel_id": None}),
+    ],
+)
+def test_an_unreadable_answer_after_posting_is_not_tried_again(pm, anna, fake_discord, answer):
+    fake_discord.answers = [answer]
     create_task(pm, make(anna))
 
     send_discord_posts()
@@ -217,8 +224,9 @@ def test_an_unreadable_answer_after_posting_is_not_tried_again(pm, anna, fake_di
     assert post.error == "Posted, but Discord's answer was unreadable"
 
 
-def test_a_rate_limit_without_a_clear_wait_waits_a_minute(pm, anna, fake_discord):
-    fake_discord.answers = [httpx.Response(429, json={"retry_after": "soon"})]
+@pytest.mark.parametrize("wait", ["soon", "1e309", "nan"])
+def test_a_rate_limit_without_a_clear_wait_waits_a_minute(pm, anna, fake_discord, wait):
+    fake_discord.answers = [httpx.Response(429, json={"retry_after": wait})]
     create_task(pm, make(anna))
     start = timezone.now()
 
