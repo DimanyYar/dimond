@@ -107,9 +107,12 @@ def test_one_persons_zone_does_not_leak_into_the_next_page(client, anna, pm):
     assert "Oct 26, 22:30" in client.get(request.get_absolute_url()).content.decode()
 
 
-def zone_on_a_page_for(person: User) -> str:
-    """The time zone the middleware turns on for one page this person opens."""
+def zone_on_a_page_for(person: User, browser: str = "") -> str:
+    """The time zone the middleware turns on for one page this person opens, from a browser
+    in the `browser` zone."""
     page = RequestFactory().get("/")
+    if browser:
+        page.COOKIES["browser_time_zone"] = browser
     page.user = person
     return PersonTimeZone(lambda _: HttpResponse(timezone.get_current_timezone_name()))(
         page
@@ -153,3 +156,30 @@ def test_offsets_in_the_list_follow_summer_time():
 
     assert winter["America/Los_Angeles"] == "UTC−08:00 · America/Los_Angeles"
     assert summer["America/Los_Angeles"] == "UTC−07:00 · America/Los_Angeles"
+
+
+def test_until_a_zone_is_saved_times_show_in_the_browsers_zone(client, anna):
+    request = request_sent_at(anna, datetime(2026, 10, 26, 22, 30, tzinfo=UTC))
+    client.force_login(anna)
+    client.cookies["browser_time_zone"] = "Europe/Moscow"
+
+    assert "Oct 27, 01:30" in client.get(request.get_absolute_url()).content.decode()
+    page = client.get("/account/").content.decode()
+    assert "times show in your browser’s zone, Europe/Moscow, until you save" in page
+
+
+def test_a_saved_zone_wins_over_the_browsers(anna):
+    services.choose_time_zone(anna, "Asia/Tokyo")
+
+    assert zone_on_a_page_for(anna, browser="Europe/Moscow") == "Asia/Tokyo"
+
+
+@pytest.mark.parametrize("browser", ["Mars/Olympus", "../../etc/passwd", "EST5EDT"])
+def test_a_browser_zone_not_in_the_list_is_ignored(anna, browser):
+    assert zone_on_a_page_for(anna, browser=browser) == "UTC"
+
+
+def test_team_sees_utc_whatever_their_browser_says():
+    olga = User.objects.create_user("olga@shakuro.com", role=Role.TEAM)
+
+    assert zone_on_a_page_for(olga, browser="Europe/Moscow") == "UTC"

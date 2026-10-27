@@ -1,5 +1,5 @@
 {% extends layout %}
-{% load static %}
+{% load static tz %}
 {% comment %}
 A person's own account (mockups 3.6 · Your account for a client, PM · Your account): name, time zone and
 which emails on the left, devices on the right; one column on a phone. A PM's emails are on or
@@ -61,7 +61,8 @@ off, a client picks which requests. Changing the email comes with #26.
         <div class="field">
           <label class="visually-hidden" for="account-time-zone">Time zone</label>
           {% include "accounts/time_zone_select.html" with field=time_zone_form.time_zone select_id="account-time-zone" %}
-          <span class="hint" id="account-time-zone-hint">{% if person.time_zone %}Moving or travelling? Pick the new one{% else %}Not saved yet: times show in UTC until you save{% endif %}</span>
+          {% get_current_timezone as current_zone %}
+          <span class="hint" id="account-time-zone-hint">{% if person.time_zone %}Moving or travelling? Pick the new one{% elif current_zone != "UTC" %}Not saved yet: times show in your browser’s zone, {{ current_zone }}, until you save{% else %}Not saved yet: times show in UTC until you save{% endif %}</span>
           <span class="hint" id="account-time-zone-guess" hidden>We picked your browser’s zone. Press Save if it’s right</span>
         </div>
         <div class="person-profile-actions">
