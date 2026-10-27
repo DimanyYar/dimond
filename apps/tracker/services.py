@@ -27,6 +27,7 @@ from apps.requests.services import (
     follow_moved_task,
     follow_releases,
     follow_task,
+    keep_team_markup,
 )
 
 from .base import (
@@ -305,11 +306,12 @@ def _follow_questions(run: SyncRun, tracker: Tracker, request: Request, issue: I
     """Comments tagged #client become questions in the request's thread, once each; an edit
     in Jira rewords the question (PRD: Jira sync, team questions). True: any was new or
     edited."""
-    known = dict(
-        Message.objects.filter(request=request)
+    known = {
+        comment_id: (edited_at, markup)
+        for comment_id, edited_at, markup in Message.objects.filter(request=request)
         .exclude(team_comment_id="")
-        .values_list("team_comment_id", "team_edited_at")
-    )
+        .values_list("team_comment_id", "team_edited_at", "team_markup")
+    }
     asked = [c for c in issue.comments if c.asks_the_client]
     # A task Jira moved between clients' projects keeps its comments: a question already shown
     # to another request's client was meant for them, never for this one.
@@ -323,9 +325,12 @@ def _follow_questions(run: SyncRun, tracker: Tracker, request: Request, issue: I
         if comment.id in elsewhere:
             continue
         if comment.id in known:
-            if known[comment.id] != comment.updated:
+            edited_at, markup = known[comment.id]
+            if edited_at != comment.updated:
                 _log_question(run, edit_team_question(request, comment))
                 news = True
+            elif not markup and comment.markup:
+                keep_team_markup(request, comment)
             continue
         files, not_shown = _question_files(tracker, comment)
         _log_question(run, add_team_question(request, comment, files, not_shown))

@@ -14,7 +14,9 @@ team question, as a comment quoting the question and mentioning its author, and 
 PM links an existing task and leaves "Add a comment" ticked, one comment pointing back to the
 request with its files (added Oct 19, 2026). It reads statuses, fix versions and the team's
 questions for the client: comments tagged `#client` outside a quote, with the files they show
-(changed Oct 20, 2026, from comments mentioning a dimond service user). A plain-text tag needs
+(changed Oct 20, 2026, from comments mentioning a dimond service user), kept in Jira's markup
+and formatted by dimond itself, never as Jira's HTML (ADR 0025, Oct 27, 2026). A plain-text
+tag needs
 no service account; a mention would have pointed at Dmitry while the sync signs in as him, and
 every mention of him would have reached the client. dimond's own answers quote the question,
 so the tag inside a quote never counts. The answer goes as soon as the client sends it, without the

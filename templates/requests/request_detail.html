@@ -1,5 +1,5 @@
 {% extends is_client|yesno:"layouts/client.html,layouts/pm.html" %}
-{% load static %}
+{% load static jira_formatting %}
 {% block title %}{{ page.request.key }} · {{ page.request.title }} · dimon.d{% endblock %}
 
 {% block content %}
@@ -100,7 +100,7 @@
             <span class="muted">asked in Jira</span>
             <time class="muted" datetime="{{ m.created_at|date:'c' }}">{{ m.created_at|date:"M j, H:i" }}</time>
           </div>
-          <p class="message-text">{{ m.text }}</p>
+          {% if m.team_markup %}<div class="message-text message-formatted">{{ m.team_markup|jira_formatted }}</div>{% else %}<p class="message-text">{{ m.text }}</p>{% endif %}
           {% with files=m.attachments.all %}{% if files %}{% include "files/file_list.html" with small=True %}{% endif %}{% endwith %}
           {% if m.files_not_shown %}<p class="message-files-not-shown">{% if m.files_not_shown|length == 1 %}A file from the team couldn’t be shown here{% else %}{{ m.files_not_shown|length }} files from the team couldn’t be shown here{% endif %}: {{ m.files_not_shown|join:", " }}. {% if is_client %}Ask Dimon if you need it.{% else %}Open the task in Jira to see it.{% endif %}</p>{% endif %}
         {% if page.can_answer_team and m == page.question %}

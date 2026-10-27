@@ -73,6 +73,8 @@ class Comment:
     missing_files: tuple[str, ...] = ()
     # A question from the team for the client: the client tag outside quotes.
     asks_the_client: bool = False
+    # The comment as the team wrote it, in the tracker's markup, for the thread to format.
+    markup: str = ""
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,7 @@
 """The team asks the client from Jira with a comment tagged #client (PRD: Jira sync, team
 questions; ADR 0010). A fake tracker answers; no test reaches Jira."""
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -400,3 +401,83 @@ def test_a_question_shown_to_another_client_never_reaches_this_one(jira, anna, p
 
     assert not second.messages.exists()
     assert run.outcome == SyncOutcome.SUCCEEDED
+
+
+FORMATTED = "#client Show *only active* sources, or [all of them|https://atlas.example.com/s]?"
+
+
+def formatted(updated: datetime = ASKED) -> Comment:
+    return Comment(
+        id="86412",
+        author_login="opetrova@shakuro.com",
+        author_name="Olga Petrova",
+        text="#client Show only active sources, or all of them (https://atlas.example.com/s)?",
+        created=ASKED,
+        updated=updated,
+        asks_the_client=True,
+        markup=FORMATTED,
+    )
+
+
+def test_the_client_sees_the_question_formatted_as_the_team_wrote_it(client, jira, anna):
+    request = linked(anna)
+    jira.comments = [formatted()]
+    sync_tasks()
+    client.force_login(anna)
+
+    page = client.get(request.get_absolute_url()).content.decode()
+
+    assert "Show <strong>only active</strong> sources" in page
+    assert '<a href="https://atlas.example.com/s"' in page
+    assert "#client" not in page
+
+
+def test_previews_of_a_formatted_question_have_no_marks(jira, anna):
+    request = linked(anna)
+    jira.comments = [formatted()]
+
+    sync_tasks()
+
+    assert request.messages.get().text == (
+        "Show only active sources, or all of them (https://atlas.example.com/s)?"
+    )
+
+
+def test_an_edit_in_jira_reformats_the_question(jira, anna):
+    request = linked(anna)
+    jira.comments = [formatted()]
+    sync_tasks()
+
+    jira.comments = [
+        replace(formatted(ASKED + timedelta(1)), markup="#client Show _archived_ ones too?")
+    ]
+    sync_tasks()
+
+    assert request.messages.get().team_markup == " Show _archived_ ones too?"
+
+
+def test_a_question_copied_before_formatting_gets_it_quietly(jira, anna):
+    request = linked(anna)
+    jira.comments = [formatted()]
+    sync_tasks()
+    question = request.messages.get()
+    Message.objects.filter(pk=question.pk).update(team_markup="")
+
+    later = sync_tasks()
+
+    question.refresh_from_db()
+    assert question.team_markup == FORMATTED.removeprefix("#client")
+    assert question.team_edited_at == ASKED
+    assert not later.events.exists()
+    assert status_of(request) == ClientStatus.NEEDS_INPUT
+
+
+def test_a_question_without_formatting_still_shows_its_words(client, jira, anna):
+    request = linked(anna)
+    jira.comments = [comment("#client Which sources should the list show?")]
+    sync_tasks()
+    client.force_login(anna)
+
+    page = client.get(request.get_absolute_url()).content.decode()
+
+    assert '<p class="message-text">Which sources should the list show?</p>' in page
