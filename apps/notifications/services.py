@@ -3,6 +3,7 @@ import smtplib
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from functools import partial
 
 from anymail.exceptions import AnymailAPIError, AnymailError
 from django.conf import settings
@@ -13,7 +14,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.accounts.models import Notify, Role, User
+from apps.accounts.models import Company, Notify, Role, User
 from apps.requests.models import (
     CLOSED_STATUSES,
     ClientStatus,
@@ -23,7 +24,15 @@ from apps.requests.models import (
     WithdrawalRequest,
 )
 
-from .models import Email, EmailKind, EmailStatus
+from . import discord
+from .models import (
+    DiscordPost,
+    DiscordPostKind,
+    DiscordPostStatus,
+    Email,
+    EmailKind,
+    EmailStatus,
+)
 from .selectors import (
     DAILY_LIMIT_REACHED,
     SERVER_UNREACHABLE,
@@ -491,3 +500,121 @@ def bounce_in_plain_words(detail: str) -> str:
     if "hard bounce" in detail:
         return "Mailbox doesn’t exist"
     return "The receiving server sent it back"
+
+
+# Discord for the team (PRD: notifications; ADR 0024).
+
+# A post that keeps failing for reasons that may pass (Discord down, too many posts) is tried
+# after these pauses, then every hour, for a day. One that Discord refuses outright, a
+# deleted webhook or a channel that is not a forum, is not tried again: it would never go.
+RETRY_DELAYS = [timedelta(minutes=m) for m in (1, 2, 5, 15, 30)]
+RETRY_LATER = timedelta(hours=1)
+GIVE_UP_AFTER = timedelta(days=1)
+# Room for the type, the urgency and the Jira link in one Discord message.
+WHY_LIMIT = 1500
+DISCORD_OFF = "Discord was turned off for this client"
+GAVE_UP = "Gave up after a day of tries"
+TASK_CHANGED = "The request got another task before the post went out"
+TEST_TOPIC = "dimond · test"
+
+
+def queue_task_topic(request: Request) -> None:
+    """A topic for the request's new Jira task in the client's Discord forum, sent by the
+    worker. Called in the same transaction that links the task, so the two go together. A
+    client without a webhook gets nothing: Discord is optional per client."""
+    if not request.company.discord_webhook:
+        return
+    DiscordPost.objects.create(
+        company=request.company,
+        request=request,
+        kind=DiscordPostKind.TASK,
+        task_key=request.jira_key,
+    )
+
+
+def send_test_post(company: Company) -> DiscordPost:
+    """Send test on the Clients page: a test topic right away, so the PM sees at once whether
+    the webhook works and belongs to a forum. `company` is one of this PM's own clients
+    (`client_for`). Not retried: the PM is looking at the answer."""
+    post = DiscordPost(company=company, kind=DiscordPostKind.TEST)
+    text = f"Test from dimond. Topics for {company.name}’s Jira tasks will appear in this forum."
+    send = partial(discord.start_topic, company.discord_webhook, TEST_TOPIC, text)
+    _try_post(post, send, timezone.now(), retry=False)
+    return post
+
+
+def send_discord_posts(now: datetime | None = None) -> int:
+    """The Discord worker's round: every waiting post whose time has come, oldest first.
+    Returns how many went out."""
+    now = now or timezone.now()
+    due = (
+        DiscordPost.objects.filter(status=DiscordPostStatus.WAITING, next_try_at__lte=now)
+        .select_related("company", "request")
+        .order_by("created_at", "pk")
+    )
+    return sum(_send_queued(post, now) for post in due)
+
+
+def _send_queued(post: DiscordPost, now: datetime) -> bool:
+    request = post.request
+    # Only task posts are queued; a test goes out at once.
+    assert request is not None
+    webhook = post.company.discord_webhook
+    if not webhook:
+        post.status, post.error = DiscordPostStatus.FAILED, DISCORD_OFF
+        post.save(update_fields=["status", "error"])
+        return False
+    # While Discord was down, the task may have been deleted in Jira or replaced: the new
+    # task has a post of its own, and an old one would post the wrong key or none.
+    if request.jira_key != post.task_key:
+        post.status, post.error = DiscordPostStatus.FAILED, TASK_CHANGED
+        post.save(update_fields=["status", "error"])
+        return False
+    name, text = _task_topic(request)
+    topic = _try_post(post, partial(discord.start_topic, webhook, name, text), now, retry=True)
+    if topic is None:
+        return False
+    request.discord_topic = topic
+    request.save(update_fields=["discord_topic"])
+    return True
+
+
+def _try_post(
+    post: DiscordPost, send: Callable[[], str], now: datetime, *, retry: bool
+) -> str | None:
+    """One try of the post, written in the journal; returns the topic's id when it went out.
+    With `retry`, a failure that may pass leaves the post waiting for its next try."""
+    post.attempts += 1
+    post.tried_at = now
+    try:
+        topic = send()
+    except discord.DiscordError as error:
+        logger.warning("Discord post %s failed: %s", post.pk, error.detail)
+        post.error, post.error_detail = error.reason, error.detail
+        if not retry or error.retry_after is None:
+            post.status = DiscordPostStatus.FAILED
+        elif now - post.created_at >= GIVE_UP_AFTER:
+            post.status, post.error = DiscordPostStatus.FAILED, GAVE_UP
+        else:
+            post.next_try_at = now + max(
+                _retry_delay(post.attempts), timedelta(seconds=error.retry_after)
+            )
+        post.save()
+        return None
+    post.status, post.error, post.error_detail = DiscordPostStatus.SENT, "", ""
+    post.save()
+    return topic
+
+
+def _retry_delay(attempts: int) -> timedelta:
+    return RETRY_DELAYS[attempts - 1] if attempts <= len(RETRY_DELAYS) else RETRY_LATER
+
+
+def _task_topic(request: Request) -> tuple[str, str]:
+    """The topic's name and first post: what the client asks for and why, and the way to the
+    task. The link goes to Jira: the team has no access to dimond's pages."""
+    lines = [f"**{request.get_type_display()}** · {request.get_when_needed_display()}"]
+    if request.why:
+        lines += ["**Why it matters**", discord.fit(request.why, WHY_LIMIT)]
+    lines.append(f"Jira: {request.jira_url}")
+    return f"{request.jira_key} · {request.title}", "\n".join(lines)

@@ -43,6 +43,11 @@ log is `docker compose logs -f sync`, and every finished run is listed on the PM
 **Sync now** there runs it within seconds; `docker compose exec web python manage.py sync_tracker`
 does the same from a terminal.
 
+The `discord` container posts a topic to the client's Discord forum for every Jira task the PM
+creates or links, when the client has a webhook on the Clients page (ADR 0024). It tries again
+for a day while Discord is down; its log is `docker compose logs -f discord`, and every post is
+listed on Logs · Discord.
+
 A Jira webhook makes the same run start within seconds of a change (ADR 0020). It is off until
 `TRACKER_JIRA_WEBHOOK_TOKEN` is set in `.env`. Locally Jira cannot reach your laptop, so play
 Jira with curl: link a request to a task, set a token, restart, then

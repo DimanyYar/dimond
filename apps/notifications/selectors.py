@@ -8,7 +8,7 @@ from django.utils import timezone
 from apps.accounts.models import Notify, Role, User
 from apps.requests.models import Request
 
-from .models import Email, EmailStatus
+from .models import DiscordPost, Email, EmailStatus
 
 
 def update_recipients(request: Request) -> list[User]:
@@ -52,6 +52,16 @@ def emails_for(pm: User) -> list[Email]:
         Email.objects.filter(Q(user=pm) | Q(user__company__owner=pm))
         .select_related("user__company")
         .order_by("-tried_at", "-pk")[:EMAILS_SHOWN]
+    )
+
+
+def discord_posts_for(pm: User) -> list[DiscordPost]:
+    """Logs · Discord: every post to this PM's clients' Discord forums, the latest first
+    (ADR 0014)."""
+    return list(
+        DiscordPost.objects.filter(company__owner=pm)
+        .select_related("company")
+        .order_by("-created_at", "-pk")[:EMAILS_SHOWN]
     )
 
 

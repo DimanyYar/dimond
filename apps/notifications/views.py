@@ -39,6 +39,21 @@ def logs_emails(request: HttpRequest) -> HttpResponse:
     )
 
 
+@require_GET
+@login_required
+def logs_discord(request: HttpRequest) -> HttpResponse:
+    """Logs · Discord: every topic dimond posted, or tried to post, to the PM's clients'
+    Discord forums and whether it went out."""
+    return render(
+        request,
+        "notifications/logs_discord.html",
+        {
+            "posts": selectors.discord_posts_for(_pm(request)),
+            "today": timezone.now().strftime("%Y%m%d"),
+        },
+    )
+
+
 @require_POST
 @login_required
 def try_emails_now(request: HttpRequest) -> HttpResponse:

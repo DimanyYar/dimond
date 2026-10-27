@@ -62,6 +62,13 @@ services:
       web:
         condition: service_healthy
 
+  discord:
+    <<: *app
+    command: python manage.py send_discord_posts --every 5
+    depends_on:
+      web:
+        condition: service_healthy
+
   previews:
     <<: *app
     command: python manage.py make_previews --every 5

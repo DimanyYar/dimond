@@ -170,6 +170,12 @@ class Request(models.Model):
         help_text="Jira moved the task into another client's project under this key; the sync "
         "stopped following it until the PM links another task or unlinks it.",
     )
+    discord_topic = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="The topic of the task in the client's Discord forum, by Discord's id. Empty "
+        "until the topic is made; a new task gets a new topic.",
+    )
     pm_handled_at = models.DateTimeField(
         null=True,
         blank=True,

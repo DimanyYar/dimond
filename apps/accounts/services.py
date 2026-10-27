@@ -369,6 +369,15 @@ def change_jira_project(pm: User, company: Company, jira_project: str) -> Compan
     return company
 
 
+def change_discord_webhook(company: Company, webhook: str) -> Company:
+    """Where the client's Jira tasks get their Discord topics; empty turns Discord off for
+    them. `company` comes from `client_for(pm, …)`, so it is one of this PM's own clients."""
+    company.discord_webhook = webhook
+    company.full_clean()
+    company.save(update_fields=["discord_webhook"])
+    return company
+
+
 @transaction.atomic
 def create_client(
     pm: User,

@@ -7,6 +7,7 @@ from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
 
+from apps.notifications.discord import WEBHOOK, webhook_tail
 from apps.tracker.base import PROJECT_KEY
 
 from .time_zones import validate_time_zone
@@ -45,6 +46,18 @@ class Company(models.Model):
         validators=[RegexValidator(rf"^{PROJECT_KEY.pattern}$", "A Jira project key, like FI.")],
         help_text="Key of the client's Jira project, e.g. FI. Their tasks are created only there.",
     )
+    discord_webhook = models.CharField(
+        max_length=300,
+        blank=True,
+        validators=[
+            RegexValidator(
+                WEBHOOK,
+                "Paste the webhook address Discord gives: https://discord.com/api/webhooks/…",
+            )
+        ],
+        help_text="Webhook of the forum channel for dimond on the client's Discord server. Each "
+        "Jira task gets a topic there (PRD: Discord for the team). Empty: nothing goes to Discord.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -63,6 +76,10 @@ class Company(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def discord_webhook_tail(self) -> str:
+        return webhook_tail(self.discord_webhook)
 
     @property
     def text_on_color(self) -> str:

@@ -1,0 +1,39 @@
+{% extends "layouts/pm.html" %}
+{% load static %}
+{% comment %}
+Logs · Discord (PRD: Discord for the team): every topic dimond posted, or tried to post, to
+the PM's clients' Discord forums, newest first, one row however many tries it took. Built like
+Logs · Emails; on a phone each row stacks. The webhook address and the text are never shown.
+{% endcomment %}
+{% block title %}Discord · Logs · dimon.d{% endblock %}
+
+{% block content %}
+<div class="logs">
+  {% include "tracker/logs_top.html" with tab="discord" note="Every topic dimond posts to your clients’ Discord forums for the team." %}
+
+  {% if posts %}
+    <section class="card email-log" aria-label="Discord posts">
+      <div class="email-log-row email-log-head" aria-hidden="true">
+        <span>Time</span><span>Event</span><span>Client</span><span>Details</span><span>Technical</span>
+      </div>
+      <ol class="email-log-list">
+        {% for post in posts %}
+          <li class="email-log-row{% if post.status == 'failed' %} email-log-problem{% endif %}">
+            <time class="email-log-time" datetime="{{ post.created_at|date:'c' }}">{% if post.created_at|date:"Ymd" == today %}{{ post.created_at|date:"H:i" }}{% else %}{{ post.created_at|date:"M j" }}{% endif %}</time>
+            <span><span class="email-status email-status-{{ post.status }}">{% if post.status == "waiting" and post.attempts %}Retrying{% else %}{{ post.get_status_display }}{% endif %}</span></span>
+            <span class="email-log-who">{{ post.company.name }}</span>
+            <span class="email-log-details">{% if post.kind == "test" %}Test topic from the Clients page{% else %}Topic for {{ post.task_key }}{% endif %}{% if post.error %}. {{ post.error }}{% endif %}</span>
+            <span class="email-log-tech"{% if post.error_detail %} title="{{ post.error_detail }}"{% endif %}>{% if post.status == "waiting" %}{% if post.attempts %}{{ post.attempts }} tr{{ post.attempts|pluralize:"y,ies" }} · next at {{ post.next_try_at|date:"H:i" }}{% else %}in the queue{% endif %}{% elif post.status == "failed" %}{{ post.attempts }} tr{{ post.attempts|pluralize:"y,ies" }}{% if post.error_detail %} · {{ post.error_detail }}{% endif %}{% elif post.attempts > 1 %}sent on try {{ post.attempts }}{% else %}—{% endif %}</span>
+          </li>
+        {% endfor %}
+      </ol>
+    </section>
+    <p class="muted logs-note">The latest {{ posts|length }} post{{ posts|length|pluralize }}. When Discord is down or busy, dimond tries again for a day. A deleted webhook or a channel that is not a forum is not tried again: fix it on the Clients page.</p>
+  {% else %}
+    <section class="card empty-state">
+      <h2>No Discord posts yet</h2>
+      <p class="muted">Set up Discord for a client on the Clients page. Each Jira task you create or link then gets a topic in their forum, listed here.</p>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

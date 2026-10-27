@@ -68,3 +68,63 @@ class Email(models.Model):
         if self.delivered_at is None:
             return None
         return (self.delivered_at - self.tried_at).total_seconds()
+
+
+class DiscordPostKind(models.TextChoices):
+    TEST = "test", "Test"
+    TASK = "task", "New task"
+
+
+class DiscordPostStatus(models.TextChoices):
+    WAITING = "waiting", "Waiting"
+    SENT = "sent", "Sent"
+    FAILED = "failed", "Not sent"
+
+
+class DiscordPost(models.Model):
+    """One post to a client's Discord forum and every try to send it: the queue the worker
+    reads and the journal behind Logs → Discord (PRD: Discord for the team; ADR 0024).
+
+    What is posted is built from the request when it goes out, so the text is not kept here,
+    and neither is the webhook address.
+    """
+
+    company = models.ForeignKey(
+        "accounts.Company", on_delete=models.CASCADE, related_name="discord_posts"
+    )
+    request = models.ForeignKey(
+        "requests.Request",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="discord_posts",
+        help_text="Empty for a test post from the Clients page.",
+    )
+    kind = models.CharField(max_length=10, choices=DiscordPostKind.choices)
+    task_key = models.CharField(max_length=32, blank=True, help_text="The task, e.g. FI-2301.")
+    status = models.CharField(
+        max_length=10, choices=DiscordPostStatus.choices, default=DiscordPostStatus.WAITING
+    )
+    error = models.CharField(
+        max_length=100, blank=True, help_text="Why it did not go out, in plain words."
+    )
+    error_detail = models.TextField(blank=True, help_text="Discord's own answer.")
+    attempts = models.PositiveIntegerField(default=0, help_text="Tries so far.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    tried_at = models.DateTimeField(null=True, blank=True, help_text="The latest try.")
+    next_try_at = models.DateTimeField(
+        default=timezone.now, help_text="The worker does not try a waiting post before this."
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        indexes = [
+            models.Index(
+                fields=["next_try_at"],
+                condition=models.Q(status="waiting"),
+                name="discord_posts_waiting",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()} for {self.company}"

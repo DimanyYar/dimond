@@ -60,6 +60,21 @@ services:
       mailpit:
         condition: service_started
 
+  # Posts Jira tasks to the clients' Discord forums, with retries (ADR 0024). Apart from the
+  # emails, so Discord being down never holds up a sign-in link.
+  discord:
+    build: .
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+    command: python manage.py send_discord_posts --every 5
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+
   # Makes the small pictures on file tiles (ADR 0013). Apart from the site, so a broken or
   # hostile image or PDF is only ever decoded here.
   previews:

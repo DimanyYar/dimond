@@ -25,3 +25,4 @@ Why the project is built the way it is. Read the record before changing what it 
 - [0021. Resend's delivery reports through a signed webhook](0021-resend-delivery-reports.md)
 - [0022. Production on a server of its own, deployed with one command](0022-production-on-a-server-of-its-own.md)
 - [0023. Each person's own time zone, from the tzdata package](0023-time-zone-per-person.md)
+- [0024. Discord topics for the team through each client's webhook](0024-discord-topics-through-webhooks.md)

@@ -4456,6 +4456,36 @@ kbd {
   align-items: start;
 }
 
+/* The client's Discord card: the saved webhook with its buttons, then the field. */
+.discord-saved {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: var(--space-3);
+  border-radius: var(--radius-s);
+  background: var(--surface-2);
+}
+
+.discord-saved p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.discord-saved-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.discord-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .clients-header {
   grid-area: header;
 }
@@ -6241,6 +6271,7 @@ details[open] .run-chevron {
 .email-status-bounced { background: #fdecec; color: #c41c1c; }
 .email-status-delivered { background: var(--success-soft); color: var(--success-text); }
 .email-status-sent { background: var(--surface-2); color: var(--ink); }
+.email-status-waiting { background: var(--accent-soft); color: #b33a00; }
 .email-status-spam { background: var(--accent-soft); color: #b33a00; }
 
 .notify-auto-off {
