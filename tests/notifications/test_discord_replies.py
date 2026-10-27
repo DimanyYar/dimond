@@ -219,3 +219,21 @@ def test_a_reply_after_the_task_was_deleted_in_jira_is_not_posted(planned, anna,
         "The request no longer has a Jira task",
     )
     assert not fake_discord.posts
+
+
+def test_a_reply_that_opened_the_new_tasks_topic_leaves_no_second_topic(
+    planned, anna, pm, fake_discord
+):
+    fake_discord.answers = [httpx.ConnectError("no route")]
+    services.post_message(anna, planned, "Any news?")
+    send_discord_posts()
+    services.drop_deleted_task(planned)
+    services.link_jira_task(pm, planned, "FI-2231", "")
+
+    send_discord_posts(timezone.now() + timedelta(minutes=2))
+
+    names = [body["thread_name"] for body in fake_discord.bodies() if "thread_name" in body]
+    assert len(names) == 1
+    assert names[0].startswith("FI-2231 · ")
+    task_post = DiscordPost.objects.get(kind=DiscordPostKind.TASK, task_key="FI-2231")
+    assert task_post.status == DiscordPostStatus.SENT

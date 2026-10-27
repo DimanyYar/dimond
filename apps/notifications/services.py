@@ -632,6 +632,12 @@ def _send_task_topic(post: DiscordPost, request: Request, webhook: str, now: dat
     # task has a post of its own, and an old one would post the wrong key or none.
     if request.jira_key != post.task_key:
         return _give_up(post, TASK_CHANGED)
+    if request.discord_topic:
+        # An older reply, still waiting when the task was linked, went first and opened the
+        # topic with this same first post: a second topic would split the conversation.
+        post.status, post.tried_at = DiscordPostStatus.SENT, now
+        post.save(update_fields=["status", "tried_at"])
+        return False
     return _try_post(post, partial(_open_topic, request, webhook), now, retry=True) is not None
 
 
