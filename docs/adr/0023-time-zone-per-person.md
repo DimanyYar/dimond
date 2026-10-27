@@ -1,6 +1,6 @@
 # 0023. Each person's own time zone, from the tzdata package
 
-Status: Accepted, 2026-10-26
+Status: Accepted, 2026-10-26; amended 2026-10-27
 
 ## Context
 
@@ -30,3 +30,13 @@ first, and `tzdata` arrived only by chance, through django-anymail[resend].
   If it ever goes, installing the system `tzdata` in the Dockerfile does the same job.
 − People who signed in before this see UTC until they save a zone in Account; the page tells
   them so.
+
+## Amendment, 2026-10-27
+
+People who signed up before time zones existed never saw the Welcome screen, and the Account
+page only suggested the browser's zone without saving it, so their pages kept showing UTC.
+Until a person saves a zone, pages now show the browser's: `static/js/browser-zone.js` puts
+its name in the `browser_time_zone` cookie on every page, and the middleware uses it when it
+is one from the list (anything else in the cookie is ignored). A saved zone always wins; the
+team still sees UTC. The very first page after signing in on a new browser may still show
+UTC, before the cookie exists.
