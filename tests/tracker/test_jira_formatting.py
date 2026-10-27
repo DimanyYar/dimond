@@ -5,7 +5,8 @@ import time
 
 import pytest
 
-from apps.tracker.jira_markup import files_shown, to_html, to_text
+from apps.tracker.base import CLIENT_TAG
+from apps.tracker.jira_markup import files_shown, to_html, to_text, without_tag
 
 JIRA = "https://j.shakuro.com"
 
@@ -183,3 +184,11 @@ def test_files_are_listed_in_the_order_the_comment_shows_them():
         "spec.pdf",
         "screen.png",
     ]
+
+
+def test_the_client_tag_in_code_or_quotes_is_the_teams_words():
+    markup = "#client Which filter? Run {{grep #client}}\n{quote}#client earlier{quote}"
+
+    assert without_tag(markup, CLIENT_TAG) == (
+        " Which filter? Run {{grep #client}}\n{quote}#client earlier{quote}"
+    )

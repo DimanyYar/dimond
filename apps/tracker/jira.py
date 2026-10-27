@@ -33,7 +33,7 @@ from .base import (
     TrackerUnreachable,
     tags_the_client,
 )
-from .jira_markup import files_shown, to_text
+from .jira_markup import QUOTED, files_shown, to_text
 
 TIMEOUT_SECONDS = 15
 OPEN_ISSUES_LIMIT = 20
@@ -49,10 +49,6 @@ TEXT_SEARCH_OPERATORS = re.compile(r"[^\w\s]")
 # Jira Software keeps an epic's required short name in a custom field whose number differs
 # from one Jira to another; its type is what identifies it.
 EPIC_NAME_TYPE = "com.pyxis.greenhopper.jira:gh-epic-label"
-
-# Quoted text, whole: {quote}…{quote} and "bq." lines. A #client tag inside one is dimond's
-# own answer quoting the question, not a new question.
-QUOTED = re.compile(r"\{quote\}.*?(?:\{quote\}|\Z)|^bq\. .*$", re.DOTALL | re.MULTILINE)
 
 
 class JiraTracker:

@@ -29,6 +29,9 @@ VERBATIM = re.compile(
     rf"(?<!\{{)\{{(code|noformat)(?::[^}}\n]{{0,{LONGEST}}})?\}}(?!\}})\n?(.*?)(?:\{{\1\}}|\Z)",
     re.DOTALL,
 )
+# Quoted text, whole: {quote}…{quote} and "bq." lines. A #client tag inside one is dimond's
+# own answer quoting the question, not a new question.
+QUOTED = re.compile(r"\{quote\}.*?(?:\{quote\}|\Z)|^bq\. .*$", re.DOTALL | re.MULTILINE)
 # Shown by their contents only: colour, panels, and quotes until quotes get their own look.
 WRAPPER_MACRO = re.compile(rf"\{{(?:quote|panel|color)(?::[^}}\n]{{0,{LONGEST}}})?\}}")
 BLANK_LINES = re.compile(r"\n[ \t]*\n")
@@ -93,6 +96,20 @@ def files_shown(body: str) -> list[str]:
         if name not in shown:
             shown.append(name)
     return shown
+
+
+def without_tag(markup: str, tag: re.Pattern[str]) -> str:
+    """The markup with the tag taken out where it tags. In code and quotes it is the team's
+    words ("grep #client") and stays."""
+    kept = [
+        found.span()
+        for words in (VERBATIM, QUOTED, CODE_IN_LINE)
+        for found in words.finditer(markup)
+    ]
+    return tag.sub(
+        lambda match: match.group() if any(a <= match.start() < b for a, b in kept) else "",
+        markup,
+    )
 
 
 def to_html(markup: str, jira_address: str) -> SafeString:

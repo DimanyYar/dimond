@@ -25,6 +25,7 @@ from apps.tracker.base import (
     TrackerUnreachable,
 )
 from apps.tracker.connection import current_tracker, jira_login_paused
+from apps.tracker.jira_markup import without_tag
 
 from .models import (
     CLOSED_STATUSES,
@@ -859,7 +860,7 @@ def _question_text(comment: Comment) -> str:
 
 def _question_markup(comment: Comment) -> str:
     # Without the tag a line starting with it is not read as a numbered list ("# item").
-    return CLIENT_TAG.sub("", comment.markup)
+    return without_tag(comment.markup, CLIENT_TAG)
 
 
 @transaction.atomic
