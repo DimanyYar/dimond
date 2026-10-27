@@ -77,7 +77,12 @@ def _sign_in(request: HttpRequest, user: User) -> None:
 
 
 def _welcome(request: HttpRequest, token: str, invite: SignInLink) -> HttpResponse:
-    form = WelcomeForm(request.POST or None, initial={"name": invite.user.name})
+    # A zone already saved (a second invite, or set by the PM in the admin) is kept; the page
+    # fills in the browser's only when there is none.
+    form = WelcomeForm(
+        request.POST or None,
+        initial={"name": invite.user.name, "time_zone": invite.user.time_zone},
+    )
     if form.is_valid():
         try:
             user = services.accept_invite(

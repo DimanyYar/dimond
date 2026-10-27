@@ -128,6 +128,25 @@ def test_client_with_a_zone_gets_it_on_every_page(anna):
     assert zone_on_a_page_for(anna) == "Asia/Tokyo"
 
 
+def test_the_zone_is_put_back_once_the_page_is_done(anna):
+    services.choose_time_zone(anna, "Asia/Tokyo")
+
+    zone_on_a_page_for(anna)
+
+    assert timezone.get_current_timezone_name() == "UTC"
+
+
+def test_welcome_screen_keeps_a_zone_already_saved(client, anna, pm):
+    services.choose_time_zone(anna, "Asia/Tokyo")
+    services.invite([anna], invited_by=pm)
+    services.send_queued_links()
+    url = re.search(r"https?://\S+", mail.outbox[-1].body).group()
+
+    page = client.get(url.removeprefix(settings.SITE_URL)).content.decode()
+
+    assert '<option value="Asia/Tokyo" selected>' in page
+
+
 def test_offsets_in_the_list_follow_summer_time():
     winter = dict(_choices_on(date(2026, 1, 15)))
     summer = dict(_choices_on(date(2026, 7, 15)))

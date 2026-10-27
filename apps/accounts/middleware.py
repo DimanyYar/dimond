@@ -19,8 +19,10 @@ class PersonTimeZone:
     def __call__(self, request: HttpRequest) -> HttpResponse:
         user = request.user
         # The team keeps UTC even with a zone saved, e.g. from before a role change in the admin.
+        zone = None
         if isinstance(user, User) and has_account_page(user) and user.time_zone:
-            timezone.activate(ZoneInfo(user.time_zone))
-        else:
-            timezone.deactivate()
-        return self.get_response(request)
+            zone = ZoneInfo(user.time_zone)
+        # override() puts the previous zone back when the page is done, errors included, so
+        # nothing that runs after it in the same thread inherits this person's zone.
+        with timezone.override(zone):
+            return self.get_response(request)
