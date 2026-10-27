@@ -77,12 +77,13 @@ def _post(webhook: str, body: dict[str, object]) -> str:
     # again would open a second topic, so the post is not retried.
     except (ValueError, KeyError, TypeError):
         topic = None
-    # Discord's ids are numbers written as strings ("snowflakes").
-    if isinstance(topic, str) and topic.isdecimal():
+    # Discord's ids are numbers written as strings ("snowflakes"); isdecimal() alone would
+    # also take digits of other scripts.
+    if isinstance(topic, str) and topic.isascii() and topic.isdecimal():
         return topic
+    # Only the status: the answer holds the posted text, which the journal never keeps.
     raise DiscordError(
-        "Posted, but Discord's answer was unreadable",
-        f"{response.status_code} {response.text[:200]}",
+        "Posted, but Discord's answer was unreadable", f"{response.status_code} without a topic id"
     )
 
 

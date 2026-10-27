@@ -210,6 +210,7 @@ def test_a_post_for_a_task_replaced_while_waiting_is_dropped(pm, anna, fake_disc
     [
         httpx.Response(200, text="<html>ok</html>"),
         httpx.Response(200, json={"id": "1", "channel_id": None}),
+        httpx.Response(200, json={"id": "1", "channel_id": "١٢٣", "content": "Secret words"}),
     ],
 )
 def test_an_unreadable_answer_after_posting_is_not_tried_again(pm, anna, fake_discord, answer):
@@ -222,6 +223,7 @@ def test_an_unreadable_answer_after_posting_is_not_tried_again(pm, anna, fake_di
     post = DiscordPost.objects.get()
     assert (post.status, post.attempts) == (DiscordPostStatus.FAILED, 1)
     assert post.error == "Posted, but Discord's answer was unreadable"
+    assert post.error_detail == "200 without a topic id"
 
 
 @pytest.mark.parametrize("wait", ["soon", "1e309", "nan"])
