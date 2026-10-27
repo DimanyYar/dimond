@@ -57,6 +57,8 @@ def test_the_clients_page_says_whether_discord_is_on(client, pm, atlas):
         "http://discord.com/api/webhooks/1/abc",
         "https://discord.com/channels/1/2",
         "https://discord.com.evil.test/api/webhooks/1/abc",
+        "https://discordapp.com.evil.test/api/webhooks/1/abc",
+        "https://ptb.discord.com/api/webhooks/1/abc",
     ],
 )
 def test_only_a_discord_webhook_is_taken(client, pm, atlas, address):

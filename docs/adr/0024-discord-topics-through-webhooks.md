@@ -25,8 +25,9 @@ message, whose `channel_id` is the topic's id.
   Unlike the Jira password (ADR 0017), which reaches every client's tasks, a webhook only
   lets someone post into one channel and is revoked by deleting it in Discord. So it is not
   encrypted; it is never shown back (only "…/a1b2"), never put in the admin, logs or the
-  journal. Only `https://discord.com/api/webhooks/…` addresses are accepted, so a pasted
-  address can never make dimond call another server.
+  journal. Only `https://discord.com/api/webhooks/…` addresses are accepted, the form
+  Discord's Copy Webhook URL gives, so a pasted address can never make dimond call another
+  server.
 - **A queue in the database and a `discord` worker** (ADR 0004), apart from the email worker
   so Discord being down never delays a sign-in link. Linking the task and queuing its post
   happen in one transaction; a Discord failure never stops the task. Failures that may pass
@@ -46,5 +47,8 @@ message, whose `channel_id` is the topic's id.
 + A Discord outage costs a delay, not a lost post, for a day.
 − Anyone who sees the webhook address can post into that channel until it is deleted in
   Discord; a database backup holds the addresses in plain text.
+− Discord offers forum channels only on servers with Community turned on (Server settings →
+  Enable Community). It does not make a server public, but it changes a few defaults, such
+  as verified emails for posting; turned on for the first client on Oct 27, 2026.
 − Topics are not closed or renamed by dimond: a webhook cannot do it. The team archives
   finished topics by hand; status changes stay in Jira.

@@ -35,7 +35,7 @@ are shown; pasting a new one replaces it. Send test makes a test topic at once.
              placeholder="https://discord.com/api/webhooks/…"
              aria-describedby="discord-webhook-hint{% if form.webhook.errors %} discord-webhook-error{% endif %}"
              {% if form.webhook.errors %}aria-invalid="true"{% endif %}>
-      <span class="hint" id="discord-webhook-hint">In Discord, open the forum channel for dimond: Edit channel → Integrations → Webhooks → New Webhook → Copy Webhook URL. Every Jira task you create or link gets a topic there. The address is never shown again after saving.</span>
+      <span class="hint" id="discord-webhook-hint">In Discord, open the forum channel for dimond: Edit channel → Integrations → Webhooks → New Webhook → Copy Webhook URL. No Forum channel type? Turn on Community in the server settings first. Every Jira task you create or link gets a topic there. The address is never shown again after saving.</span>
       {% if form.webhook.errors %}<span class="error-text" id="discord-webhook-error">{{ form.webhook.errors.0 }}</span>{% endif %}
     </div>
     <div class="invite-form-foot">

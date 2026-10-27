@@ -12,9 +12,7 @@ import re
 import httpx
 
 TIMEOUT_SECONDS = 10
-WEBHOOK = re.compile(
-    r"^https://(?:(?:ptb|canary)\.)?discord(?:app)?\.com/api(?:/v\d+)?/webhooks/\d+/[\w-]+$"
-)
+WEBHOOK = re.compile(r"^https://discord\.com/api/webhooks/\d+/[\w-]+$")
 # Discord's own limits: a topic name of 100 characters, a message of 2000.
 TOPIC_NAME_LIMIT = 100
 MESSAGE_LIMIT = 2000
@@ -68,10 +66,18 @@ def _post(webhook: str, body: dict[str, object]) -> str:
         raise DiscordError(
             "Discord unreachable", str(error) or type(error).__name__, retry_after=0
         ) from None
-    if response.is_success:
-        # With wait=true Discord returns the message; in a new topic its channel is the topic.
+    if not response.is_success:
+        raise _refusal(response)
+    # With wait=true Discord returns the message; in a new topic its channel is the topic.
+    try:
         return str(response.json()["channel_id"])
-    raise _refusal(response)
+    # Discord took the post but its answer is not the message, e.g. a proxy's page. Trying
+    # again would open a second topic, so the post is not retried.
+    except (ValueError, KeyError, TypeError):
+        raise DiscordError(
+            "Posted, but Discord's answer was unreadable",
+            f"{response.status_code} {response.text[:200]}",
+        ) from None
 
 
 def _refusal(response: httpx.Response) -> DiscordError:
@@ -85,9 +91,7 @@ def _refusal(response: httpx.Response) -> DiscordError:
     detail = f"{response.status_code} {answer.get('message') or response.reason_phrase}"
     code = answer.get("code")
     if response.status_code == 429:
-        return DiscordError(
-            "Too many posts at once", detail, retry_after=float(answer.get("retry_after", 5))
-        )
+        return DiscordError("Too many posts at once", detail, retry_after=_seconds(answer))
     if response.status_code >= 500:
         return DiscordError("Discord is having trouble", detail, retry_after=0)
     if code == UNKNOWN_WEBHOOK or response.status_code in (401, 403, 404):
@@ -95,3 +99,11 @@ def _refusal(response: httpx.Response) -> DiscordError:
     if code in NOT_A_FORUM:
         return DiscordError("The channel is not a forum", detail)
     return DiscordError("Discord refused the post", detail)
+
+
+def _seconds(answer: dict[str, object]) -> float:
+    """How long Discord asks to wait; 5 seconds when the answer does not say it clearly."""
+    try:
+        return max(0.0, float(str(answer.get("retry_after", 5))))
+    except ValueError:
+        return 5.0

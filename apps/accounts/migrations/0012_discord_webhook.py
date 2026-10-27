@@ -22,7 +22,7 @@ class Migration(migrations.Migration):
                 validators=[
                     django.core.validators.RegexValidator(
                         re.compile(
-                            "^https://(?:(?:ptb|canary)\\.)?discord(?:app)?\\.com/api(?:/v\\d+)?/webhooks/\\d+/[\\w-]+$"
+                            "^https://discord\\.com/api/webhooks/\\d+/[\\w-]+$"
                         ),
                         "Paste the webhook address Discord gives: https://discord.com/api/webhooks/…",
                     )

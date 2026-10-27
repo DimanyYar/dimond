@@ -514,6 +514,7 @@ GIVE_UP_AFTER = timedelta(days=1)
 WHY_LIMIT = 1500
 DISCORD_OFF = "Discord was turned off for this client"
 GAVE_UP = "Gave up after a day of tries"
+TASK_CHANGED = "The request got another task before the post went out"
 TEST_TOPIC = "dimond · test"
 
 
@@ -561,6 +562,12 @@ def _send_queued(post: DiscordPost, now: datetime) -> bool:
     webhook = post.company.discord_webhook
     if not webhook:
         post.status, post.error = DiscordPostStatus.FAILED, DISCORD_OFF
+        post.save(update_fields=["status", "error"])
+        return False
+    # While Discord was down, the task may have been deleted in Jira or replaced: the new
+    # task has a post of its own, and an old one would post the wrong key or none.
+    if request.jira_key != post.task_key:
+        post.status, post.error = DiscordPostStatus.FAILED, TASK_CHANGED
         post.save(update_fields=["status", "error"])
         return False
     name, text = _task_topic(request)

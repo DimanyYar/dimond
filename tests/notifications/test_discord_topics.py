@@ -185,3 +185,45 @@ def test_a_new_task_for_the_request_gets_a_topic_of_its_own(pm, anna, fake_disco
     request.refresh_from_db()
     assert request.discord_topic == ""
     assert DiscordPost.objects.filter(kind=DiscordPostKind.TASK, task_key="FI-2231").exists()
+
+
+def test_a_post_for_a_task_replaced_while_waiting_is_dropped(pm, anna, fake_discord):
+    fake_discord.answers = [httpx.ConnectError("no route")]
+    request = create_task(pm, make(anna))
+    send_discord_posts()
+    services.drop_deleted_task(request)
+    services.link_jira_task(pm, request, "FI-2231", "")
+
+    send_discord_posts(timezone.now() + timedelta(minutes=2))
+
+    old, new = DiscordPost.objects.order_by("created_at", "pk")
+    assert (old.status, old.error) == (
+        DiscordPostStatus.FAILED,
+        "The request got another task before the post went out",
+    )
+    assert new.status == DiscordPostStatus.SENT
+    assert [body["thread_name"][:8] for body in fake_discord.bodies()[1:]] == ["FI-2231 "]
+
+
+def test_an_unreadable_answer_after_posting_is_not_tried_again(pm, anna, fake_discord):
+    fake_discord.answers = [httpx.Response(200, text="<html>ok</html>")]
+    create_task(pm, make(anna))
+
+    send_discord_posts()
+    send_discord_posts(timezone.now() + timedelta(hours=2))
+
+    post = DiscordPost.objects.get()
+    assert (post.status, post.attempts) == (DiscordPostStatus.FAILED, 1)
+    assert post.error == "Posted, but Discord's answer was unreadable"
+
+
+def test_a_rate_limit_without_a_clear_wait_waits_a_minute(pm, anna, fake_discord):
+    fake_discord.answers = [httpx.Response(429, json={"retry_after": "soon"})]
+    create_task(pm, make(anna))
+    start = timezone.now()
+
+    send_discord_posts(start)
+
+    post = DiscordPost.objects.get()
+    assert post.status == DiscordPostStatus.WAITING
+    assert post.next_try_at == start + timedelta(minutes=1)
