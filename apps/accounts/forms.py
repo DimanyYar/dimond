@@ -10,14 +10,29 @@ from apps.tracker.connection import current_tracker
 
 from . import selectors
 from .models import Company, Notify, Role, User
+from .time_zones import time_zone_choices
 
 
 class EmailForm(forms.Form):
     email = forms.EmailField(label="Work email")
 
 
+def time_zone_field(required: bool) -> forms.ChoiceField:
+    # A callable, so the list is built on first use rather than at import.
+    return forms.ChoiceField(
+        choices=lambda: [("", "Pick your time zone"), *time_zone_choices()],
+        required=required,
+        error_messages={
+            "required": "Pick your time zone.",
+            "invalid_choice": "Pick a time zone from the list.",
+        },
+    )
+
+
 class WelcomeForm(forms.Form):
     name = forms.CharField(label="Your name", max_length=120)
+    # The page fills it in from the browser; empty keeps times in UTC until the person picks.
+    time_zone = time_zone_field(required=False)
     # "Nothing" lives in account settings; a newcomer who picks it would miss the first answer.
     notify = forms.ChoiceField(
         choices=[(Notify.OWN, Notify.OWN.label), (Notify.COMPANY, Notify.COMPANY.label)],
@@ -36,6 +51,10 @@ class AccountNameForm(forms.Form):
     name = forms.CharField(
         max_length=120, error_messages={"required": "Your name shows on your requests."}
     )
+
+
+class AccountTimeZoneForm(forms.Form):
+    time_zone = time_zone_field(required=True)
 
 
 class AccountEmailsForm(forms.Form):

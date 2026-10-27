@@ -9,6 +9,8 @@ from django.utils import timezone
 
 from apps.tracker.base import PROJECT_KEY
 
+from .time_zones import validate_time_zone
+
 
 class Role(models.TextChoices):
     CLIENT = "client", "Client"
@@ -117,6 +119,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         Company, null=True, blank=True, on_delete=models.PROTECT, related_name="people"
     )
     notify = models.CharField(max_length=10, choices=Notify.choices, default=Notify.OWN)
+    time_zone = models.CharField(
+        max_length=64,
+        blank=True,
+        validators=[validate_time_zone],
+        help_text="IANA name, e.g. Europe/Moscow. Empty: times show in UTC.",
+    )
     emails_off_at = models.DateTimeField(
         null=True,
         blank=True,

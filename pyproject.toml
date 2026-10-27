@@ -12,6 +12,7 @@ dependencies = [
     "pypdfium2>=4.30",
     "httpx>=0.28.1",
     "django-anymail[resend]>=15.2",
+    "tzdata>=2026.1",
 ]
 
 [dependency-groups]

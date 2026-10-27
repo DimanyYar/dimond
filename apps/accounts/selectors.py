@@ -236,10 +236,15 @@ class AccountPage:
     clients: int  # the PM's own clients; 0 for a client
 
 
+def has_account_page(user: User) -> bool:
+    """Clients and PMs have an account page; the team only opens media links (PRD: roles)."""
+    return user.role in (Role.CLIENT, Role.PM)
+
+
 def account_owner(user: User) -> User:
     """Whose account page this is: a client's or a PM's own. Raises User.DoesNotExist for the
-    team, who only open media links (PRD: roles)."""
-    if user.role not in (Role.CLIENT, Role.PM):
+    team."""
+    if not has_account_page(user):
         raise User.DoesNotExist
     return user
 

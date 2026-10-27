@@ -204,12 +204,13 @@ def use_sign_in_link(token: str) -> User:
 
 
 @transaction.atomic
-def accept_invite(token: str, name: str, notify: Notify) -> User:
+def accept_invite(token: str, name: str, notify: Notify, time_zone: str = "") -> User:
     """Spend an invite, save what the person told us on the welcome screen, return them."""
     user = _spend(token, LinkKind.INVITE)
     user.name = name
     user.notify = notify
-    user.save(update_fields=["name", "notify"])
+    user.time_zone = time_zone
+    user.save(update_fields=["name", "notify", "time_zone"])
     return user
 
 
@@ -260,6 +261,12 @@ def rename_myself(person: User, name: str) -> None:
     """A person changes the name shown on their requests and replies (PRD: account)."""
     person.name = name
     person.save(update_fields=["name"])
+
+
+def choose_time_zone(person: User, time_zone: str) -> None:
+    """A person picks the zone every time on their pages shows in (PRD: account)."""
+    person.time_zone = time_zone
+    person.save(update_fields=["time_zone"])
 
 
 def choose_emails(person: User, notify: Notify) -> None:

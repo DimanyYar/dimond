@@ -1,6 +1,7 @@
 {% extends layout %}
+{% load static %}
 {% comment %}
-A person's own account (mockups 3.6 · Your account for a client, PM · Your account): name and
+A person's own account (mockups 3.6 · Your account for a client, PM · Your account): name, time zone and
 which emails on the left, devices on the right; one column on a phone. A PM's emails are on or
 off, a client picks which requests. Changing the email comes with #26.
 {% endcomment %}
@@ -45,6 +46,23 @@ off, a client picks which requests. Changing the email comes with #26.
             <span class="read-only-value">{{ person.email }}</span>
             <span class="hint">{% if is_pm %}This is how you sign in. Changing it comes with accounts{% else %}This is how you sign in. To change it, ask {{ company.owner.name|default:"your PM" }}{% endif %}</span>
           </div>
+        </div>
+        <div class="person-profile-actions">
+          <button class="btn btn-dark" type="submit">Save</button>
+        </div>
+      </form>
+
+      <form class="card person-profile" method="post" action="{% url 'save_account_time_zone' %}" aria-labelledby="time-zone-title" novalidate>
+        {% csrf_token %}
+        <div class="account-section-head">
+          <h2 id="time-zone-title">Time zone</h2>
+          <p class="hint">Every date and time in dimon.d shows in this zone.</p>
+        </div>
+        <div class="field">
+          <label class="visually-hidden" for="account-time-zone">Time zone</label>
+          {% include "accounts/time_zone_select.html" with field=time_zone_form.time_zone select_id="account-time-zone" %}
+          <span class="hint" id="account-time-zone-hint">{% if person.time_zone %}Moving or travelling? Pick the new one{% else %}Not saved yet: times show in UTC until you save{% endif %}</span>
+          <span class="hint" id="account-time-zone-guess" hidden>We picked your browser’s zone. Press Save if it’s right</span>
         </div>
         <div class="person-profile-actions">
           <button class="btn btn-dark" type="submit">Save</button>
@@ -116,4 +134,5 @@ off, a client picks which requests. Changing the email comes with #26.
   </div>
 </div>
 {% endwith %}
+<script type="module" src="{% static 'js/time-zone.js' %}"></script>
 {% endblock %}
