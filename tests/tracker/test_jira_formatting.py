@@ -165,3 +165,21 @@ def test_a_broken_address_stays_words_and_does_not_stop_the_sync():
 
     assert html(markup) == "<p>Docs</p>"
     assert to_text(markup, JIRA) == "Docs"
+
+
+@pytest.mark.parametrize("opener", ["{{a ", "[a ", "[^a ", "{code:x ", "{color:x "])
+def test_thousands_of_brackets_that_never_close_are_read_quickly(opener: str):
+    markup = opener * 8000
+
+    started = time.monotonic()
+    html(markup)
+    files_shown(markup)
+
+    assert time.monotonic() - started < 1
+
+
+def test_files_are_listed_in_the_order_the_comment_shows_them():
+    assert files_shown("See [^spec.pdf], then !screen.png! and [^spec.pdf]") == [
+        "spec.pdf",
+        "screen.png",
+    ]

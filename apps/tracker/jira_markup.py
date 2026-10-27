@@ -14,18 +14,23 @@ from urllib.parse import urlsplit
 from django.utils.html import escape
 from django.utils.safestring import SafeString, mark_safe
 
+# Every bracketed piece has a length limit: without one, a line of thousands of "[" or "{{"
+# that never close is read again from each of them, and one such comment would hold up the
+# sync for seconds. Longer pieces are shown as typed; real links and code fit easily.
+LONGEST = 500
 # Pictures and file links: the files are shown beside the text, not inside it. In code,
 # "!flag!" is words, not a picture.
 PICTURE = re.compile(r"!([^!\s|][^!|\n]*?)(?:\|[^!\n]*)?!")
-FILE_LINK = re.compile(r"\[\^([^\]\n]+)\]")
-CODE_IN_LINE = re.compile(r"\{\{(?P<code>.+?)\}\}")
+FILE_LINK = re.compile(rf"\[\^([^\]\n]{{1,{LONGEST}}})\]")
+CODE_IN_LINE = re.compile(rf"\{{\{{(?P<code>[^\n]{{1,{LONGEST}}}?)\}}\}}")
 # Code and noformat keep their text exactly: a star in code is a star.
 # Not inside {{…}}, which is code in a line, not a block.
 VERBATIM = re.compile(
-    r"(?<!\{)\{(code|noformat)(?::[^}\n]*)?\}(?!\})\n?(.*?)(?:\{\1\}|\Z)", re.DOTALL
+    rf"(?<!\{{)\{{(code|noformat)(?::[^}}\n]{{0,{LONGEST}}})?\}}(?!\}})\n?(.*?)(?:\{{\1\}}|\Z)",
+    re.DOTALL,
 )
 # Shown by their contents only: colour, panels, and quotes until quotes get their own look.
-WRAPPER_MACRO = re.compile(r"\{(?:quote|panel|color)(?::[^}\n]*)?\}")
+WRAPPER_MACRO = re.compile(rf"\{{(?:quote|panel|color)(?::[^}}\n]{{0,{LONGEST}}})?\}}")
 BLANK_LINES = re.compile(r"\n[ \t]*\n")
 
 INLINE = re.compile(
@@ -33,7 +38,7 @@ INLINE = re.compile(
     r"|\\(?P<escaped>[^\s\\])"
     rf"|{CODE_IN_LINE.pattern}"
     rf"|(?P<picture>{PICTURE.pattern})"
-    r"|\[(?P<bracket>[^\]\n]+)\]"
+    rf"|\[(?P<bracket>[^\]\n]{{1,{LONGEST}}})\]"
     r"|(?P<url>(?<![\w/])(?:https?://|mailto:)[^\s\[\]|<>\"]+)"
     r"|(?P<mark>[*_+-])"
 )
@@ -82,7 +87,8 @@ def files_shown(body: str) -> list[str]:
     """Names of the files a comment shows or links to, in order, each once."""
     shown: list[str] = []
     outside_code = CODE_IN_LINE.sub("", VERBATIM.sub("", body))
-    for match in (*PICTURE.finditer(outside_code), *FILE_LINK.finditer(outside_code)):
+    found = (*PICTURE.finditer(outside_code), *FILE_LINK.finditer(outside_code))
+    for match in sorted(found, key=lambda match: match.start()):
         name = match.group(1).strip()
         if name not in shown:
             shown.append(name)
