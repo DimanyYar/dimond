@@ -1,0 +1,12 @@
+{% extends "email/layout.html" %}
+{% block title %}Your dimon.d sign-in link{% endblock %}
+{% block card %}
+            <p style="margin:0 0 16px;font-size:13px;color:#626260;">Hi{% if user.name %} {{ user.name }}{% endif %},</p>
+            <h1 style="margin:0 0 16px;font-size:28px;font-weight:500;letter-spacing:-0.6px;line-height:1.15;">Here is your link to sign in</h1>
+            <p style="margin:0;font-size:15px;line-height:1.55;color:#313130;">It works once, for 15 minutes. No password needed.</p>
+            {% include "accounts/email/link_card.html" with button="Sign in to dimon.d" %}
+{% endblock %}
+{% block footer %}
+            <p style="margin:0 0 8px;">Didn’t ask for it? Ignore this email: nobody can sign in without opening the link.</p>
+            <p style="margin:0;">— Dimon</p>
+{% endblock %}

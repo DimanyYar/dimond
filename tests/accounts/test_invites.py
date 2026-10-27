@@ -40,6 +40,16 @@ def test_invited_person_gets_an_email_naming_who_invited_them(ruslan, dmitry):
     assert "7 days" in mail.outbox[0].body
 
 
+def test_invite_email_has_a_styled_version_with_the_same_link(ruslan, dmitry):
+    path = invite_path(ruslan, dmitry)
+
+    html, kind = mail.outbox[0].alternatives[0]
+    assert kind == "text/html"
+    assert "Dmitry invited you to dimon.d" in html
+    assert "This is where Atlas sends requests" in html
+    assert f'href="{settings.SITE_URL}{path}"' in html
+
+
 def test_invite_opens_the_welcome_screen_without_spending_the_link(client, ruslan, dmitry):
     path = invite_path(ruslan, dmitry)
 

@@ -1,0 +1,3 @@
+{% comment %}The button of a sign-in or invite email, and the address in plain text for a mail app that hides buttons.{% endcomment %}
+            {% include "email/button.html" with label=button %}
+            <p style="margin:22px 0 0;font-size:13px;line-height:1.55;color:#626260;">Button not working? Copy this address into your browser:<br><a href="{{ url }}" style="color:#111111;word-break:break-all;">{{ url }}</a></p>

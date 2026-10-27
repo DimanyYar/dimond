@@ -1,0 +1,42 @@
+{% comment %}
+The frame every dimon.d email shares (mockup 5.7): logo, a white card, small print under it.
+Email apps ignore stylesheets, so every style is inline and the layout is a table. Figtree
+loads where the mail app allows web fonts; elsewhere the system font stands in. Emails fill
+`title`, `brand_note`, `card` and `footer`.
+{% endcomment %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>{% block title %}dimon.d{% endblock %}</title>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&amp;display=swap" rel="stylesheet">
+</head>
+<body style="margin:0;padding:0;background:#f5f1ec;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f1ec;font-family:Figtree,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111111;">
+  <tr>
+    <td align="center" style="padding:28px 16px 40px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+        <tr>
+          <td style="padding:0 0 16px;">
+            <span style="display:inline-block;width:32px;height:32px;line-height:32px;border-radius:8px;background:#ff5600;color:#111111;font-weight:600;font-size:14px;text-align:center;vertical-align:middle;">d.</span>
+            <span style="font-weight:500;font-size:19px;letter-spacing:-0.3px;vertical-align:middle;padding-left:8px;">dimon.d</span>
+            {% block brand_note %}{% endblock %}
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#ffffff;border:1px solid #d3cec6;border-radius:16px;padding:28px 28px 30px;">
+            {% block card %}{% endblock %}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:18px 8px 0;font-size:13px;line-height:1.55;color:#626260;">
+            {% block footer %}{% endblock %}
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
