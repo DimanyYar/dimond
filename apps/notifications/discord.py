@@ -21,6 +21,7 @@ MESSAGE_LIMIT = 2000
 
 # Discord's error codes that need words of their own.
 UNKNOWN_WEBHOOK = 10015
+UNKNOWN_CHANNEL = 10003
 NOT_A_FORUM = (220001, 220003)
 
 # Tests put an httpx.MockTransport here (tests/conftest.py); None is the real network.
@@ -31,11 +32,20 @@ class DiscordError(Exception):
     """Discord did not take the post. `reason` is for the PM's eyes, `detail` is Discord's
     own words. `retry_after` is set, in seconds, when trying again later can help."""
 
-    def __init__(self, reason: str, detail: str, retry_after: float | None = None) -> None:
+    def __init__(
+        self,
+        reason: str,
+        detail: str,
+        retry_after: float | None = None,
+        *,
+        topic_gone: bool = False,
+    ) -> None:
         super().__init__(reason)
         self.reason = reason
         self.detail = detail
         self.retry_after = retry_after
+        # Someone deleted the topic in Discord: a new one can be opened in its place.
+        self.topic_gone = topic_gone
 
 
 def is_webhook(address: str) -> bool:
@@ -56,21 +66,27 @@ def start_topic(webhook: str, name: str, text: str) -> str:
     return _post(webhook, {"thread_name": fit(name, TOPIC_NAME_LIMIT), "content": text})
 
 
-def _post(webhook: str, body: dict[str, object]) -> str:
+def post_in_topic(webhook: str, topic: str, text: str) -> str:
+    """A post in a topic the webhook's forum already has; returns the topic's id."""
+    return _post(webhook, {"content": fit(text, MESSAGE_LIMIT)}, thread=topic)
+
+
+def _post(webhook: str, body: dict[str, object], thread: str | None = None) -> str:
     # A client's words may hold @everyone or a role mention: nobody gets pinged by dimond.
     body = {**body, "allowed_mentions": {"parse": []}}
     try:
         with httpx.Client(
             timeout=TIMEOUT_SECONDS, follow_redirects=False, transport=transport
         ) as client:
-            response = client.post(webhook, params={"wait": "true"}, json=body)
+            params = {"wait": "true"} | ({"thread_id": thread} if thread else {})
+            response = client.post(webhook, params=params, json=body)
     except httpx.TransportError as error:
         raise DiscordError(
             "Discord unreachable", str(error) or type(error).__name__, retry_after=0
         ) from None
     if not response.is_success:
         raise _refusal(response)
-    # With wait=true Discord returns the message; in a new topic its channel is the topic.
+    # With wait=true Discord returns the message; its channel is the topic it went into.
     try:
         topic = response.json()["channel_id"]
     # Discord took the post but its answer is not the message, e.g. a proxy's page. Trying
@@ -101,6 +117,9 @@ def _refusal(response: httpx.Response) -> DiscordError:
         return DiscordError("Too many posts at once", detail, retry_after=_seconds(answer))
     if response.status_code >= 500:
         return DiscordError("Discord is having trouble", detail, retry_after=0)
+    # Only a post into a topic names a channel, so an unknown channel is the topic.
+    if code == UNKNOWN_CHANNEL:
+        return DiscordError("The topic was deleted in Discord", detail, topic_gone=True)
     if code == UNKNOWN_WEBHOOK or response.status_code in (401, 403, 404):
         return DiscordError("The webhook was deleted in Discord", detail)
     if code in NOT_A_FORUM:

@@ -73,6 +73,9 @@ class Email(models.Model):
 class DiscordPostKind(models.TextChoices):
     TEST = "test", "Test"
     TASK = "task", "New task"
+    REPLY = "reply", "Client reply"
+    WITHDRAW_ASK = "withdraw_ask", "Asks to withdraw"
+    WITHDRAW_DECISION = "withdraw_decision", "Withdrawal decided"
 
 
 class DiscordPostStatus(models.TextChoices):
@@ -100,7 +103,23 @@ class DiscordPost(models.Model):
         related_name="discord_posts",
         help_text="Empty for a test post from the Clients page.",
     )
-    kind = models.CharField(max_length=10, choices=DiscordPostKind.choices)
+    message = models.ForeignKey(
+        "requests.Message",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="+",
+        help_text="The client's reply this post carries into the task's topic.",
+    )
+    withdrawal = models.ForeignKey(
+        "requests.WithdrawalRequest",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="+",
+        help_text="The ask to withdraw, or the PM's decision on it, this post tells about.",
+    )
+    kind = models.CharField(max_length=20, choices=DiscordPostKind.choices)
     task_key = models.CharField(max_length=32, blank=True, help_text="The task, e.g. FI-2301.")
     status = models.CharField(
         max_length=10, choices=DiscordPostStatus.choices, default=DiscordPostStatus.WAITING

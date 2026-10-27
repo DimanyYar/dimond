@@ -13,7 +13,7 @@ from apps.accounts.models import Role, User
 from apps.files.models import Attachment, JiraCopy
 from apps.files.services import attach_files, public_link, removable_files, remove_files
 from apps.files.uploads import CheckedFile
-from apps.notifications.services import queue_task_topic
+from apps.notifications.services import queue_reply, queue_task_topic, queue_withdrawal
 from apps.tracker.base import (
     CLIENT_TAG,
     Comment,
@@ -233,6 +233,8 @@ def post_message(
         request=request, author=author, text=text, asks_for_input=ask_for_input
     )
     attach_files(request, author, files, message=message)
+    if author.role == Role.CLIENT:
+        queue_reply(message)
     if ask_for_input:
         _set_status(request, ClientStatus.NEEDS_INPUT, author)
     elif (
@@ -269,6 +271,7 @@ def _save_answer(
         raise NotAllowedError
     message = Message.objects.create(request=request, author=client, text=text, answers_team=True)
     attach_files(request, client, files, message=message)
+    queue_reply(message)
     _set_status(request, status_before_question(request), client)
     return message
 
@@ -432,7 +435,10 @@ def withdraw_request(client: User, request: Request, reason: str = "") -> Withdr
     if not reason:
         raise ValueError("A reason is required to ask the PM to withdraw a request.")
     message = Message.objects.create(request=request, author=client, text=reason)
-    return WithdrawalRequest.objects.create(request=request, requested_by=client, reason=message)
+    ask = WithdrawalRequest.objects.create(request=request, requested_by=client, reason=message)
+    # The reason goes to Discord with the ask, as one post, not as a reply of its own.
+    queue_withdrawal(ask)
+    return ask
 
 
 @transaction.atomic
@@ -444,9 +450,10 @@ def decide_withdrawal(pm: User, request: Request, *, confirm: bool) -> Request:
     request = Request.objects.select_for_update().get(pk=request.pk)
     if not can_decide_withdrawal(pm, request):
         raise NotAllowedError
-    WithdrawalRequest.objects.filter(request=request, confirmed__isnull=True).update(
-        confirmed=confirm, decided_by=pm, decided_at=timezone.now()
-    )
+    ask = WithdrawalRequest.objects.get(request=request, confirmed__isnull=True)
+    ask.confirmed, ask.decided_by, ask.decided_at = confirm, pm, timezone.now()
+    ask.save(update_fields=["confirmed", "decided_by", "decided_at"])
+    queue_withdrawal(ask)
     if confirm:
         return _set_status(request, ClientStatus.WITHDRAWN, pm)
     return request

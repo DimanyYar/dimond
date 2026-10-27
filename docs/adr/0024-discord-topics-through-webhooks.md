@@ -38,6 +38,14 @@ message, whose `channel_id` is the topic's id.
   The text is built from the request when it goes out and is not stored.
 - **httpx**, already in the project (ADR 0017), sends the posts; tests use `MockTransport`,
   and a test that forgets to set one fails instead of reaching Discord.
+- **Replies and withdrawals go into the task's topic** (added Oct 27, 2026): a client's reply
+  (`thread_id`), cut to 1500 characters with "…", and how many files came with it, never a
+  link; an ask to withdraw, with its reason, as one post; the PM's decision on it, withdrawn
+  or kept going. The PM's own replies, status changes and closing the task are not posted:
+  the team sees those in Jira. dimond makes every topic itself: a task linked before the
+  client had Discord, or whose topic was deleted in Discord, gets a new topic with the next
+  post. Posts about one request go out in order: a post waits, without spending its tries,
+  while an earlier one about the same request is still waiting.
 - **Nobody is pinged**: every post sends `allowed_mentions: {parse: []}`, since a client's
   words may hold `@everyone`.
 
