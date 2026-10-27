@@ -5,6 +5,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 
+from apps.notifications.discord import is_webhook
 from apps.tracker.base import TrackerError
 from apps.tracker.connection import current_tracker
 
@@ -212,6 +213,24 @@ class JiraProjectForm(forms.Form):
             cast(forms.ChoiceField, self.fields["jira_project"]), keep=company.jira_project
         )
         self.fields["jira_project"].initial = company.jira_project
+
+
+class DiscordForm(forms.Form):
+    """The webhook of the client's Discord forum, pasted on the Clients page (PRD: Discord for
+    the team). The saved one is never shown back: a new paste replaces it."""
+
+    webhook = forms.CharField(
+        max_length=300, strip=True, error_messages={"required": "Paste the webhook address."}
+    )
+
+    def clean_webhook(self) -> str:
+        webhook: str = self.cleaned_data["webhook"]
+        if not is_webhook(webhook):
+            raise ValidationError(
+                "This is not a Discord webhook. Copy it in Discord: Edit channel → "
+                "Integrations → Webhooks → Copy Webhook URL."
+            )
+        return webhook
 
 
 class NewClientForm(forms.Form):

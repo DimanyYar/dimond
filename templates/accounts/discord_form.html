@@ -1,0 +1,47 @@
+{% comment %}
+The client's Discord on the Clients page (PRD: Discord for the team): the webhook of the
+forum channel for dimond on the client's Discord server. Once saved, only its last characters
+are shown; pasting a new one replaces it. Send test makes a test topic at once.
+{% endcomment %}
+{% load static %}
+<section class="card invite-form" id="discord" aria-labelledby="discord-title">
+  <div class="invite-form-head">
+    <h3 id="discord-title">{{ company.name }}’s Discord</h3>
+    <a class="icon-link" href="{% url 'client' company.pk %}" aria-label="Close">×</a>
+  </div>
+
+  {% if company.discord_webhook %}
+    <div class="discord-saved">
+      <p><span class="sync-dot" aria-hidden="true"></span> Webhook saved <span class="muted">{{ company.discord_webhook_tail }}</span></p>
+      <div class="discord-saved-actions">
+        <form method="post" action="{% url 'test_discord' company.pk %}" data-busy="Sending…">
+          {% csrf_token %}
+          <button class="btn btn-dark" type="submit">Send test</button>
+        </form>
+        <form method="post" action="{% url 'remove_discord_webhook' company.pk %}">
+          {% csrf_token %}
+          <button class="btn" type="submit">Turn off</button>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  <form class="discord-form" method="post" action="{% url 'change_discord_webhook' company.pk %}">
+    {% csrf_token %}
+    <div class="field">
+      <label for="discord-webhook">{% if company.discord_webhook %}Replace with another webhook{% else %}Forum webhook{% endif %}</label>
+      <input class="input" type="text" id="discord-webhook" name="webhook" required
+             autocomplete="off" spellcheck="false" inputmode="url"
+             placeholder="https://discord.com/api/webhooks/…"
+             aria-describedby="discord-webhook-hint{% if form.webhook.errors %} discord-webhook-error{% endif %}"
+             {% if form.webhook.errors %}aria-invalid="true"{% endif %}>
+      <span class="hint" id="discord-webhook-hint">In Discord, open the forum channel for dimond: Edit channel → Integrations → Webhooks → New Webhook → Copy Webhook URL. Every Jira task you create or link gets a topic there. The address is never shown again after saving.</span>
+      {% if form.webhook.errors %}<span class="error-text" id="discord-webhook-error">{{ form.webhook.errors.0 }}</span>{% endif %}
+    </div>
+    <div class="invite-form-foot">
+      <a class="btn" href="{% url 'client' company.pk %}">Cancel</a>
+      <button class="btn btn-primary" type="submit">Save</button>
+    </div>
+  </form>
+</section>
+<script type="module" src="{% static 'js/busy-button.js' %}"></script>

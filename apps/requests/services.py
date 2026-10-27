@@ -13,6 +13,7 @@ from apps.accounts.models import Role, User
 from apps.files.models import Attachment, JiraCopy
 from apps.files.services import attach_files, public_link, removable_files, remove_files
 from apps.files.uploads import CheckedFile
+from apps.notifications.services import queue_task_topic
 from apps.tracker.base import (
     CLIENT_TAG,
     Comment,
@@ -648,6 +649,8 @@ def _plan_with_task(pm: User, request: Request, task: Issue, reply: str) -> Requ
     # its release dates come with the next sync.
     request.lost_jira_key = request.jira_moved_to = ""
     request.planned_releases = []
+    # A new task gets a topic of its own in Discord, named after its key.
+    request.discord_topic = ""
     try:
         # Two PMs linking the same task at the same moment both pass the check above; the
         # unique key lets one through, and the other hears why instead of seeing an error page.
@@ -660,6 +663,7 @@ def _plan_with_task(pm: User, request: Request, task: Issue, reply: str) -> Requ
                     "lost_jira_key",
                     "jira_moved_to",
                     "planned_releases",
+                    "discord_topic",
                     "updated_at",
                 ]
             )
@@ -669,6 +673,7 @@ def _plan_with_task(pm: User, request: Request, task: Issue, reply: str) -> Requ
     TaskEvent.objects.create(
         request=request, kind=TaskEventKind.LINKED, task_key=task.key, actor=pm
     )
+    queue_task_topic(request)
     if reply:
         Message.objects.create(request=request, author=pm, text=reply)
     _mark_handled_so_far(request)
