@@ -93,6 +93,11 @@ uv run mypy
 uv run pytest
 ```
 
+## Production
+
+One server of its own, Caddy does HTTPS, updated with `deploy/deploy.sh` (ADR 0022).
+First start, deploys and what to do when one fails: [docs/deploy.md](docs/deploy.md).
+
 ## How we work
 
 - `CONTRIBUTING.md`: branches, pull requests, review, releases
