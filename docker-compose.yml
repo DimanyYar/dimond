@@ -1,5 +1,5 @@
 # Local development: database, mail catcher and the app with auto-reload.
-# Production compose (gunicorn, worker, Caddy) arrives with the first deploy.
+# Production is docker-compose.prod.yml (ADR 0022).
 
 services:
   db:

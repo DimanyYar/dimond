@@ -54,6 +54,16 @@ def test_invited_person_gets_a_sign_in_link_by_email(client, anna):
     assert settings.SITE_URL in mail.outbox[0].body
 
 
+def test_sign_in_email_has_a_styled_version_with_the_same_link(client, anna):
+    ask_for_link(client, "anna.k@atlas-crm.com")
+
+    [email] = mail.outbox
+    html, kind = email.alternatives[0]
+    assert kind == "text/html"
+    assert "Sign in to dimon.d" in html
+    assert f'href="{settings.SITE_URL}{link_path_from_email()}"' in html
+
+
 def test_sign_in_page_does_not_reveal_who_has_an_account(client, anna):
     known = ask_for_link(client, "anna.k@atlas-crm.com")
     unknown = ask_for_link(client, "stranger@example.com")

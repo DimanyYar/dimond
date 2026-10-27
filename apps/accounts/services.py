@@ -24,12 +24,8 @@ LIFETIME = {LinkKind.SIGN_IN: timedelta(minutes=15), LinkKind.INVITE: timedelta(
 MAX_SIGN_IN_LINKS_PER_LIFETIME = 3
 
 EMAIL = {
-    LinkKind.SIGN_IN: (
-        EmailKind.SIGN_IN_LINK,
-        "Your dimon.d sign-in link",
-        "accounts/email/sign_in_link.txt",
-    ),
-    LinkKind.INVITE: (EmailKind.INVITE, "You're invited to dimon.d", "accounts/email/invite.txt"),
+    LinkKind.SIGN_IN: (EmailKind.SIGN_IN_LINK, "Your dimon.d sign-in link", "sign_in_link"),
+    LinkKind.INVITE: (EmailKind.INVITE, "You're invited to dimon.d", "invite"),
 }
 
 
@@ -161,7 +157,9 @@ def _send_one(link_id: int) -> bool:
         context = {"user": link.user, "url": url, "invited_by": link.invited_by}
         # The link is marked sent only after the mail server took it: a failed attempt
         # leaves it queued, and the next round tries again with a fresh token.
-        if not send_email(link.user, kind, subject, render_to_string(template, context)):
+        text = render_to_string(f"accounts/email/{template}.txt", context)
+        html = render_to_string(f"accounts/email/{template}.html", context)
+        if not send_email(link.user, kind, subject, text, html):
             return False
 
         now = timezone.now()

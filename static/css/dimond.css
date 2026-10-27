@@ -206,7 +206,9 @@ h2 {
 .main {
   flex: 1 1 auto;
   min-width: 0;
-  padding: var(--space-7);
+  /* Twice the gap below the page: the last button of a long form (Summon Dimon) must not
+     look glued to the bottom edge of the window once the page is scrolled to the end. */
+  padding: var(--space-7) var(--space-7) calc(var(--space-7) * 2);
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
@@ -349,7 +351,7 @@ h2 {
   }
 
   .main {
-    padding: var(--space-5) var(--space-4) var(--space-7);
+    padding: var(--space-5) var(--space-4) calc(var(--space-7) + env(safe-area-inset-bottom));
   }
 
   h1 {
