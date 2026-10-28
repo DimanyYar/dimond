@@ -2115,7 +2115,23 @@ kbd {
 
 .message-formatted ul,
 .message-formatted ol {
-  padding-left: 22px;
+  padding-left: 26px;
+}
+
+.message-formatted ol > li::marker {
+  font-weight: 700;
+}
+
+/* A point the team numbered by hand ("4. Request ID"): the number bold, a wrapped line
+   starts under the words, not under the number. */
+.message-point {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+}
+
+/* What follows a point is its content: kept close, as in one paragraph in Jira. */
+.message-formatted > .message-point + p {
+  margin-top: var(--space-1);
 }
 
 .message-heading {
@@ -2131,8 +2147,10 @@ kbd {
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.5;
-  white-space: pre;
-  overflow-wrap: normal;
+  /* Long lines wrap, as in Jira: a pasted JSON or log stays readable without scrolling.
+     Spaces and indents are kept as written. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .message-formatted pre code {

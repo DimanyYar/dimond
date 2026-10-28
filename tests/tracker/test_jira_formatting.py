@@ -335,3 +335,26 @@ def test_thousands_of_block_markers_are_read_quickly(markup: str):
     html(markup)
 
     assert time.monotonic() - started < 1
+
+
+def test_a_point_numbered_by_hand_has_a_bold_number_and_keeps_its_words():
+    markup = "4. Request ID\nEkBcbdpRjYkN1WNW5j_HEg\n5. Full *request* log"
+
+    assert html(markup) == (
+        '<p class="message-point"><strong>4.</strong> <span>Request ID</span></p>'
+        "<p>EkBcbdpRjYkN1WNW5j_HEg</p>"
+        '<p class="message-point"><strong>5.</strong> <span>Full <strong>request</strong> log'
+        "</span></p>"
+    )
+    assert to_text(markup, JIRA) == "4. Request ID\nEkBcbdpRjYkN1WNW5j_HEg\n5. Full request log"
+
+
+@pytest.mark.parametrize("line", ["2026. A year", "4.Request ID", "3 . apples", "1.5 hours"])
+def test_a_year_or_a_number_without_a_space_is_not_a_point(line: str):
+    assert html(line) == f"<p>{line}</p>"
+
+
+def test_points_between_paragraphs_keep_the_blank_lines_of_the_comment():
+    markup = "Intro\n4. First\n5. Second\n\nAfter"
+
+    assert to_text(markup, JIRA) == markup
