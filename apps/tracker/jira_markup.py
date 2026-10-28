@@ -197,20 +197,52 @@ def _blocks(markup: str) -> list[Block]:
     match, so a comment of many blocks is read in one pass."""
     blocks: list[Block] = []
     position = 0
-    upcoming = {pattern: pattern.search(markup) for pattern in (VERBATIM, QUOTE_BLOCK)}
+    in_line_code = [found.span() for found in CODE_IN_LINE.finditer(markup)]
+    upcoming = {
+        pattern: _next_block(pattern, markup, 0, in_line_code)
+        for pattern in (VERBATIM, QUOTE_BLOCK)
+    }
     while found := min((m for m in upcoming.values() if m), key=re.Match.start, default=None):
         blocks += [*_lines(markup[position : found.start()]), *_enclosed(found)]
         position = found.end()
         for pattern, match in upcoming.items():
             if match is not None and match.start() < position:
-                upcoming[pattern] = pattern.search(markup, position)
+                upcoming[pattern] = _next_block(pattern, markup, position, in_line_code)
     return blocks + _lines(markup[position:])
+
+
+def _next_block(
+    pattern: re.Pattern[str], markup: str, position: int, in_line_code: list[tuple[int, int]]
+) -> re.Match[str] | None:
+    """The next block that really opens one: "\\{quote}" and "{{x {quote} y}}" are words."""
+    while (found := pattern.search(markup, position)) is not None:
+        start = found.start()
+        if not _escaped(markup, start) and not _within(start, in_line_code):
+            return found
+        position = start + 1
+    return None
+
+
+def _escaped(markup: str, index: int) -> bool:
+    # Two backslashes before a macro are Jira's line break, not an escape: only an odd count
+    # escapes it.
+    before = index
+    while before > 0 and markup[before - 1] == "\\":
+        before -= 1
+    return (index - before) % 2 == 1
+
+
+def _within(index: int, spans: list[tuple[int, int]]) -> bool:
+    found = bisect_right(spans, index, key=lambda span: span[0]) - 1
+    return found >= 0 and index < spans[found][1]
 
 
 def _enclosed(found: re.Match[str]) -> list[Block]:
     if found.re is VERBATIM:
-        text = found.group(2).rstrip()
-        return [CodeBlock(text)] if text else []
+        # The empty lines before the closing {code} are how the comment was laid out in
+        # Jira; anything else, trailing spaces included, is kept as written.
+        text = found.group(2).rstrip("\n")
+        return [CodeBlock(text)] if text.strip() else []
     inside = tuple(_blocks(found.group(1)))
     return [Quote(inside)] if inside else []
 

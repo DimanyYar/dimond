@@ -280,3 +280,28 @@ def test_the_plain_text_shows_lists_and_tables_simply():
     assert to_text(markup, JIRA) == (
         "Source | In use\nWeb form | yes\n\n• one\n  • one-a\n\n1. first"
     )
+
+
+def test_a_quote_or_code_macro_inside_code_in_a_line_is_words():
+    assert html("Run {{x {quote} y}} end") == "<p>Run <code>x {quote} y</code> end</p>"
+    assert html("Type {{ {code} }} to start") == "<p>Type <code> {code} </code> to start</p>"
+
+
+def test_an_escaped_macro_is_words_and_a_line_break_before_one_is_not_an_escape():
+    assert html("\\{quote} after") == "<p>{quote} after</p>"
+    assert html("before\\\\{quote}in{quote}") == (
+        "<p>before<br></p><blockquote><p>in</p></blockquote>"
+    )
+
+
+def test_many_macros_inside_code_in_a_line_are_read_quickly():
+    markup = "{{a {quote} b}} \\{code} " * 4000
+
+    started = time.monotonic()
+    html(markup)
+
+    assert time.monotonic() - started < 1
+
+
+def test_a_code_block_keeps_trailing_spaces_but_not_the_empty_lines_before_its_end():
+    assert html("{code}\nx = 1   \n\n\n{code}") == '<pre tabindex="0"><code>x = 1   </code></pre>'
