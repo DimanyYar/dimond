@@ -59,6 +59,7 @@
   --space-7: 40px;
 
   --font: "Figtree", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --tap: 44px;
 }
 
@@ -2091,6 +2092,37 @@ kbd {
   line-height: 1.55;
   white-space: pre-line;
   overflow-wrap: anywhere;
+}
+
+/* The team's Jira formatting (ADR 0025): paragraphs come as <p>, so lines are not kept by CSS. */
+.message-formatted {
+  white-space: normal;
+}
+
+.message-formatted p {
+  margin: 0;
+}
+
+.message-formatted p + p {
+  margin-top: var(--space-2);
+}
+
+.message-formatted a {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.message-formatted code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+
+.message-formatted ins {
+  text-decoration: underline;
 }
 
 .message-why {

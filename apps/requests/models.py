@@ -377,6 +377,12 @@ class Message(models.Model):
     team_edited_at = models.DateTimeField(
         null=True, blank=True, help_text="When the comment last changed in Jira."
     )
+    team_markup = models.TextField(
+        blank=True,
+        help_text="The team question as written in Jira, in its markup: the thread formats it "
+        "when shown (ADR 0025). Empty for questions copied before Oct 27, 2026 until the sync "
+        "fills it.",
+    )
     emailed = models.BooleanField(
         default=False,
         help_text="The worker has taken it into a notification email (PRD: email notifications).",

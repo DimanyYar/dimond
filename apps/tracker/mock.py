@@ -20,6 +20,7 @@ from .base import (
     TaskFile,
     TrackerRefused,
 )
+from .jira_markup import to_text
 
 DEMO_ADDRESS = "https://jira.example.com"
 PROJECTS = [Project("FI", "Atlas"), Project("HF", "Harbor Foods"), Project("NW", "Northwind")]
@@ -55,6 +56,10 @@ DEMO_PICTURE = base64.b64decode(
 SOURCES_SCREENSHOT = TaskFile("90001", "lead-sources.png", "image/png", len(DEMO_PICTURE))
 FILES = {SOURCES_SCREENSHOT.id: DEMO_PICTURE}
 
+QUESTION_MARKUP = (
+    "#client Which sources should the list show: *only the ones you use now*, or every source "
+    "from [CRM settings|https://atlas.example.com/settings/sources], including _archived_ ones?"
+)
 # The team question from the mockups (RequestCardTeamAsk) and an internal note that must never
 # reach the client.
 FI_2214_COMMENTS = (
@@ -70,12 +75,12 @@ FI_2214_COMMENTS = (
         id="70002",
         author_login="olga.p",
         author_name="Olga Petrova",
-        text="#client Which sources should the list show: only the ones you use now, or every "
-        "source from CRM settings, including archived ones?",
+        text=to_text(QUESTION_MARKUP),
         created=datetime(2026, 10, 20, 8, 44, tzinfo=UTC),
         updated=datetime(2026, 10, 20, 8, 44, tzinfo=UTC),
         files=(SOURCES_SCREENSHOT,),
         asks_the_client=True,
+        markup=QUESTION_MARKUP,
     ),
 )
 

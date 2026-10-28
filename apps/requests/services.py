@@ -25,6 +25,7 @@ from apps.tracker.base import (
     TrackerUnreachable,
 )
 from apps.tracker.connection import current_tracker, jira_login_paused
+from apps.tracker.jira_markup import without_tag
 
 from .models import (
     CLOSED_STATUSES,
@@ -857,6 +858,11 @@ def _question_text(comment: Comment) -> str:
     ).strip()
 
 
+def _question_markup(comment: Comment) -> str:
+    # Without the tag a line starting with it is not read as a numbered list ("# item").
+    return without_tag(comment.markup, CLIENT_TAG)
+
+
 @transaction.atomic
 def add_team_question(
     request: Request,
@@ -876,6 +882,7 @@ def add_team_question(
         team_author=comment.author_name,
         team_author_login=comment.author_login,
         team_edited_at=comment.updated,
+        team_markup=_question_markup(comment),
         files_not_shown=list(files_not_shown),
     )
     attach_files(request, None, files, message=message)
@@ -890,8 +897,18 @@ def edit_team_question(request: Request, comment: Comment) -> QuestionFollowed:
     they were copied; the status does not change."""
     message = Message.objects.select_for_update().get(request=request, team_comment_id=comment.id)
     message.text, message.team_edited_at = _question_text(comment), comment.updated
-    message.save(update_fields=["text", "team_edited_at"])
+    message.team_markup = _question_markup(comment)
+    message.save(update_fields=["text", "team_edited_at", "team_markup"])
     return QuestionFollowed(request, message, edited=True, status_from=ClientStatus(request.status))
+
+
+def keep_team_markup(request: Request, comment: Comment) -> None:
+    """A question copied before dimond kept Jira's markup gets it from the unchanged comment,
+    so the thread formats it. Nothing else changes: it is not an edit, the client is not told
+    (decided Oct 27, 2026)."""
+    Message.objects.filter(request=request, team_comment_id=comment.id).update(
+        team_markup=_question_markup(comment)
+    )
 
 
 @dataclass(frozen=True)

@@ -33,6 +33,7 @@ from .base import (
     TrackerUnreachable,
     tags_the_client,
 )
+from .jira_markup import QUOTED, files_shown, to_text
 
 TIMEOUT_SECONDS = 15
 OPEN_ISSUES_LIMIT = 20
@@ -48,16 +49,6 @@ TEXT_SEARCH_OPERATORS = re.compile(r"[^\w\s]")
 # Jira Software keeps an epic's required short name in a custom field whose number differs
 # from one Jira to another; its type is what identifies it.
 EPIC_NAME_TYPE = "com.pyxis.greenhopper.jira:gh-epic-label"
-
-# Jira's wiki markup in comment bodies, read into plain text for the client.
-PICTURE = re.compile(r"!([^!\s|][^!|\n]*?)(?:\|[^!\n]*)?!")
-FILE_LINK = re.compile(r"\[\^([^\]\n]+)\]")
-MENTION = re.compile(r"\[~([^\]\n]+)\]")
-LINK = re.compile(r"\[([^\]|\n]+)\|([^\]\n]+)\]")
-# Quoted text, whole: {quote}…{quote} and "bq." lines.
-QUOTED = re.compile(r"\{quote\}.*?(?:\{quote\}|\Z)|^bq\. .*$", re.DOTALL | re.MULTILINE)
-BLOCK_MACRO = re.compile(r"\{(?:quote|code|noformat|panel|color)(?::[^}\n]*)?\}")
-EXTRA_BLANK_LINES = re.compile(r"\n{3,}")
 
 
 class JiraTracker:
@@ -285,7 +276,8 @@ class JiraTracker:
         }
         comments = []
         for item in fields.get("comment", {}).get("comments", []):
-            text, shown = _plain_text(item["body"])
+            body = item["body"].replace("\r\n", "\n")
+            shown = files_shown(body)
             author = item.get("author", {})
             login = author.get("name", "")
             comments.append(
@@ -293,12 +285,13 @@ class JiraTracker:
                     id=str(item["id"]),
                     author_login=login,
                     author_name=author.get("displayName", login),
-                    text=text,
+                    text=to_text(body, self.address),
                     created=datetime.fromisoformat(item["created"]),
                     updated=datetime.fromisoformat(item["updated"]),
                     files=tuple(files[name] for name in shown if name in files),
                     missing_files=tuple(name for name in shown if name not in files),
-                    asks_the_client=tags_the_client(QUOTED.sub("", item["body"])),
+                    asks_the_client=tags_the_client(QUOTED.sub("", body)),
+                    markup=body,
                 )
             )
         return tuple(comments)
@@ -370,28 +363,6 @@ class JiraTracker:
             raise TrackerRefused("Jira said the file is larger than its attachment limit.")
         if response.is_error:
             raise TrackerUnreachable(f"Jira answered {response.status_code} to {path}.")
-
-
-def _plain_text(body: str) -> tuple[str, list[str]]:
-    """A comment as the client reads it, and the names of the files it shows, in order.
-    Pictures and file links become the files beside the text; [~login] reads as @login, a
-    link as its words and address."""
-    shown: list[str] = []
-
-    def file(match: re.Match[str]) -> str:
-        name = match.group(1).strip()
-        if name not in shown:
-            shown.append(name)
-        return ""
-
-    text = body.replace("\r\n", "\n")
-    text = PICTURE.sub(file, text)
-    text = FILE_LINK.sub(file, text)
-    text = MENTION.sub(lambda m: "@" + m.group(1).split("@")[0], text)
-    text = LINK.sub(lambda m: f"{m.group(1)} ({m.group(2)})", text)
-    text = BLOCK_MACRO.sub("", text)
-    text = "\n".join(line.rstrip() for line in text.split("\n"))
-    return EXTRA_BLANK_LINES.sub("\n\n", text).strip(), shown
 
 
 def _jira_complaints(response: httpx.Response) -> str:
