@@ -2158,7 +2158,8 @@ kbd {
   overflow-x: auto;
 }
 
-.message-table:focus-visible {
+.message-table:focus-visible,
+.message-formatted pre:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

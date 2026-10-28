@@ -115,7 +115,9 @@ def test_paragraphs_and_line_breaks_are_kept():
 def test_code_keeps_its_stars_and_brackets_exactly():
     shown = html("Try:\n{code:python}\n    x = a*b*c\n[1, 2]\n{code}\nThanks")
 
-    assert shown == ("<p>Try:</p><pre><code>    x = a*b*c\n[1, 2]</code></pre><p>Thanks</p>")
+    assert shown == (
+        '<p>Try:</p><pre tabindex="0"><code>    x = a*b*c\n[1, 2]</code></pre><p>Thanks</p>'
+    )
 
 
 def test_colour_and_panels_show_only_their_words():
@@ -156,7 +158,8 @@ def test_exclamation_marks_in_code_are_words_not_pictures():
     markup = "Run {{echo !important!}}\n{code}\nflag = !set!\n{code}\nSee !screen.png!"
 
     assert html(markup) == (
-        "<p>Run <code>echo !important!</code></p><pre><code>flag = !set!</code></pre><p>See </p>"
+        '<p>Run <code>echo !important!</code></p><pre tabindex="0"><code>flag = !set!</code>'
+        "</pre><p>See </p>"
     )
     assert files_shown(markup) == ["screen.png"]
 

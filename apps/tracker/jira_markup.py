@@ -446,7 +446,8 @@ def _block_html(block: Block, jira_address: str) -> str:
             # Focusable, so a wide table on a phone scrolls from the keyboard too.
             return f'<div class="message-table" tabindex="0"><table>{shown}</table></div>'
         case CodeBlock(text):
-            return f"<pre><code>{escape(text)}</code></pre>"
+            # Focusable like a table: a long line scrolls from the keyboard too.
+            return f'<pre tabindex="0"><code>{escape(text)}</code></pre>'
         case Quote(blocks):
             inside = "".join(_block_html(inner, jira_address) for inner in blocks)
             return f"<blockquote>{inside}</blockquote>"
