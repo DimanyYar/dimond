@@ -113,9 +113,9 @@ def test_paragraphs_and_line_breaks_are_kept():
 
 
 def test_code_keeps_its_stars_and_brackets_exactly():
-    shown = html("Try:\n{code:python}\nx = a*b*c\n[1, 2]\n{code}\nThanks")
+    shown = html("Try:\n{code:python}\n    x = a*b*c\n[1, 2]\n{code}\nThanks")
 
-    assert shown == "<p>Try:</p><p>x = a*b*c<br>[1, 2]</p><p>Thanks</p>"
+    assert shown == ("<p>Try:</p><pre><code>    x = a*b*c\n[1, 2]</code></pre><p>Thanks</p>")
 
 
 def test_colour_and_panels_show_only_their_words():
@@ -156,7 +156,7 @@ def test_exclamation_marks_in_code_are_words_not_pictures():
     markup = "Run {{echo !important!}}\n{code}\nflag = !set!\n{code}\nSee !screen.png!"
 
     assert html(markup) == (
-        "<p>Run <code>echo !important!</code></p><p>flag = !set!</p><p>See </p>"
+        "<p>Run <code>echo !important!</code></p><pre><code>flag = !set!</code></pre><p>See </p>"
     )
     assert files_shown(markup) == ["screen.png"]
 
@@ -199,3 +199,81 @@ def test_a_question_after_a_quoted_line_still_asks_the_client():
 
     assert tags_the_client(QUOTED.sub("", body))
     assert not tags_the_client(QUOTED.sub("", "bq. #client What changed?"))
+
+
+def test_a_table_is_shown_with_its_heading_row_and_scrolls_on_a_phone():
+    shown = html("||Source||In use||\n|Web form|yes|\n|Import|no|")
+
+    assert shown == (
+        '<div class="message-table" tabindex="0"><table>'
+        "<tr><th>Source</th><th>In use</th></tr>"
+        "<tr><td>Web form</td><td>yes</td></tr>"
+        "<tr><td>Import</td><td>no</td></tr>"
+        "</table></div>"
+    )
+
+
+def test_a_bar_inside_a_link_or_code_is_not_a_cell_border():
+    shown = html("|[CRM|https://atlas.example.com/s]|{{a|b}}|\\|x|")
+
+    assert shown.count("<td>") == 3
+    assert '<a href="https://atlas.example.com/s"' in shown
+    assert "<code>a|b</code>" in shown
+
+
+def test_a_row_of_brackets_that_never_close_is_read_quickly():
+    markup = "|" + "[a {{b " * 8000 + "|"
+
+    started = time.monotonic()
+    html(markup)
+
+    assert time.monotonic() - started < 1
+
+
+def test_lists_keep_their_nesting_and_numbers():
+    shown = html("* Web form\n** archived\n*# first\n* Import\n# one\n# two\n- dash")
+
+    assert shown == (
+        "<ul><li>Web form<ul><li>archived</li></ul><ol><li>first</li></ol></li>"
+        "<li>Import</li></ul><ol><li>one</li><li>two</li></ol><ul><li>dash</li></ul>"
+    )
+
+
+def test_a_list_cannot_skip_levels_or_nest_without_end():
+    markup = "\n".join("*" * depth + " deep" for depth in range(1, 3000))
+
+    shown = html(markup)
+
+    assert shown.count("<ul>") == 6
+    assert "*** " not in shown
+
+
+def test_a_bold_line_is_not_a_list():
+    assert html("*Bold* start") == "<p><strong>Bold</strong> start</p>"
+
+
+def test_quotes_headings_and_rules_have_their_own_look():
+    shown = html("h2. Plan\n{quote}Earlier *note*{quote}\nbq. one line\n----\nDone")
+
+    assert shown == (
+        '<p class="message-heading">Plan</p>'
+        "<blockquote><p>Earlier <strong>note</strong></p></blockquote>"
+        "<blockquote><p>one line</p></blockquote><hr><p>Done</p>"
+    )
+
+
+def test_many_quotes_and_code_blocks_are_read_quickly():
+    markup = "{quote}a{quote}{code}b{code}" * 4000 + "{quote}" * 4000
+
+    started = time.monotonic()
+    html(markup)
+
+    assert time.monotonic() - started < 1
+
+
+def test_the_plain_text_shows_lists_and_tables_simply():
+    markup = "||Source||In use||\n|Web form|yes|\n\n* one\n** one-a\n# first"
+
+    assert to_text(markup, JIRA) == (
+        "Source | In use\nWeb form | yes\n\n• one\n  • one-a\n\n1. first"
+    )

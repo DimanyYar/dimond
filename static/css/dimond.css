@@ -2099,12 +2099,92 @@ kbd {
   white-space: normal;
 }
 
-.message-formatted p {
+.message-formatted p,
+.message-formatted ul,
+.message-formatted ol,
+.message-formatted pre,
+.message-formatted blockquote {
   margin: 0;
 }
 
-.message-formatted p + p {
-  margin-top: var(--space-2);
+/* :not() lifts the rule above the "margin: 0" one just before it. */
+.message-formatted > :not(:first-child),
+.message-formatted blockquote > :not(:first-child) {
+  margin-top: var(--space-3);
+}
+
+.message-formatted ul,
+.message-formatted ol {
+  padding-left: 22px;
+}
+
+.message-heading {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.message-formatted pre {
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  background: var(--surface-2);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.message-formatted pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.message-formatted blockquote {
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--hairline-strong);
+  color: var(--ink-soft);
+}
+
+.message-formatted hr {
+  border: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+/* A wide table scrolls inside the message; the page itself never scrolls sideways. */
+.message-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.message-table:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.message-table table {
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.message-table th,
+.message-table td {
+  padding: 6px 10px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  text-align: left;
+  vertical-align: top;
+  /* Words wrap but never break, so a narrow screen scrolls the table instead of
+     squeezing each column to a letter. */
+  overflow-wrap: break-word;
+  min-width: 72px;
+}
+
+.message-table th {
+  background: var(--surface-2);
+  font-weight: 600;
 }
 
 .message-formatted a {
