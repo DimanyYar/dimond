@@ -45,6 +45,9 @@ RULE = re.compile(r"-{4,}")
 QUOTE_LINE = re.compile(r"bq\. +(.*)")
 # "* item", "## item", "*# item", "- item"; a mark needs a space after it, so *bold* is not one.
 LIST_ITEM = re.compile(r"([*#]+|-) +(\S.*)")
+# "4. Request ID": a point the team numbered by hand. Two digits at most, so "2026. was…" is
+# not one.
+POINT = re.compile(r"(\d{1,2})\. +(\S.*)")
 # Deeper lists are shown at this depth: enough for any real comment, and the reader's
 # recursion stays short whatever is typed.
 MAX_LIST_DEPTH = 6
@@ -142,11 +145,17 @@ class Quote:
 
 
 @dataclass(frozen=True)
+class Point:
+    number: str
+    line: Line
+
+
+@dataclass(frozen=True)
 class Rule:
     pass
 
 
-Block = Paragraph | Heading | ListBlock | Table | CodeBlock | Quote | Rule
+Block = Paragraph | Heading | Point | ListBlock | Table | CodeBlock | Quote | Rule
 
 
 def files_shown(body: str) -> list[str]:
@@ -280,6 +289,8 @@ def _classify(line: str) -> tuple[str, str, str]:
         return "quote", "", found.group(1)
     if found := LIST_ITEM.fullmatch(line):
         return "list", found.group(1), found.group(2)
+    if found := POINT.fullmatch(line):
+        return "point", found.group(1), found.group(2)
     if line.startswith("|"):
         return "row", "", line
     return "text", "", line
@@ -291,6 +302,8 @@ def _group(kind: str, lines: list[tuple[str, str]]) -> list[Block]:
         return [Heading(_inline(words)) for _, words in lines]
     if kind == "rule":
         return [Rule() for _ in lines]
+    if kind == "point":
+        return [Point(number, _inline(words)) for number, words in lines]
     if kind == "list":
         return list(_lists(_list_entries(lines), 1))
     if kind == "row":
@@ -475,10 +488,8 @@ def _linkable(url: str, jira_address: str) -> bool:
 
 def _block_html(block: Block, jira_address: str) -> str:
     match block:
-        case Paragraph(lines):
-            return "<p>" + "<br>".join(_html(line, jira_address) for line in lines) + "</p>"
-        case Heading(line):
-            return f'<p class="message-heading">{_html(line, jira_address)}</p>'
+        case Paragraph() | Heading() | Point():
+            return _words_html(block, jira_address)
         case ListBlock(ordered, items):
             tag = "ol" if ordered else "ul"
             shown = "".join(_item_html(item, jira_address) for item in items)
@@ -500,6 +511,19 @@ def _block_html(block: Block, jira_address: str) -> str:
             return "<hr>"
 
 
+def _words_html(block: Paragraph | Heading | Point, jira_address: str) -> str:
+    match block:
+        case Paragraph(lines):
+            return "<p>" + "<br>".join(_html(line, jira_address) for line in lines) + "</p>"
+        case Heading(line):
+            return f'<p class="message-heading">{_html(line, jira_address)}</p>'
+        case Point(number, line):
+            return (
+                f'<p class="message-point"><strong>{number}.</strong>'
+                f"<span>{_html(line, jira_address)}</span></p>"
+            )
+
+
 def _item_html(item: ListItem, jira_address: str) -> str:
     nested = "".join(_block_html(inner, jira_address) for inner in item.lists)
     return f"<li>{_html(item.line, jira_address)}{nested}</li>"
@@ -512,10 +536,8 @@ def _cell_html(cell: Cell, jira_address: str) -> str:
 
 def _block_text(block: Block, jira_address: str, indent: str = "") -> str:
     match block:
-        case Paragraph(lines):
-            return "\n".join(_text(line, jira_address) for line in lines)
-        case Heading(line):
-            return _text(line, jira_address)
+        case Paragraph() | Heading() | Point():
+            return _words_text(block, jira_address)
         case ListBlock(ordered, items):
             return "\n".join(
                 _item_text(f"{number}." if ordered else "•", item, jira_address, indent)
@@ -531,6 +553,16 @@ def _block_text(block: Block, jira_address: str, indent: str = "") -> str:
             return "\n\n".join(_block_text(inner, jira_address) for inner in blocks)
         case Rule():
             return ""
+
+
+def _words_text(block: Paragraph | Heading | Point, jira_address: str) -> str:
+    match block:
+        case Paragraph(lines):
+            return "\n".join(_text(line, jira_address) for line in lines)
+        case Heading(line):
+            return _text(line, jira_address)
+        case Point(number, line):
+            return f"{number}. {_text(line, jira_address)}"
 
 
 def _item_text(mark: str, item: ListItem, jira_address: str, indent: str) -> str:
