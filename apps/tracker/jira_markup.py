@@ -9,6 +9,7 @@ mail addresses become links.
 import re
 from bisect import bisect_right
 from dataclasses import dataclass
+from itertools import groupby, pairwise
 from urllib.parse import urlsplit
 
 from django.utils.html import escape
@@ -33,9 +34,20 @@ VERBATIM = re.compile(
 # own answer quoting the question, not a new question.
 # A "bq." quote ends with its line: what follows may be a new question.
 QUOTED = re.compile(r"\{quote\}.*?(?:\{quote\}|\Z)|^bq\. [^\n]*$", re.DOTALL | re.MULTILINE)
-# Shown by their contents only: colour, panels, and quotes until quotes get their own look.
-WRAPPER_MACRO = re.compile(rf"\{{(?:quote|panel|color)(?::[^}}\n]{{0,{LONGEST}}})?\}}")
-BLANK_LINES = re.compile(r"\n[ \t]*\n")
+# Where code blocks and quotes open and close; which of them count is decided in _blocks.
+BLOCK_MACRO = re.compile(
+    rf"(?<!\{{)\{{(?P<kind>code|noformat|quote)(?::[^}}\n]{{0,{LONGEST}}})?\}}(?!\}})"
+)
+# Shown by their contents only: colour and panels.
+WRAPPER_MACRO = re.compile(rf"\{{(?:panel|color)(?::[^}}\n]{{0,{LONGEST}}})?\}}")
+HEADING = re.compile(r"h[1-6]\. +(.*)")
+RULE = re.compile(r"-{4,}")
+QUOTE_LINE = re.compile(r"bq\. +(.*)")
+# "* item", "## item", "*# item", "- item"; a mark needs a space after it, so *bold* is not one.
+LIST_ITEM = re.compile(r"([*#]+|-) +(\S.*)")
+# Deeper lists are shown at this depth: enough for any real comment, and the reader's
+# recursion stays short whatever is typed.
+MAX_LIST_DEPTH = 6
 
 INLINE = re.compile(
     r"(?P<br>\\\\)"
@@ -83,8 +95,58 @@ class Break:
 
 
 Inline = Text | Styled | Code | Link | Break
-# A paragraph is lines of inline pieces; a verbatim one keeps its lines as they are.
-Paragraph = tuple[tuple[Inline, ...], ...]
+Line = tuple[Inline, ...]
+
+
+@dataclass(frozen=True)
+class Paragraph:
+    lines: tuple[Line, ...]
+
+
+@dataclass(frozen=True)
+class Heading:
+    line: Line
+
+
+@dataclass(frozen=True)
+class ListItem:
+    line: Line
+    lists: tuple["ListBlock", ...]
+
+
+@dataclass(frozen=True)
+class ListBlock:
+    ordered: bool
+    items: tuple[ListItem, ...]
+
+
+@dataclass(frozen=True)
+class Cell:
+    header: bool
+    line: Line
+
+
+@dataclass(frozen=True)
+class Table:
+    rows: tuple[tuple[Cell, ...], ...]
+
+
+@dataclass(frozen=True)
+class CodeBlock:
+    text: str
+
+
+@dataclass(frozen=True)
+class Quote:
+    blocks: tuple["Block", ...]
+
+
+@dataclass(frozen=True)
+class Rule:
+    pass
+
+
+Block = Paragraph | Heading | ListBlock | Table | CodeBlock | Quote | Rule
 
 
 def files_shown(body: str) -> list[str]:
@@ -116,50 +178,200 @@ def without_tag(markup: str, tag: re.Pattern[str]) -> str:
 def to_html(markup: str, jira_address: str) -> SafeString:
     """The comment as the thread shows it. Links to Jira itself stay words: the client has no
     access there."""
-    rendered = "".join(
-        "<p>" + "<br>".join(_html(line, jira_address) for line in paragraph) + "</p>"
-        for paragraph in _paragraphs(markup)
-    )
+    rendered = "".join(_block_html(block, jira_address) for block in _read(markup))
     # Safe: every word of the comment went through escape(), every tag is one written here.
     return mark_safe(rendered)  # noqa: S308
 
 
 def to_text(markup: str, jira_address: str = "") -> str:
     """The comment as plain words: styles gone, a link as its words and address, a mention as
-    @login."""
-    return "\n\n".join(
-        "\n".join(_text(line, jira_address) for line in paragraph)
-        for paragraph in _paragraphs(markup)
-    )
+    @login, list items with bullets, table cells between bars."""
+    texts = (_block_text(block, jira_address) for block in _read(markup))
+    return "\n\n".join(text for text in texts if text)
 
 
-def _paragraphs(markup: str) -> list[Paragraph]:
-    markup = markup.replace("\r\n", "\n")
-    paragraphs: list[Paragraph] = []
-    position = 0
-    for block in VERBATIM.finditer(markup):
-        paragraphs += _formatted(markup[position : block.start()])
-        lines = block.group(2).rstrip().split("\n")
-        if any(line.strip() for line in lines):
-            paragraphs.append(tuple((Text(line.rstrip()),) for line in lines))
-        position = block.end()
-    return paragraphs + _formatted(markup[position:])
+def _read(markup: str) -> list[Block]:
+    return _blocks(markup.replace("\r\n", "\n"))
 
 
-def _formatted(markup: str) -> list[Paragraph]:
-    markup = WRAPPER_MACRO.sub("", markup)
-    paragraphs = []
-    for chunk in BLANK_LINES.split(markup):
-        # A line holding only a picture shows nothing once the picture is beside the text.
-        lines = [_inline(line.strip()) for line in chunk.split("\n")]
-        shown = tuple(line for line in lines if not _blank(line))
-        if shown:
-            paragraphs.append(shown)
-    return paragraphs
+def _blocks(markup: str) -> list[Block]:
+    """Code blocks and quotes first, as their lines are not read like the others; the rest
+    line by line. Their markers are found in one pass; one escaped with "\\" or inside
+    {{…}} is words, whether it opens or closes."""
+    in_line_code = [found.span() for found in CODE_IN_LINE.finditer(markup)]
+    macros = [
+        found
+        for found in BLOCK_MACRO.finditer(markup)
+        if not _escaped(markup, found.start()) and not _within(found.start(), in_line_code)
+    ]
+    blocks: list[Block] = []
+    position = index = 0
+    while index < len(macros):
+        opening = macros[index]
+        closing = _closing(macros, index)
+        inside_ends = macros[closing].start() if closing is not None else len(markup)
+        blocks += _lines(markup[position : opening.start()])
+        blocks += _enclosed(opening["kind"], markup[opening.end() : inside_ends])
+        position = macros[closing].end() if closing is not None else len(markup)
+        index = closing + 1 if closing is not None else len(macros)
+    return blocks + _lines(markup[position:])
 
 
-def _blank(pieces: tuple[Inline, ...]) -> bool:
+def _closing(macros: list[re.Match[str]], opening: int) -> int | None:
+    """The marker that closes the one at `opening`, or None when it runs to the end. Inside a
+    code block other markers are its words; inside a quote a code block is skipped whole,
+    as a {quote} in it is code. Every marker is looked at once."""
+    kind = macros[opening]["kind"]
+    index = opening + 1
+    while index < len(macros):
+        current = macros[index]["kind"]
+        if current == kind:
+            return index
+        if kind == "quote":
+            inner = _closing(macros, index)
+            if inner is None:
+                return None
+            index = inner
+        index += 1
+    return None
+
+
+def _escaped(markup: str, index: int) -> bool:
+    # Two backslashes before a macro are Jira's line break, not an escape: only an odd count
+    # escapes it.
+    before = index
+    while before > 0 and markup[before - 1] == "\\":
+        before -= 1
+    return (index - before) % 2 == 1
+
+
+def _within(index: int, spans: list[tuple[int, int]]) -> bool:
+    found = bisect_right(spans, index, key=lambda span: span[0]) - 1
+    return found >= 0 and index < spans[found][1]
+
+
+def _enclosed(kind: str, inside: str) -> list[Block]:
+    if kind == "quote":
+        blocks = tuple(_blocks(inside))
+        return [Quote(blocks)] if blocks else []
+    # The line break after {code} and the empty lines before the closing one are how the
+    # comment was laid out in Jira; anything else, trailing spaces included, is kept.
+    text = inside.removeprefix("\n").rstrip("\n")
+    return [CodeBlock(text)] if text.strip() else []
+
+
+def _lines(markup: str) -> list[Block]:
+    lines = (_classify(line.strip()) for line in WRAPPER_MACRO.sub("", markup).split("\n"))
+    blocks: list[Block] = []
+    for kind, group in groupby(lines, key=lambda line: line[0]):
+        blocks += _group(kind, [(marks, words) for _, marks, words in group])
+    return blocks
+
+
+def _classify(line: str) -> tuple[str, str, str]:
+    """What a line is, its marks (for a list item) and its words."""
+    if not line:
+        return "blank", "", ""
+    if found := HEADING.fullmatch(line):
+        return "heading", "", found.group(1)
+    if RULE.fullmatch(line):
+        return "rule", "", ""
+    if found := QUOTE_LINE.fullmatch(line):
+        return "quote", "", found.group(1)
+    if found := LIST_ITEM.fullmatch(line):
+        return "list", found.group(1), found.group(2)
+    if line.startswith("|"):
+        return "row", "", line
+    return "text", "", line
+
+
+def _group(kind: str, lines: list[tuple[str, str]]) -> list[Block]:
+    """Lines of one kind in a row: one block, or one per line for headings and rules."""
+    if kind == "heading":
+        return [Heading(_inline(words)) for _, words in lines]
+    if kind == "rule":
+        return [Rule() for _ in lines]
+    if kind == "list":
+        return list(_lists(_list_entries(lines), 1))
+    if kind == "row":
+        return [Table(tuple(_row(words) for _, words in lines))]
+    # A line holding only a picture shows nothing once the picture is beside the text.
+    shown = tuple(line for line in (_inline(words) for _, words in lines) if not _blank(line))
+    if not shown:
+        return []
+    if kind == "quote":
+        return [Quote((Paragraph(shown),))]
+    return [Paragraph(shown)]
+
+
+def _blank(pieces: Line) -> bool:
     return all(isinstance(piece, Text) and not piece.text.strip() for piece in pieces)
+
+
+def _list_entries(lines: list[tuple[str, str]]) -> list[tuple[int, bool, Line]]:
+    """Each item's depth, never more than one below the item before it, as Jira reads them;
+    its last mark says numbered or bulleted."""
+    entries = []
+    depth = 0
+    for marks, words in lines:
+        depth = min(len(marks), depth + 1, MAX_LIST_DEPTH)
+        entries.append((depth, marks.endswith("#"), _inline(words)))
+    return entries
+
+
+def _lists(entries: list[tuple[int, bool, Line]], depth: int) -> tuple[ListBlock, ...]:
+    """Items at this depth with the deeper items after each as its own lists. A switch between
+    bullets and numbers starts a new list."""
+    lists: list[tuple[bool, list[ListItem]]] = []
+    index = 0
+    while index < len(entries):
+        _, ordered, line = entries[index]
+        end = index + 1
+        while end < len(entries) and entries[end][0] > depth:
+            end += 1
+        item = ListItem(line, _lists(entries[index + 1 : end], depth + 1))
+        if lists and lists[-1][0] == ordered:
+            lists[-1][1].append(item)
+        else:
+            lists.append((ordered, [item]))
+        index = end
+    return tuple(ListBlock(ordered, tuple(items)) for ordered, items in lists)
+
+
+def _row(line: str) -> tuple[Cell, ...]:
+    """|cell|cell| and ||heading||heading||: a cell after "||" is a heading."""
+    borders = _borders(line)
+    cells = []
+    for (start, after), (end, _) in pairwise([*borders, (len(line), len(line))]):
+        words = line[after:end].strip()
+        if end == len(line) and not words:
+            continue
+        cells.append(Cell(after - start == 2, _inline(words)))
+    return tuple(cells)
+
+
+def _borders(line: str) -> list[tuple[int, int]]:
+    """Where each cell border starts and ends. A bar inside [words|address] or {{code}}, or
+    after "\\", is not a border. A bracket that never closes is skipped at once, so a row of
+    them is still read in one pass."""
+    closers = {"[": "]", "{{": "}}"}
+    last = {opener: line.rfind(closer) for opener, closer in closers.items()}
+    borders = []
+    index = 0
+    while index < len(line):
+        opener = "{{" if line.startswith("{{", index) else line[index]
+        if opener == "\\":
+            index += 2
+        elif opener in closers and index < last[opener]:
+            closer = closers[opener]
+            index = line.find(closer, index + len(opener)) + len(closer)
+        elif opener == "|":
+            width = 2 if line.startswith("||", index) else 1
+            borders.append((index, index + width))
+            index += width
+        else:
+            index += 1
+    return borders
 
 
 def _inline(line: str, depth: int = 0) -> tuple[Inline, ...]:
@@ -259,6 +471,72 @@ def _linkable(url: str, jira_address: str) -> bool:
         return False
     jira_host = urlsplit(jira_address).hostname
     return parts.hostname is None or parts.hostname != jira_host
+
+
+def _block_html(block: Block, jira_address: str) -> str:
+    match block:
+        case Paragraph(lines):
+            return "<p>" + "<br>".join(_html(line, jira_address) for line in lines) + "</p>"
+        case Heading(line):
+            return f'<p class="message-heading">{_html(line, jira_address)}</p>'
+        case ListBlock(ordered, items):
+            tag = "ol" if ordered else "ul"
+            shown = "".join(_item_html(item, jira_address) for item in items)
+            return f"<{tag}>{shown}</{tag}>"
+        case Table(rows):
+            shown = "".join(
+                "<tr>" + "".join(_cell_html(cell, jira_address) for cell in row) + "</tr>"
+                for row in rows
+            )
+            # Focusable, so a wide table on a phone scrolls from the keyboard too.
+            return f'<div class="message-table" tabindex="0"><table>{shown}</table></div>'
+        case CodeBlock(text):
+            # Focusable like a table: a long line scrolls from the keyboard too.
+            return f'<pre tabindex="0"><code>{escape(text)}</code></pre>'
+        case Quote(blocks):
+            inside = "".join(_block_html(inner, jira_address) for inner in blocks)
+            return f"<blockquote>{inside}</blockquote>"
+        case Rule():
+            return "<hr>"
+
+
+def _item_html(item: ListItem, jira_address: str) -> str:
+    nested = "".join(_block_html(inner, jira_address) for inner in item.lists)
+    return f"<li>{_html(item.line, jira_address)}{nested}</li>"
+
+
+def _cell_html(cell: Cell, jira_address: str) -> str:
+    tag = "th" if cell.header else "td"
+    return f"<{tag}>{_html(cell.line, jira_address)}</{tag}>"
+
+
+def _block_text(block: Block, jira_address: str, indent: str = "") -> str:
+    match block:
+        case Paragraph(lines):
+            return "\n".join(_text(line, jira_address) for line in lines)
+        case Heading(line):
+            return _text(line, jira_address)
+        case ListBlock(ordered, items):
+            return "\n".join(
+                _item_text(f"{number}." if ordered else "•", item, jira_address, indent)
+                for number, item in enumerate(items, 1)
+            )
+        case Table(rows):
+            return "\n".join(
+                " | ".join(_text(cell.line, jira_address) for cell in row) for row in rows
+            )
+        case CodeBlock(text):
+            return text
+        case Quote(blocks):
+            return "\n\n".join(_block_text(inner, jira_address) for inner in blocks)
+        case Rule():
+            return ""
+
+
+def _item_text(mark: str, item: ListItem, jira_address: str, indent: str) -> str:
+    lines = [f"{indent}{mark} {_text(item.line, jira_address)}"]
+    lines += [_block_text(inner, jira_address, indent + "  ") for inner in item.lists]
+    return "\n".join(lines)
 
 
 def _html(pieces: tuple[Inline, ...], jira_address: str) -> str:

@@ -448,7 +448,7 @@ def test_dimonds_answer_quoting_a_question_is_not_a_question():
     *_, answer = comments_of_fi_2214()
 
     assert not answer.asks_the_client
-    assert answer.text.startswith("#client Which sources should the list show?\nMark T.")
+    assert answer.text.startswith("#client Which sources should the list show?\n\nMark T.")
 
 
 @pytest.mark.parametrize(
