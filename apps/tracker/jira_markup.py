@@ -34,7 +34,10 @@ VERBATIM = re.compile(
 # own answer quoting the question, not a new question.
 # A "bq." quote ends with its line: what follows may be a new question.
 QUOTED = re.compile(r"\{quote\}.*?(?:\{quote\}|\Z)|^bq\. [^\n]*$", re.DOTALL | re.MULTILINE)
-QUOTE_BLOCK = re.compile(r"(?<!\{)\{quote\}(.*?)(?:\{quote\}|\Z)", re.DOTALL)
+# Where code blocks and quotes open and close; which of them count is decided in _blocks.
+BLOCK_MACRO = re.compile(
+    rf"(?<!\{{)\{{(?P<kind>code|noformat|quote)(?::[^}}\n]{{0,{LONGEST}}})?\}}(?!\}})"
+)
 # Shown by their contents only: colour and panels.
 WRAPPER_MACRO = re.compile(rf"\{{(?:panel|color)(?::[^}}\n]{{0,{LONGEST}}})?\}}")
 HEADING = re.compile(r"h[1-6]\. +(.*)")
@@ -193,33 +196,43 @@ def _read(markup: str) -> list[Block]:
 
 def _blocks(markup: str) -> list[Block]:
     """Code blocks and quotes first, as their lines are not read like the others; the rest
-    line by line. Each pattern is searched again only once the text has passed its last
-    match, so a comment of many blocks is read in one pass."""
-    blocks: list[Block] = []
-    position = 0
+    line by line. Their markers are found in one pass; one escaped with "\\" or inside
+    {{…}} is words, whether it opens or closes."""
     in_line_code = [found.span() for found in CODE_IN_LINE.finditer(markup)]
-    upcoming = {
-        pattern: _next_block(pattern, markup, 0, in_line_code)
-        for pattern in (VERBATIM, QUOTE_BLOCK)
-    }
-    while found := min((m for m in upcoming.values() if m), key=re.Match.start, default=None):
-        blocks += [*_lines(markup[position : found.start()]), *_enclosed(found)]
-        position = found.end()
-        for pattern, match in upcoming.items():
-            if match is not None and match.start() < position:
-                upcoming[pattern] = _next_block(pattern, markup, position, in_line_code)
+    macros = [
+        found
+        for found in BLOCK_MACRO.finditer(markup)
+        if not _escaped(markup, found.start()) and not _within(found.start(), in_line_code)
+    ]
+    blocks: list[Block] = []
+    position = index = 0
+    while index < len(macros):
+        opening = macros[index]
+        closing = _closing(macros, index)
+        inside_ends = macros[closing].start() if closing is not None else len(markup)
+        blocks += _lines(markup[position : opening.start()])
+        blocks += _enclosed(opening["kind"], markup[opening.end() : inside_ends])
+        position = macros[closing].end() if closing is not None else len(markup)
+        index = closing + 1 if closing is not None else len(macros)
     return blocks + _lines(markup[position:])
 
 
-def _next_block(
-    pattern: re.Pattern[str], markup: str, position: int, in_line_code: list[tuple[int, int]]
-) -> re.Match[str] | None:
-    """The next block that really opens one: "\\{quote}" and "{{x {quote} y}}" are words."""
-    while (found := pattern.search(markup, position)) is not None:
-        start = found.start()
-        if not _escaped(markup, start) and not _within(start, in_line_code):
-            return found
-        position = start + 1
+def _closing(macros: list[re.Match[str]], opening: int) -> int | None:
+    """The marker that closes the one at `opening`, or None when it runs to the end. Inside a
+    code block other markers are its words; inside a quote a code block is skipped whole,
+    as a {quote} in it is code. Every marker is looked at once."""
+    kind = macros[opening]["kind"]
+    index = opening + 1
+    while index < len(macros):
+        current = macros[index]["kind"]
+        if current == kind:
+            return index
+        if kind == "quote":
+            inner = _closing(macros, index)
+            if inner is None:
+                return None
+            index = inner
+        index += 1
     return None
 
 
@@ -237,14 +250,14 @@ def _within(index: int, spans: list[tuple[int, int]]) -> bool:
     return found >= 0 and index < spans[found][1]
 
 
-def _enclosed(found: re.Match[str]) -> list[Block]:
-    if found.re is VERBATIM:
-        # The empty lines before the closing {code} are how the comment was laid out in
-        # Jira; anything else, trailing spaces included, is kept as written.
-        text = found.group(2).rstrip("\n")
-        return [CodeBlock(text)] if text.strip() else []
-    inside = tuple(_blocks(found.group(1)))
-    return [Quote(inside)] if inside else []
+def _enclosed(kind: str, inside: str) -> list[Block]:
+    if kind == "quote":
+        blocks = tuple(_blocks(inside))
+        return [Quote(blocks)] if blocks else []
+    # The line break after {code} and the empty lines before the closing one are how the
+    # comment was laid out in Jira; anything else, trailing spaces included, is kept.
+    text = inside.removeprefix("\n").rstrip("\n")
+    return [CodeBlock(text)] if text.strip() else []
 
 
 def _lines(markup: str) -> list[Block]:

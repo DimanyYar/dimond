@@ -305,3 +305,33 @@ def test_many_macros_inside_code_in_a_line_are_read_quickly():
 
 def test_a_code_block_keeps_trailing_spaces_but_not_the_empty_lines_before_its_end():
     assert html("{code}\nx = 1   \n\n\n{code}") == '<pre tabindex="0"><code>x = 1   </code></pre>'
+
+
+@pytest.mark.parametrize(
+    ("markup", "shown"),
+    [
+        ("{quote}a \\{quote} b{quote}", "<blockquote><p>a {quote} b</p></blockquote>"),
+        (
+            "{quote}a {{x {quote} y}} b{quote}",
+            "<blockquote><p>a <code>x {quote} y</code> b</p></blockquote>",
+        ),
+        ("{code}a \\{code} b{code}", '<pre tabindex="0"><code>a \\{code} b</code></pre>'),
+        (
+            "{quote}see {code}{quote}{code} end{quote}",
+            '<blockquote><p>see</p><pre tabindex="0"><code>{quote}</code></pre>'
+            "<p>end</p></blockquote>",
+        ),
+    ],
+)
+def test_an_escaped_or_coded_marker_does_not_close_a_block(markup: str, shown: str):
+    assert html(markup) == shown
+
+
+@pytest.mark.parametrize(
+    "markup", ["\\{code:python} " * 4000, "{quote}{code}" * 4000, "{code}{quote}" * 4000]
+)
+def test_thousands_of_block_markers_are_read_quickly(markup: str):
+    started = time.monotonic()
+    html(markup)
+
+    assert time.monotonic() - started < 1
