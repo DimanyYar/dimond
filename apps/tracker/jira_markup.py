@@ -31,7 +31,8 @@ VERBATIM = re.compile(
 )
 # Quoted text, whole: {quote}…{quote} and "bq." lines. A #client tag inside one is dimond's
 # own answer quoting the question, not a new question.
-QUOTED = re.compile(r"\{quote\}.*?(?:\{quote\}|\Z)|^bq\. .*$", re.DOTALL | re.MULTILINE)
+# A "bq." quote ends with its line: what follows may be a new question.
+QUOTED = re.compile(r"\{quote\}.*?(?:\{quote\}|\Z)|^bq\. [^\n]*$", re.DOTALL | re.MULTILINE)
 # Shown by their contents only: colour, panels, and quotes until quotes get their own look.
 WRAPPER_MACRO = re.compile(rf"\{{(?:quote|panel|color)(?::[^}}\n]{{0,{LONGEST}}})?\}}")
 BLANK_LINES = re.compile(r"\n[ \t]*\n")

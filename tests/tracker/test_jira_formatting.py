@@ -5,8 +5,8 @@ import time
 
 import pytest
 
-from apps.tracker.base import CLIENT_TAG
-from apps.tracker.jira_markup import files_shown, to_html, to_text, without_tag
+from apps.tracker.base import CLIENT_TAG, tags_the_client
+from apps.tracker.jira_markup import QUOTED, files_shown, to_html, to_text, without_tag
 
 JIRA = "https://j.shakuro.com"
 
@@ -192,3 +192,10 @@ def test_the_client_tag_in_code_or_quotes_is_the_teams_words():
     assert without_tag(markup, CLIENT_TAG) == (
         " Which filter? Run {{grep #client}}\n{quote}#client earlier{quote}"
     )
+
+
+def test_a_question_after_a_quoted_line_still_asks_the_client():
+    body = "bq. Earlier note\n#client What changed?"
+
+    assert tags_the_client(QUOTED.sub("", body))
+    assert not tags_the_client(QUOTED.sub("", "bq. #client What changed?"))
