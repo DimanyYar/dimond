@@ -5645,6 +5645,10 @@ a.person-name:hover {
   grid-template-columns: minmax(160px, 200px) minmax(0, 1fr);
 }
 
+.jira-task-sprint {
+  max-width: 360px;
+}
+
 .jira-markup {
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 13px;

@@ -8,6 +8,7 @@ from django.core.validators import validate_email
 from apps.notifications.discord import is_webhook
 from apps.tracker.base import TrackerError
 from apps.tracker.connection import current_tracker
+from apps.tracker.forms import fill_sprints, sprint_field
 
 from . import selectors
 from .models import Company, Notify, Role, User
@@ -213,6 +214,22 @@ class JiraProjectForm(forms.Form):
             cast(forms.ChoiceField, self.fields["jira_project"]), keep=company.jira_project
         )
         self.fields["jira_project"].initial = company.jira_project
+
+
+class DefaultSprintForm(forms.Form):
+    """The sprint the Create task window chooses for this client's new tasks, changed on the
+    Clients page; Backlog unless the PM picks one (roadmap #29)."""
+
+    sprint = sprint_field()
+
+    def __init__(self, *args: Any, company: Company, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.sprints = fill_sprints(
+            cast(forms.ChoiceField, self.fields["sprint"]),
+            company.jira_project,
+            company.jira_sprint_id,
+            company.jira_sprint_name,
+        )
 
 
 class DiscordForm(forms.Form):

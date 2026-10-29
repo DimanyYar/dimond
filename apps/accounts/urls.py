@@ -17,6 +17,11 @@ urlpatterns = [
     path("clients/<int:pk>/", views.clients, name="client"),
     path("clients/<int:pk>/invite/", views.invite_people, name="invite_people"),
     path("clients/<int:pk>/jira-project/", views.change_jira_project, name="change_jira_project"),
+    path(
+        "clients/<int:pk>/default-sprint/",
+        views.change_default_sprint,
+        name="change_default_sprint",
+    ),
     path("clients/<int:pk>/discord/", views.change_discord_webhook, name="change_discord_webhook"),
     path(
         "clients/<int:pk>/discord/remove/",

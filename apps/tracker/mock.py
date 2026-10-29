@@ -17,6 +17,7 @@ from .base import (
     Project,
     ProjectNotFound,
     Release,
+    Sprint,
     TaskFile,
     TrackerRefused,
 )
@@ -109,6 +110,22 @@ ISSUES = [
 ]
 
 
+# Atlas sorts tasks into sprints it never closes, as Dmitry does; Harbor Foods has two boards;
+# Northwind has none, so its tasks can only go to the backlog.
+SPRINTS = {
+    "FI": [
+        Sprint(101, "Sprint 12", "FI board"),
+        Sprint(102, "Bugs bucket", "FI board"),
+        Sprint(103, "Ideas bucket", "FI board"),
+        Sprint(104, "Old bucket", "FI board"),
+    ],
+    "HF": [Sprint(201, "Web bucket", "HF web"), Sprint(202, "Mobile bucket", "HF mobile")],
+}
+# Plays a sprint someone closed after the PM opened the window: still listed, but Jira refuses
+# to put a task in it.
+CLOSING_SPRINT = 104
+
+
 # New demo tasks are not stored, but their keys are saved on requests, which must stay unique
 # across restarts: numbering starts from the second the process started, so a restart begins
 # above every key the previous run gave out.
@@ -171,6 +188,15 @@ class MockTracker:
         if issue_type not in ISSUE_TYPES:
             raise TrackerRefused(f"The demo tracker has no issue type {issue_type!r}.")
         return _issue(f"{project_key}-{next(_new_numbers)}", summary, "To Do", issue_type)
+
+    def open_sprints(self, project_key: str) -> list[Sprint]:
+        self._check_project(project_key)
+        return list(SPRINTS.get(project_key, []))
+
+    def move_to_sprint(self, key: str, sprint_id: int) -> None:
+        self.issue(key)
+        if sprint_id == CLOSING_SPRINT:
+            raise TrackerRefused("Jira said no: Issues can't be moved to a closed sprint.")
 
     def attach_file(self, key: str, name: str, content: bytes, content_type: str) -> None:
         """The demo keeps no files: a known key is enough to say it went well."""

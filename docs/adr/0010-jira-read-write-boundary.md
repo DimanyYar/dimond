@@ -9,11 +9,13 @@ The PM rewrites the task description into a full spec after creation.
 
 ## Decision
 
-dimond writes to Jira only (1) a new task created by the PM, (2) a client's answer to a
+dimond writes to Jira only (1) a new task created by the PM, then put into the sprint the PM
+chose in the Create task window (added Oct 29, 2026), (2) a client's answer to a
 team question, as a comment quoting the question and mentioning its author, and (3) when the
 PM links an existing task and leaves "Add a comment" ticked, one comment pointing back to the
-request with its files (added Oct 19, 2026). It reads statuses, fix versions and the team's
-questions for the client: comments tagged `#client` outside a quote, with the files they show
+request with its files (added Oct 19, 2026). It reads the open sprints of the project's scrum
+boards for that window, statuses, fix versions and the team's questions for the client:
+comments tagged `#client` outside a quote, with the files they show
 (changed Oct 20, 2026, from comments mentioning a dimond service user), kept in Jira's markup
 and formatted by dimond itself, never as Jira's HTML (ADR 0025, Oct 27, 2026). A plain-text
 tag needs
@@ -33,3 +35,7 @@ triggers an early fetch and its payload is not trusted.
 description whole, so appending would risk erasing an edit made at the same moment.
 − Team questions must carry the `#client` tag, which needs a short team agreement; a comment
 written without it stays internal, which is the safe way to get it wrong.
++ The sprint is set by a second call to Jira Software's Agile API after the task exists, not by
+the Sprint field on creation: when that field is missing from a project's create screen, Jira
+refuses the whole task. A sprint Jira refuses leaves the task in the backlog with a note for the
+PM, as before this change. A linked existing task keeps its sprint.

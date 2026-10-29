@@ -50,7 +50,7 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
           <span class="company-mark company-mark-large" style="background: {{ company.color }}; color: {{ company.text_on_color }}" aria-hidden="true">{{ company.name|first|upper }}</span>
           <div class="company-head-text">
             <h2 id="company-name">{{ company.name }}</h2>
-            <p class="muted">Client since {{ company.created_at|date:"M Y" }}{% if company.email_domain %} · {{ company.email_domain }}{% endif %} · {% if company.jira_project %}Jira {{ company.jira_project }}{% else %}No Jira project yet{% endif %}{% if not jira_form %} · <a href="{% url 'client' company.pk %}?jira#jira">{% if company.jira_project %}Change{% else %}Choose{% endif %}</a>{% endif %} · {% if company.discord_webhook %}Discord on{% else %}No Discord{% endif %}{% if not discord_form %} · <a href="{% url 'client' company.pk %}?discord#discord">{% if company.discord_webhook %}Change{% else %}Set up{% endif %}</a>{% endif %}</p>
+            <p class="muted">Client since {{ company.created_at|date:"M Y" }}{% if company.email_domain %} · {{ company.email_domain }}{% endif %} · {% if company.jira_project %}Jira {{ company.jira_project }}{% else %}No Jira project yet{% endif %}{% if not jira_form %} · <a href="{% url 'client' company.pk %}?jira#jira">{% if company.jira_project %}Change{% else %}Choose{% endif %}</a>{% endif %}{% if company.jira_project %} · New tasks: {% if company.jira_sprint_id %}sprint {{ company.jira_sprint_name }}{% else %}Backlog{% endif %}{% if not sprint_form %} · <a href="{% url 'client' company.pk %}?sprint#sprint">Change</a>{% endif %}{% endif %} · {% if company.discord_webhook %}Discord on{% else %}No Discord{% endif %}{% if not discord_form %} · <a href="{% url 'client' company.pk %}?discord#discord">{% if company.discord_webhook %}Change{% else %}Set up{% endif %}</a>{% endif %}</p>
           </div>
           <a class="btn" href="{% url 'my_requests' %}?company={{ company.pk }}">{% if company.open_requests %}Open requests · {{ company.open_requests }}{% else %}Requests{% endif %}</a>
           {% if not invite_form %}<a class="btn btn-dark" href="{% url 'client' company.pk %}?invite#invite">Invite people</a>{% endif %}
@@ -58,6 +58,9 @@ on the right. Phone: /clients/ is the list, /clients/<id>/ one company with a wa
 
         {% if jira_form %}
           {% include "accounts/jira_project_form.html" with form=jira_form %}
+        {% endif %}
+        {% if sprint_form %}
+          {% include "accounts/default_sprint_form.html" with form=sprint_form %}
         {% endif %}
         {% if discord_form %}
           {% include "accounts/discord_form.html" with form=discord_form %}

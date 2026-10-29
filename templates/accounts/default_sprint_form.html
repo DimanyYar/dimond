@@ -1,0 +1,18 @@
+{% comment %}
+The client's default sprint on the Clients page ("Change" next to "New tasks", roadmap #29).
+The Create task window chooses it for this client's new tasks; the PM can still pick another
+there. Backlog is always on the list, even when Jira did not give the sprints.
+{% endcomment %}
+<form class="card invite-form" id="sprint" method="post" action="{% url 'change_default_sprint' company.pk %}" aria-labelledby="sprint-title">
+  {% csrf_token %}
+  <div class="invite-form-head">
+    <h3 id="sprint-title">Sprint for new {{ company.name }} tasks</h3>
+    <a class="icon-link" href="{% url 'client' company.pk %}" aria-label="Close">×</a>
+  </div>
+  {% include "tracker/sprint_field.html" with field=form.sprint sprints=form.sprints select_id="default-sprint" label="Default sprint" %}
+  <p class="hint">The Create task window chooses it; you can pick another there. Open sprints of {{ company.jira_project }}’s scrum boards.</p>
+  <div class="invite-form-foot">
+    <a class="btn" href="{% url 'client' company.pk %}">Cancel</a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </div>
+</form>

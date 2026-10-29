@@ -40,6 +40,15 @@ class Project:
 
 
 @dataclass(frozen=True)
+class Sprint:
+    """An open sprint (started or not yet) on one of the project's scrum boards."""
+
+    id: int
+    name: str
+    board: str
+
+
+@dataclass(frozen=True)
 class Release:
     """A fix version of a task that has a release date; versions without one tell the client
     nothing yet, so the adapters leave them out."""
@@ -157,6 +166,13 @@ class Tracker(Protocol):
     def create_issue(
         self, project_key: str, issue_type: str, summary: str, description: str, labels: list[str]
     ) -> Issue: ...
+
+    def open_sprints(self, project_key: str) -> list[Sprint]:
+        """Sprints a new task of the project can go into, in the boards' own order. A project
+        without a scrum board has none: its tasks stay in the backlog."""
+        ...
+
+    def move_to_sprint(self, key: str, sprint_id: int) -> None: ...
 
     def attach_file(self, key: str, name: str, content: bytes, content_type: str) -> None: ...
 

@@ -46,6 +46,12 @@ class Company(models.Model):
         validators=[RegexValidator(rf"^{PROJECT_KEY.pattern}$", "A Jira project key, like FI.")],
         help_text="Key of the client's Jira project, e.g. FI. Their tasks are created only there.",
     )
+    # Where the Create task window puts new tasks unless the PM picks another sprint; empty is
+    # the backlog. The name is kept so the Clients page shows it without asking Jira.
+    jira_sprint_id = models.PositiveBigIntegerField(
+        null=True, blank=True, help_text="Default sprint for new tasks; empty: the backlog."
+    )
+    jira_sprint_name = models.CharField(max_length=255, blank=True)
     discord_webhook = models.CharField(
         max_length=300,
         blank=True,

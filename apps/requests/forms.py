@@ -12,6 +12,7 @@ from apps.files.models import Attachment
 from apps.files.uploads import CheckedFile, check_upload
 from apps.tracker.base import ISSUE_KEY, TrackerError
 from apps.tracker.connection import current_tracker
+from apps.tracker.forms import fill_sprints, sprint_field
 
 from .models import FORM_TYPES, REQUEST_FIELDS, Request, RequestType, WhenNeeded
 from .selectors import Period, Show
@@ -402,9 +403,17 @@ class JiraTaskForm(_FilesToJira):
     issue_type = forms.ChoiceField()
     summary = forms.CharField(max_length=255, error_messages={"required": "Name the task."})
     description = forms.CharField(widget=forms.Textarea, required=False)
+    sprint = sprint_field()
 
     def __init__(self, *args: Any, request: Request, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        company = request.company
+        self.sprints = fill_sprints(
+            cast(forms.ChoiceField, self.fields["sprint"]),
+            company.jira_project,
+            company.jira_sprint_id,
+            company.jira_sprint_name,
+        )
         self.tracker_error = ""
         try:
             types = current_tracker().issue_types(request.company.jira_project)

@@ -17,6 +17,9 @@ the client reads the reply in the thread.
           <div class="banner banner-error" role="alert">{{ form.non_field_errors.0 }}</div>
         {% endif %}
         <p class="jira-task-project">Project <strong>{{ r.company.jira_project }} · {{ r.company }}</strong> <span class="hint">set on the client · tasks go only here</span></p>
+        <div class="jira-task-sprint">
+          {% include "tracker/sprint_field.html" with field=form.sprint sprints=form.sprints select_id="jt-sprint" label="Sprint" %}
+        </div>
 
         <div class="dialog-grid jira-task-grid">
           <div class="field">

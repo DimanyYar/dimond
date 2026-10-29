@@ -232,3 +232,106 @@ def test_demo_keys_never_repeat_a_key_already_given():
     second = MockTracker().create_issue("FI", "Bug", "Two", "", ["dimond"])
 
     assert first.key != second.key
+
+
+def test_the_window_chooses_the_clients_default_sprint(client, pm, atlas, bug):
+    atlas.jira_sprint_id, atlas.jira_sprint_name = 102, "Bugs bucket"
+    atlas.save()
+
+    page = window(client, pm, bug).content.decode()
+
+    assert '<option value="102" selected>Bugs bucket</option>' in page
+    assert '<option value="">Backlog</option>' in page
+
+
+def test_the_task_goes_into_the_sprint_the_pm_picked(client, pm, bug, tracker, monkeypatch):
+    moved: list[tuple[str, int]] = []
+    monkeypatch.setattr(tracker, "move_to_sprint", lambda key, sprint: moved.append((key, sprint)))
+
+    create(client, pm, bug, sprint="103")
+
+    bug.refresh_from_db()
+    assert moved == [(bug.jira_key, 103)]
+    assert not bug.notes.exists()
+
+
+def test_backlog_moves_the_task_nowhere(client, pm, bug, tracker, monkeypatch):
+    moved: list[tuple[str, int]] = []
+    monkeypatch.setattr(tracker, "move_to_sprint", lambda key, sprint: moved.append((key, sprint)))
+
+    create(client, pm, bug, sprint="")
+
+    bug.refresh_from_db()
+    assert bug.status == ClientStatus.PLANNED
+    assert moved == []
+
+
+def test_a_sprint_jira_refuses_leaves_the_task_in_the_backlog_with_a_note(client, pm, bug, tracker):
+    create(client, pm, bug, sprint="104")  # the demo's sprint closed a moment ago
+
+    bug.refresh_from_db()
+    assert bug.status == ClientStatus.PLANNED
+    [note] = bug.notes.all()
+    assert note.text.startswith(f"Couldn't put {bug.jira_key} into sprint Old bucket: Jira said no")
+    assert "It is in the backlog; move it in Jira by hand." in note.text
+
+
+def test_a_sprint_closed_before_sending_is_refused_before_any_task_is_made(
+    client, pm, bug, tracker
+):
+    response = create(client, pm, bug, sprint="999")
+
+    assert "This sprint is closed or gone from Jira" in response.content.decode()
+    assert tracker.created == []
+
+
+def test_without_sprints_from_jira_the_task_still_goes_to_the_backlog(
+    client, pm, bug, tracker, monkeypatch
+):
+    class Silent(MockTracker):
+        def open_sprints(self, project_key):
+            raise TrackerUnreachable("Jira at https://j.shakuro.com did not answer.")
+
+    monkeypatch.setattr("apps.tracker.forms.current_tracker", Silent)
+    page = window(client, pm, bug).content.decode()
+    assert "load the sprints: Jira at https://j.shakuro.com did not answer." in page
+    assert "Tasks go to the backlog." in page
+
+    create(client, pm, bug, sprint="")
+
+    bug.refresh_from_db()
+    assert bug.jira_key.startswith("FI-")
+
+
+def test_a_sprint_move_without_an_answer_asks_the_pm_to_check_jira(
+    client, pm, bug, tracker, monkeypatch
+):
+    def silent(key, sprint):
+        raise TrackerUnreachable("Jira at https://j.shakuro.com did not answer.")
+
+    monkeypatch.setattr(tracker, "move_to_sprint", silent)
+
+    create(client, pm, bug, sprint="103")
+
+    bug.refresh_from_db()
+    [note] = bug.notes.all()
+    assert note.text == (
+        f"Couldn't confirm that {bug.jira_key} reached sprint Ideas bucket: Jira at "
+        "https://j.shakuro.com did not answer. Check its sprint in Jira."
+    )
+
+
+def test_a_sprint_picked_before_jira_stopped_answering_is_not_called_closed(
+    client, pm, bug, tracker, monkeypatch
+):
+    class Silent(MockTracker):
+        def open_sprints(self, project_key):
+            raise TrackerUnreachable("Jira at https://j.shakuro.com did not answer.")
+
+    monkeypatch.setattr("apps.tracker.forms.current_tracker", Silent)
+
+    page = create(client, pm, bug, sprint="103").content.decode()
+
+    assert "closed or gone" not in page
+    assert "load the sprints: Jira at https://j.shakuro.com did not answer." in page
+    assert tracker.created == []

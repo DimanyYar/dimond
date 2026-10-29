@@ -19,6 +19,7 @@ from .forms import (
     AccountEmailsForm,
     AccountNameForm,
     AccountTimeZoneForm,
+    DefaultSprintForm,
     DiscordForm,
     EmailForm,
     InviteForm,
@@ -142,6 +143,7 @@ def _clients_screen(
     invite_form: InviteForm | None = None,
     new_client_form: NewClientForm | None = None,
     jira_form: JiraProjectForm | None = None,
+    sprint_form: DefaultSprintForm | None = None,
     discord_form: DiscordForm | None = None,
 ) -> HttpResponse:
     try:
@@ -154,6 +156,13 @@ def _clients_screen(
         invite_form = InviteForm(company=page.chosen)
     if jira_form is None and "jira" in request.GET and page.chosen is not None:
         jira_form = JiraProjectForm(company=page.chosen)
+    if (
+        sprint_form is None
+        and "sprint" in request.GET
+        and page.chosen is not None
+        and page.chosen.jira_project
+    ):
+        sprint_form = DefaultSprintForm(company=page.chosen)
     if discord_form is None and "discord" in request.GET:
         discord_form = DiscordForm()
     cancel = request.GET.get("cancel", "")
@@ -168,6 +177,7 @@ def _clients_screen(
             "revoke_person": int(revoke) if revoke.isdigit() else None,
             "new_client_form": new_client_form,
             "jira_form": jira_form,
+            "sprint_form": sprint_form,
             "discord_form": discord_form,
             "client_colors": CLIENT_COLORS,
         },
@@ -195,6 +205,27 @@ def change_jira_project(request: HttpRequest, pk: int) -> HttpResponse:
         return _clients_screen(request, pm, pk, jira_form=form)
     services.change_jira_project(pm, company, form.cleaned_data["jira_project"])
     messages.success(request, f"New {company.name} tasks will go to Jira {company.jira_project}.")
+    return redirect("client", pk)
+
+
+@require_POST
+@login_required
+def change_default_sprint(request: HttpRequest, pk: int) -> HttpResponse:
+    """The sprint new tasks of this client go to, changed from the Clients page."""
+    pm = _pm(request)
+    try:
+        company = selectors.client_for(pm, pk)
+    except Company.DoesNotExist:
+        raise Http404 from None
+    if not company.jira_project:
+        raise Http404
+    form = DefaultSprintForm(request.POST, company=company)
+    if not form.is_valid():
+        return _clients_screen(request, pm, pk, sprint_form=form)
+    sprint = form.sprints.chosen(form.cleaned_data["sprint"])
+    services.change_default_sprint(company, sprint)
+    where = f"sprint {sprint.name}" if sprint else "the backlog"
+    messages.success(request, f"New {company.name} tasks will go to {where}.")
     return redirect("client", pk)
 
 

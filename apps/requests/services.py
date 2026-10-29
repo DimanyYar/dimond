@@ -19,6 +19,7 @@ from apps.tracker.base import (
     Comment,
     Issue,
     Release,
+    Sprint,
     Tracker,
     TrackerError,
     TrackerRefused,
@@ -499,9 +500,11 @@ def create_jira_task(
     reply: str,
     attach: Sequence[Attachment] = (),
     share: Sequence[Attachment] = (),
+    sprint: Sprint | None = None,
 ) -> Request:
-    """Creates the task in the client's Jira project and plans the request (PRD: Jira sync,
-    "Create task"). The thread gets "Planned · FI-2301" and, if written, the PM's reply.
+    """Creates the task in the client's Jira project, in `sprint` or the backlog, and plans
+    the request (PRD: Jira sync, "Create task"). The thread gets "Planned · FI-2301" and, if
+    written, the PM's reply.
 
     The row stays locked while Jira answers, so a double click waits and then finds the task
     already made instead of creating a second one. Tracker problems (TrackerError) leave the
@@ -521,9 +524,33 @@ def create_jira_task(
         request.company.jira_project, issue_type, summary, description, ["dimond"]
     )
     planned = _plan_with_task(pm, request, task, reply)
+    if sprint is not None:
+        _move_to_sprint(tracker, pm, planned, sprint)
     for file in attach:
         _attach(tracker, pm, planned, file)
     return planned
+
+
+def _move_to_sprint(tracker: Tracker, pm: User, request: Request, sprint: Sprint) -> None:
+    """The task already exists, so a sprint Jira refuses (closed a moment ago, say) leaves it
+    in the backlog with a note for the PM instead of undoing everything."""
+    try:
+        tracker.move_to_sprint(request.jira_key, sprint.id)
+    except TrackerUnreachable as error:
+        # The connection broke, maybe after Jira moved the task.
+        InternalNote.objects.create(
+            request=request,
+            author=pm,
+            text=f"Couldn't confirm that {request.jira_key} reached sprint {sprint.name}: "
+            f"{error} Check its sprint in Jira.",
+        )
+    except TrackerError as error:
+        InternalNote.objects.create(
+            request=request,
+            author=pm,
+            text=f"Couldn't put {request.jira_key} into sprint {sprint.name}: {error} "
+            "It is in the backlog; move it in Jira by hand.",
+        )
 
 
 def _attach(tracker: Tracker, pm: User, request: Request, file: Attachment) -> bool:

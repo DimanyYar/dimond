@@ -1,0 +1,23 @@
+{% comment %}
+A sprint list: Backlog and the project's open sprints (roadmap #29). Shared by the client's
+default sprint and the Create task window. Needs: field, sprints (SprintList), select_id, label.
+{% endcomment %}
+<div class="field">
+  <label for="{{ select_id }}">{{ label }}</label>
+  <select class="input" id="{{ select_id }}" name="{{ field.html_name }}"
+          {% if field.errors or sprints.error or sprints.gone %}aria-describedby="{{ select_id }}-note"{% endif %}
+          {% if field.errors %}aria-invalid="true"{% endif %}>
+    {% for value, text in field.field.choices %}
+      <option value="{{ value }}"{% if field.value|stringformat:"s" == value %} selected{% endif %}>{{ text }}</option>
+    {% endfor %}
+  </select>
+  {% if field.errors %}
+    <span class="error-text" id="{{ select_id }}-note">{{ field.errors.0 }}</span>
+  {% elif sprints.error %}
+    <span class="error-text" id="{{ select_id }}-note">{{ sprints.error }} Tasks go to the backlog.</span>
+  {% elif sprints.gone %}
+    <span class="error-text" id="{{ select_id }}-note">Default sprint “{{ sprints.gone }}” is closed or gone from Jira. Until you pick another, tasks go to the backlog.</span>
+  {% elif not sprints.sprints %}
+    <span class="hint">No scrum board with open sprints in this project: tasks go to the backlog.</span>
+  {% endif %}
+</div>
