@@ -42,6 +42,8 @@ def fill_sprints(
     except TrackerError as problem:
         sprints = []
         found.error = f"Couldn't load the sprints: {problem}"
+        # A sprint picked before Jira stopped answering may still be open.
+        choice.error_messages |= {"invalid_choice": found.error}
     boards = {sprint.board for sprint in sprints}
     found.sprints = {str(sprint.id): sprint for sprint in sprints}
     choice.choices = [(BACKLOG, "Backlog")] + [

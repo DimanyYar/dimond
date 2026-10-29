@@ -301,3 +301,37 @@ def test_without_sprints_from_jira_the_task_still_goes_to_the_backlog(
 
     bug.refresh_from_db()
     assert bug.jira_key.startswith("FI-")
+
+
+def test_a_sprint_move_without_an_answer_asks_the_pm_to_check_jira(
+    client, pm, bug, tracker, monkeypatch
+):
+    def silent(key, sprint):
+        raise TrackerUnreachable("Jira at https://j.shakuro.com did not answer.")
+
+    monkeypatch.setattr(tracker, "move_to_sprint", silent)
+
+    create(client, pm, bug, sprint="103")
+
+    bug.refresh_from_db()
+    [note] = bug.notes.all()
+    assert note.text == (
+        f"Couldn't confirm that {bug.jira_key} reached sprint Ideas bucket: Jira at "
+        "https://j.shakuro.com did not answer. Check its sprint in Jira."
+    )
+
+
+def test_a_sprint_picked_before_jira_stopped_answering_is_not_called_closed(
+    client, pm, bug, tracker, monkeypatch
+):
+    class Silent(MockTracker):
+        def open_sprints(self, project_key):
+            raise TrackerUnreachable("Jira at https://j.shakuro.com did not answer.")
+
+    monkeypatch.setattr("apps.tracker.forms.current_tracker", Silent)
+
+    page = create(client, pm, bug, sprint="103").content.decode()
+
+    assert "closed or gone" not in page
+    assert "load the sprints: Jira at https://j.shakuro.com did not answer." in page
+    assert tracker.created == []

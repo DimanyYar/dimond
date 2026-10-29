@@ -536,6 +536,14 @@ def _move_to_sprint(tracker: Tracker, pm: User, request: Request, sprint: Sprint
     in the backlog with a note for the PM instead of undoing everything."""
     try:
         tracker.move_to_sprint(request.jira_key, sprint.id)
+    except TrackerUnreachable as error:
+        # The connection broke, maybe after Jira moved the task.
+        InternalNote.objects.create(
+            request=request,
+            author=pm,
+            text=f"Couldn't confirm that {request.jira_key} reached sprint {sprint.name}: "
+            f"{error} Check its sprint in Jira.",
+        )
     except TrackerError as error:
         InternalNote.objects.create(
             request=request,
