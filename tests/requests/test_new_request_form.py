@@ -61,6 +61,13 @@ def test_title_and_why_it_matters_are_required(client, ruslan, field):
     assert not Request.objects.exists()
 
 
+def test_title_with_line_breaks_is_saved_as_one_line(client, ruslan):
+    # The page's input cannot hold a line break; a hand-made request can.
+    client.post(URL, filled("bug", title="Leads export\r\n  times out"))
+
+    assert Request.objects.get().title == "Leads export times out"
+
+
 def test_typed_text_survives_a_bounced_form(client, ruslan):
     response = client.post(URL, filled("bug", link="", description="Gateway timeout"))
 
