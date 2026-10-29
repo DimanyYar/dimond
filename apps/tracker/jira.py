@@ -23,6 +23,7 @@ from .base import (
     Project,
     ProjectNotFound,
     Release,
+    Sprint,
     TaskFile,
     TrackerCaptcha,
     TrackerError,
@@ -49,6 +50,8 @@ TEXT_SEARCH_OPERATORS = re.compile(r"[^\w\s]")
 # Jira Software keeps an epic's required short name in a custom field whose number differs
 # from one Jira to another; its type is what identifies it.
 EPIC_NAME_TYPE = "com.pyxis.greenhopper.jira:gh-epic-label"
+# Boards and sprints belong to Jira Software and live outside REST API v2.
+AGILE_PATH = "rest/agile/1.0"
 
 
 class JiraTracker:
@@ -166,6 +169,38 @@ class JiraTracker:
             url=f"{self.address}/browse/{key}",
         )
 
+    def open_sprints(self, project_key: str) -> list[Sprint]:
+        project_key = self._checked_project(project_key)
+        # Kanban boards have no sprints: Jira answers 400 when asked for theirs.
+        boards = self._agile_pages(
+            "board",
+            {"projectKeyOrId": project_key, "type": "scrum"},
+            lambda item: (int(item["id"]), str(item["name"])),
+            missing=ProjectNotFound(project_key),
+        )
+        found: dict[int, Sprint] = {}
+        for board_id, board in boards:
+            for sprint_id, name in self._agile_pages(
+                f"board/{board_id}/sprint",
+                {"state": "active,future"},
+                lambda item: (int(item["id"]), str(item["name"])),
+            ):
+                # One sprint can sit on several boards of the project; it is listed once.
+                found.setdefault(sprint_id, Sprint(id=sprint_id, name=name, board=board))
+        return list(found.values())
+
+    def move_to_sprint(self, key: str, sprint_id: int) -> None:
+        """A separate call after the task is made, not the Sprint field on creation: when that
+        field is missing from the project's create screen, Jira refuses the whole task."""
+        if not ISSUE_KEY.fullmatch(key):
+            raise IssueNotFound(key)
+        self._call(
+            f"{self.address}/{AGILE_PATH}/sprint/{sprint_id}/issue",
+            lambda data: None,
+            body={"issues": [key]},
+            missing=TrackerRefused("The sprint is gone from Jira."),
+        )
+
     def attach_file(self, key: str, name: str, content: bytes, content_type: str) -> None:
         if not ISSUE_KEY.fullmatch(key):
             raise IssueNotFound(key)
@@ -205,6 +240,27 @@ class JiraTracker:
                 if item.get("schema", {}).get("custom") == EPIC_NAME_TYPE
             ],
         )
+
+    def _agile_pages[T](
+        self,
+        path: str,
+        params: dict[str, str | int],
+        parse: Callable[[Any], T],
+        missing: TrackerError | None = None,
+    ) -> list[T]:
+        """The Agile API gives at most 50 boards or sprints a page and says which page is the
+        last."""
+        found: list[T] = []
+        while True:
+            last, page = self._call(
+                f"{self.address}/{AGILE_PATH}/{path}",
+                lambda data: (bool(data["isLast"]), [parse(item) for item in data["values"]]),
+                params | {"startAt": len(found)},
+                missing=missing,
+            )
+            found += page
+            if last or not page:
+                return found
 
     def _open_issue_by_key(self, project_key: str, key: str) -> list[Issue]:
         try:
@@ -322,7 +378,8 @@ class JiraTracker:
             raise TrackerUnreachable(f"Jira at {self.address} did not answer: {error}") from error
         self._raise_for_answer(response, path, missing)
         try:
-            return parse(response.json())
+            # Moving tasks into a sprint answers 204 with no body.
+            return parse(response.json() if response.content else None)
         except ValueError as error:
             raise TrackerUnreachable(
                 f"Jira at {self.address} answered {path} with something that is not JSON."

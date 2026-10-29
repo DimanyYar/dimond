@@ -1,0 +1,22 @@
+{
+  "maxResults": 50,
+  "startAt": 0,
+  "total": 2,
+  "isLast": true,
+  "values": [
+    {
+      "id": 412,
+      "self": "https://j.shakuro.com/rest/agile/1.0/board/412",
+      "name": "FI board",
+      "type": "scrum",
+      "location": {"projectId": 14200, "displayName": "Atlas (FI)", "projectName": "Atlas", "projectKey": "FI", "projectTypeKey": "software", "name": "Atlas (FI)"}
+    },
+    {
+      "id": 418,
+      "self": "https://j.shakuro.com/rest/agile/1.0/board/418",
+      "name": "FI mobile",
+      "type": "scrum",
+      "location": {"projectId": 14200, "displayName": "Atlas (FI)", "projectName": "Atlas", "projectKey": "FI", "projectTypeKey": "software", "name": "Atlas (FI)"}
+    }
+  ]
+}

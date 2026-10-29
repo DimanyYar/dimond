@@ -1,0 +1,25 @@
+{
+  "maxResults": 50,
+  "startAt": 0,
+  "isLast": true,
+  "values": [
+    {
+      "id": 1931,
+      "self": "https://j.shakuro.com/rest/agile/1.0/sprint/1931",
+      "state": "active",
+      "name": "Sprint 12",
+      "startDate": "2026-10-20T09:00:00.000+03:00",
+      "endDate": "2026-11-03T09:00:00.000+03:00",
+      "originBoardId": 412,
+      "goal": ""
+    },
+    {
+      "id": 1874,
+      "self": "https://j.shakuro.com/rest/agile/1.0/sprint/1874",
+      "state": "future",
+      "name": "Bugs bucket",
+      "originBoardId": 412,
+      "goal": ""
+    }
+  ]
+}

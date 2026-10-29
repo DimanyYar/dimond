@@ -40,3 +40,15 @@ def test_the_demo_task_from_the_mockups_has_one_question_for_the_client_with_a_p
     assert len(task.comments) == 2
     [picture] = questions[0].files
     assert demo.file_content(picture).startswith(b"\x89PNG")
+
+
+def test_demo_projects_have_sprints_except_northwind():
+    demo = MockTracker()
+
+    assert [s.name for s in demo.open_sprints("FI")][:3] == [
+        "Sprint 12",
+        "Bugs bucket",
+        "Ideas bucket",
+    ]
+    assert {s.board for s in demo.open_sprints("HF")} == {"HF web", "HF mobile"}
+    assert demo.open_sprints("NW") == []

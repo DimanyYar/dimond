@@ -1,0 +1,23 @@
+{
+  "maxResults": 50,
+  "startAt": 0,
+  "isLast": true,
+  "values": [
+    {
+      "id": 1874,
+      "self": "https://j.shakuro.com/rest/agile/1.0/sprint/1874",
+      "state": "future",
+      "name": "Bugs bucket",
+      "originBoardId": 412,
+      "goal": ""
+    },
+    {
+      "id": 1902,
+      "self": "https://j.shakuro.com/rest/agile/1.0/sprint/1902",
+      "state": "future",
+      "name": "Mobile bucket",
+      "originBoardId": 418,
+      "goal": ""
+    }
+  ]
+}

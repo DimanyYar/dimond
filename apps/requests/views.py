@@ -375,6 +375,7 @@ def request_jira_task(request: HttpRequest, pk: int) -> HttpResponse:
             reply=form.message_for_client(),
             attach=form.files_to("file"),
             share=form.files_to("link"),
+            sprint=form.sprints.chosen(data["sprint"]),
         )
     except services.NotAllowedError:
         raise PermissionDenied from None

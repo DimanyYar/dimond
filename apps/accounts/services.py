@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from apps.notifications.models import EmailKind
 from apps.notifications.services import send_email
+from apps.tracker.base import Sprint
 
 from .models import Company, Device, LinkKind, Notify, Role, SignInLink, User
 
@@ -363,9 +364,21 @@ def cancel_invite(person: User) -> None:
 def change_jira_project(pm: User, company: Company, jira_project: str) -> Company:
     """New tasks for this client go to another Jira project; existing tasks keep their keys.
     `company` comes from `client_for(pm, …)`, so it is one of this PM's own clients."""
+    if jira_project != company.jira_project:
+        # Sprints belong to the old project's boards.
+        company.jira_sprint_id, company.jira_sprint_name = None, ""
     company.jira_project = jira_project
     company.full_clean()
-    company.save(update_fields=["jira_project"])
+    company.save(update_fields=["jira_project", "jira_sprint_id", "jira_sprint_name"])
+    return company
+
+
+def change_default_sprint(company: Company, sprint: Sprint | None) -> Company:
+    """Where the Create task window puts this client's new tasks; None is the backlog.
+    `company` comes from `client_for(pm, …)`."""
+    company.jira_sprint_id = sprint.id if sprint else None
+    company.jira_sprint_name = sprint.name if sprint else ""
+    company.save(update_fields=["jira_sprint_id", "jira_sprint_name"])
     return company
 
 
