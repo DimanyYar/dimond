@@ -65,3 +65,6 @@ uv run python manage.py makemigrations --check --dry-run
 
 Fill in the PR template. UI changes need a screenshot. If behaviour changed, say which PRD
 section needs an update.
+
+After opening the PR, post `@coderabbitai review` as a PR comment, and again after pushing
+fixes. The tag only works in a comment, not in the PR description.
