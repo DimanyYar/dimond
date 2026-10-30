@@ -399,28 +399,115 @@ def _send_updates_for(request_id: int, stop_on_failure: bool) -> int:
         if not events and not messages:
             return 0
         request = Request.objects.select_related("company__owner").get(pk=request_id)
-        found = [_status_news(event) for event in events] + [_message_news(m) for m in messages]
-        news = sorted((item for item in found if item is not None), key=lambda item: item.at)
-        emails: list[tuple[Callable[[User, Request, list[News]], bool], User, list[News]]] = [
-            (_send_update, person, theirs)
-            for person in (update_recipients(request) if news else [])
-            if (theirs := [item for item in news if item.actor_id != person.pk])
-        ]
-        pm = pm_recipient(request)
-        pm_news = _pm_news(request, events, messages) if pm else []
-        if pm and pm_news:
-            emails.append((_send_pm_update, pm, pm_news))
-        attempts: list[bool] = []
-        for send, person, theirs in emails:
-            attempts.append(send(person, request, theirs))
-            if stop_on_failure and not attempts[-1]:
-                break
-        if attempts and not any(attempts):
+        # Broad on purpose, here and below: whatever breaks one request's emails must not stop
+        # every other request's, and a retry would email again the people already reached.
+        readers: list[Reader] = []
+        try:
+            # Every email is built before any goes out: a broken one stops the whole batch,
+            # not half of it. Savepoints keep a database error from spoiling the round.
+            with transaction.atomic():
+                readers = _readers(request, events, messages)
+                emails = [_build(reader, request) for reader in readers]
+        except Exception as error:  # noqa: BLE001 (see the comment above)
+            missed = [(kind, person) for kind, person, _ in readers]
+            for kind, person in missed or [(EmailKind.PM_UPDATE, request.company.owner)]:
+                _set_aside(person, kind, request, NOT_BUILT, error)
+            _mark_emailed(events, messages)
+            return 0
+        attempts, set_aside = _send_built(emails, request, stop_on_failure)
+        if attempts and not any(attempts) and not set_aside:
             # The mail server took none of them: try the whole batch again next round.
             return 0
-        StatusEvent.objects.filter(pk__in=[event.pk for event in events]).update(emailed=True)
-        Message.objects.filter(pk__in=[message.pk for message in messages]).update(emailed=True)
+        _mark_emailed(events, messages)
     return sum(attempts)
+
+
+# Who gets an email about a batch of news, and which of that news is theirs.
+Reader = tuple[EmailKind, User, list[News]]
+
+
+@dataclass(frozen=True)
+class UpdateEmail:
+    person: User
+    kind: EmailKind
+    subject: str
+    text: str
+    html: str
+
+
+def _readers(request: Request, events: list[StatusEvent], messages: list[Message]) -> list[Reader]:
+    """Each client gets the news they did not make themselves, then the PM theirs."""
+    found = [_status_news(event) for event in events] + [_message_news(m) for m in messages]
+    news = sorted((item for item in found if item is not None), key=lambda item: item.at)
+    readers: list[Reader] = [
+        (EmailKind.REQUEST_UPDATE, person, theirs)
+        for person in (update_recipients(request) if news else [])
+        if (theirs := [item for item in news if item.actor_id != person.pk])
+    ]
+    pm = pm_recipient(request)
+    pm_news = _pm_news(request, events, messages) if pm else []
+    if pm and pm_news:
+        readers.append((EmailKind.PM_UPDATE, pm, pm_news))
+    return readers
+
+
+def _build(reader: Reader, request: Request) -> UpdateEmail:
+    kind, person, news = reader
+    build = _update if kind == EmailKind.REQUEST_UPDATE else _pm_update
+    return UpdateEmail(person, kind, *build(person, request, news))
+
+
+def _send_built(
+    emails: list[UpdateEmail], request: Request, stop_on_failure: bool
+) -> tuple[list[bool], bool]:
+    """Sends the batch in order. Returns whether each went out, and whether the batch was set
+    aside after an error."""
+    attempts: list[bool] = []
+    set_aside = False
+    for index, email in enumerate(emails):
+        try:
+            with transaction.atomic():
+                attempts.append(
+                    send_email(email.person, email.kind, email.subject, email.text, email.html)
+                )
+        except Exception as error:  # noqa: BLE001 (see _send_updates_for)
+            # The mail server may have taken it before the error, so its row says dimond
+            # cannot tell. The people after it are not emailed; nothing is tried again.
+            _set_aside(email.person, email.kind, request, NOT_SURE, error)
+            for later in emails[index + 1 :]:
+                _set_aside(later.person, later.kind, request, AFTER_ERROR, error)
+            set_aside = True
+            break
+        if stop_on_failure and not attempts[-1]:
+            break
+    return attempts, set_aside
+
+
+def _mark_emailed(events: list[StatusEvent], messages: list[Message]) -> None:
+    StatusEvent.objects.filter(pk__in=[event.pk for event in events]).update(emailed=True)
+    Message.objects.filter(pk__in=[message.pk for message in messages]).update(emailed=True)
+
+
+NOT_BUILT = "dimond could not build this email"
+NOT_SURE = "dimond could not tell whether this email went out"
+AFTER_ERROR = "Held back: another email of the same update broke"
+
+
+def _set_aside(
+    person: User, kind: EmailKind, request: Request, reason: str, error: Exception
+) -> None:
+    """A row in Logs → Emails for someone whose email about the request was set aside, so the
+    PM sees who missed it and why."""
+    logger.exception("Update email about request %s to user %s set aside", request.pk, person.pk)
+    Email.objects.create(
+        user=person,
+        to=person.email,
+        kind=kind,
+        subject=f"{request.key} · {request.title}",
+        status=EmailStatus.FAILED,
+        error=reason,
+        error_detail=f"{type(error).__name__}: {error}",
+    )
 
 
 def _context(request: Request, news: list[News]) -> dict[str, object]:
@@ -436,7 +523,7 @@ def _context(request: Request, news: list[News]) -> dict[str, object]:
     }
 
 
-def _send_update(person: User, request: Request, news: list[News]) -> bool:
+def _update(person: User, request: Request, news: list[News]) -> tuple[str, str, str]:
     """One email about the latest news a person did not make themselves, with the earlier
     news of the same few minutes under it."""
     status = ClientStatus(request.status)
@@ -445,16 +532,14 @@ def _send_update(person: User, request: Request, news: list[News]) -> bool:
         "pill": PILLS.get(status, PLAIN_PILL),
         "for_team": person.notify == Notify.COMPANY,
     }
-    return send_email(
-        person,
-        EmailKind.REQUEST_UPDATE,
+    return (
         f"{request.key} · {request.title} — {news[-1].subject}",
         render_to_string("notifications/email/request_update.txt", context),
         render_to_string("notifications/email/request_update.html", context),
     )
 
 
-def _send_pm_update(pm: User, request: Request, news: list[News]) -> bool:
+def _pm_update(pm: User, request: Request, news: list[News]) -> tuple[str, str, str]:
     """The PM's email about their client's request (mockup 5.7 · Email to the PM)."""
     status = ClientStatus(request.status)
     if news[-1].kind is NEW_REQUEST:
@@ -462,9 +547,7 @@ def _send_pm_update(pm: User, request: Request, news: list[News]) -> bool:
     else:
         meta = status.label + (f" · {request.jira_key}" if request.jira_key else "")
     context = _context(request, news) | {"meta": meta}
-    return send_email(
-        pm,
-        EmailKind.PM_UPDATE,
+    return (
         f"{request.company.name} · {request.key} · {request.title} — {news[-1].subject}",
         render_to_string("notifications/email/pm_update.txt", context),
         render_to_string("notifications/email/pm_update.html", context),
