@@ -11,7 +11,13 @@ from django.utils import timezone
 from apps.accounts.models import Company, Notify, User
 from apps.notifications import services as notifications
 from apps.notifications.models import Email, EmailKind, EmailStatus
-from apps.notifications.services import GROUPING, NOT_BUILT, send_request_updates
+from apps.notifications.services import (
+    AFTER_ERROR,
+    GROUPING,
+    NOT_BUILT,
+    NOT_SURE,
+    send_request_updates,
+)
 from apps.requests import services
 from apps.requests.models import Request, RequestType, WhenNeeded
 
@@ -71,44 +77,56 @@ def broken_pm_email(monkeypatch):
     monkeypatch.setattr(notifications, "render_to_string", render_or_break)
 
 
-def test_client_is_not_emailed_again_when_the_pm_email_cannot_be_built(mark, anna, broken_pm_email):
+def test_nobody_is_emailed_when_one_email_of_the_batch_cannot_be_built(mark, anna, broken_pm_email):
     request = new_request(mark, "Leads export times out")
     reply_after_the_request_email(mark, request)
 
     for _ in range(3):
         settle()
 
-    assert [message.to for message in mail.outbox] == [["anna.k@atlas-crm.com"]]
+    assert mail.outbox == []
 
 
-def test_logs_show_who_missed_an_email_that_could_not_be_built(mark, anna, pm, broken_pm_email):
+def test_logs_show_everyone_who_missed_an_email_that_could_not_be_built(
+    mark, anna, pm, broken_pm_email
+):
     request = new_request(mark, "Leads export times out")
     reply_after_the_request_email(mark, request)
 
     settle()
 
-    sent = Email.objects.get(user=anna)
+    assert set(Email.objects.values_list("user", "kind", "status", "error")) == {
+        (anna.pk, EmailKind.REQUEST_UPDATE, EmailStatus.FAILED, NOT_BUILT),
+        (pm.pk, EmailKind.PM_UPDATE, EmailStatus.FAILED, NOT_BUILT),
+    }
     missed = Email.objects.get(user=pm)
-    assert sent.status == EmailStatus.SENT
-    assert missed.kind == EmailKind.PM_UPDATE
-    assert missed.status == EmailStatus.FAILED
     assert missed.subject == f"{request.key} · Leads export times out"
-    assert missed.error == NOT_BUILT
     assert missed.error_detail == "KeyError: 'meta'"
 
 
-def test_everyone_after_the_broken_email_is_logged_as_missing_it(mark, anna, pm, monkeypatch):
+def test_an_email_that_broke_while_going_out_is_not_called_unsent_or_sent_again(
+    mark, anna, pm, monkeypatch
+):
     request = new_request(mark, "Leads export times out")
     reply_after_the_request_email(mark, request)
-    monkeypatch.setattr(notifications, "render_to_string", lambda template, context: 1 / 0)
+    send = notifications.send_email
+
+    def send_then_break(user: User, kind: EmailKind, *args: str) -> bool:
+        send(user, kind, *args)
+        if kind == EmailKind.PM_UPDATE:
+            raise RuntimeError("journal")
+        return True
+
+    monkeypatch.setattr(notifications, "send_email", send_then_break)
 
     settle()
+    settle()
 
-    assert mail.outbox == []
-    assert set(Email.objects.values_list("user", "error")) == {
-        (anna.pk, NOT_BUILT),
-        (pm.pk, NOT_BUILT),
-    }
+    assert len([m for m in mail.outbox if m.to == ["dmitry@shakuro.com"]]) == 1
+    assert Email.objects.get(user=anna).status == EmailStatus.SENT
+    unsure = Email.objects.get(user=pm)
+    assert unsure.error == NOT_SURE
+    assert unsure.error_detail == "RuntimeError: journal"
 
 
 def test_one_broken_request_does_not_hold_up_the_others(mark, anna, pm, monkeypatch):
@@ -151,3 +169,18 @@ def test_set_aside_news_is_not_tried_again(mark, pm, broken_pm_email):
     settle()
 
     assert Email.objects.filter(error=NOT_BUILT).count() == 1
+
+
+def test_people_after_an_email_that_broke_while_going_out_are_logged_as_held_back(
+    mark, anna, monkeypatch
+):
+    request = new_request(mark, "Leads export times out")
+    reply_after_the_request_email(mark, request)
+    monkeypatch.setattr(notifications, "send_email", lambda *args: 1 / 0)
+
+    settle()
+
+    assert set(Email.objects.values_list("kind", "error")) == {
+        (EmailKind.REQUEST_UPDATE, NOT_SURE),
+        (EmailKind.PM_UPDATE, AFTER_ERROR),
+    }
