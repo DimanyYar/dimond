@@ -379,28 +379,79 @@ def _send_updates_for(request_id: int, stop_on_failure: bool) -> int:
         if not events and not messages:
             return 0
         request = Request.objects.select_related("company__owner").get(pk=request_id)
-        found = [_status_news(event) for event in events] + [_message_news(m) for m in messages]
-        news = sorted((item for item in found if item is not None), key=lambda item: item.at)
-        emails: list[tuple[Callable[[User, Request, list[News]], bool], User, list[News]]] = [
-            (_send_update, person, theirs)
-            for person in (update_recipients(request) if news else [])
-            if (theirs := [item for item in news if item.actor_id != person.pk])
-        ]
-        pm = pm_recipient(request)
-        pm_news = _pm_news(request, events, messages) if pm else []
-        if pm and pm_news:
-            emails.append((_send_pm_update, pm, pm_news))
+        # Broad on purpose: whatever breaks one request's emails must not stop every other
+        # request's, and a retry would email again the people this batch already reached.
+        try:
+            # Savepoints, here and below: a database error leaves the rest of the batch usable.
+            with transaction.atomic():
+                emails = _update_emails(request, events, messages)
+        except Exception as error:  # noqa: BLE001 (see the comment above)
+            _not_built(request.company.owner, EmailKind.PM_UPDATE, request, error)
+            _mark_emailed(events, messages)
+            return 0
         attempts: list[bool] = []
-        for send, person, theirs in emails:
-            attempts.append(send(person, request, theirs))
+        set_aside = False
+        for index, (send, _, person, theirs) in enumerate(emails):
+            try:
+                with transaction.atomic():
+                    attempts.append(send(person, request, theirs))
+            except Exception as error:  # noqa: BLE001 (see the comment above)
+                for _, kind, missed, _ in emails[index:]:
+                    _not_built(missed, kind, request, error)
+                set_aside = True
+                break
             if stop_on_failure and not attempts[-1]:
                 break
-        if attempts and not any(attempts):
+        if attempts and not any(attempts) and not set_aside:
             # The mail server took none of them: try the whole batch again next round.
             return 0
-        StatusEvent.objects.filter(pk__in=[event.pk for event in events]).update(emailed=True)
-        Message.objects.filter(pk__in=[message.pk for message in messages]).update(emailed=True)
+        _mark_emailed(events, messages)
     return sum(attempts)
+
+
+UpdateEmail = tuple[Callable[[User, Request, list[News]], bool], EmailKind, User, list[News]]
+
+
+def _update_emails(
+    request: Request, events: list[StatusEvent], messages: list[Message]
+) -> list[UpdateEmail]:
+    """Who gets an email about this batch of news, and with which news: each client their
+    own, then the PM."""
+    found = [_status_news(event) for event in events] + [_message_news(m) for m in messages]
+    news = sorted((item for item in found if item is not None), key=lambda item: item.at)
+    emails: list[UpdateEmail] = [
+        (_send_update, EmailKind.REQUEST_UPDATE, person, theirs)
+        for person in (update_recipients(request) if news else [])
+        if (theirs := [item for item in news if item.actor_id != person.pk])
+    ]
+    pm = pm_recipient(request)
+    pm_news = _pm_news(request, events, messages) if pm else []
+    if pm and pm_news:
+        emails.append((_send_pm_update, EmailKind.PM_UPDATE, pm, pm_news))
+    return emails
+
+
+def _mark_emailed(events: list[StatusEvent], messages: list[Message]) -> None:
+    StatusEvent.objects.filter(pk__in=[event.pk for event in events]).update(emailed=True)
+    Message.objects.filter(pk__in=[message.pk for message in messages]).update(emailed=True)
+
+
+NOT_BUILT = "dimond could not build this email"
+
+
+def _not_built(person: User, kind: EmailKind, request: Request, error: Exception) -> None:
+    """A failed row in Logs → Emails for someone whose email about the request was set
+    aside, so the PM sees who missed it and why."""
+    logger.exception("Update email about request %s to user %s not built", request.pk, person.pk)
+    Email.objects.create(
+        user=person,
+        to=person.email,
+        kind=kind,
+        subject=f"{request.key} · {request.title}",
+        status=EmailStatus.FAILED,
+        error=NOT_BUILT,
+        error_detail=f"{type(error).__name__}: {error}",
+    )
 
 
 def _context(request: Request, news: list[News]) -> dict[str, object]:
