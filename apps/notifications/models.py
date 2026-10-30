@@ -20,6 +20,10 @@ class EmailStatus(models.TextChoices):
     SPAM = "spam", "Marked spam"
 
 
+# The journal keeps the subject as it went out, so no email gets a longer one.
+SUBJECT_LENGTH = 300
+
+
 class Email(models.Model):
     """One email and every try to send it: the journal behind Logs → Emails (PRD:
     notifications). Tries of the same email update its row instead of adding rows.
@@ -38,7 +42,7 @@ class Email(models.Model):
     )
     to = models.EmailField(help_text="The address as it was when the email went out.")
     kind = models.CharField(max_length=20, choices=EmailKind.choices)
-    subject = models.CharField(max_length=300)
+    subject = models.CharField(max_length=SUBJECT_LENGTH)
     status = models.CharField(max_length=10, choices=EmailStatus.choices)
     provider_id = models.CharField(
         max_length=100,

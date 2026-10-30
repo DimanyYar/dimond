@@ -78,6 +78,12 @@ def test_voice_request_without_a_text_draft_has_no_what_we_heard(client, anna):
     assert "What we heard" not in client.get(request.get_absolute_url()).content.decode()
 
 
+def test_voice_request_title_is_one_line(client, anna):
+    client.post(URL, said(title="Duplicate leads\nfrom web forms"))
+
+    assert Request.objects.get().title == "Duplicate leads from web forms"
+
+
 def test_voice_request_needs_a_title(client, anna):
     response = client.post(URL, said(title=""))
 
