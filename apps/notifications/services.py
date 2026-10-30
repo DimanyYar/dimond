@@ -98,14 +98,22 @@ def send_email(
     return journal.status == EmailStatus.SENT
 
 
+# How much of the end a long subject keeps: the news, such as "— Mark T. replied".
+SUBJECT_END = 100
+
+
 def _one_line_subject(text: str) -> str:
     """Subjects carry names and titles people typed. Django refuses a whole email whose
     subject has a line break, and the journal row is saved after the email went out, so a
-    subject too long for it would send the email again every round."""
+    subject too long for it would send the email again every round.
+
+    A long one is cut in the middle, inside the title: the start names the request and the
+    end says what happened, so two emails about one request keep different subjects and
+    their journal rows stay apart."""
     line = " ".join(text.split())
     if len(line) <= SUBJECT_LENGTH:
         return line
-    return line[: SUBJECT_LENGTH - 1] + "…"
+    return line[: SUBJECT_LENGTH - SUBJECT_END - 1] + "…" + line[-SUBJECT_END:]
 
 
 def in_plain_words(error: Exception) -> str:

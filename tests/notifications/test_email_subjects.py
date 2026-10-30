@@ -62,6 +62,20 @@ def test_a_subject_too_long_for_the_journal_is_cut_and_sent_once(pm):
 
     [message] = mail.outbox
     assert len(message.subject) == SUBJECT_LENGTH
-    assert message.subject.endswith("…")
+    assert "…" in message.subject
+    assert message.subject.endswith("T — new request")
     assert Email.objects.get().subject == message.subject
     assert nothing_left_to_email()
+
+
+def test_two_long_subjects_about_one_request_stay_apart_in_the_journal(pm):
+    mark = client_of(Company.objects.create(name="A" * 120, owner=pm))
+    request = new_request(mark, "T" * 200)
+    settle()
+    services.post_message(mark, request, "It also happens on 5k rows")
+
+    settle()
+
+    first, second = Email.objects.order_by("pk").values_list("subject", flat=True)
+    assert first != second
+    assert second.endswith("— Mark T. replied")
