@@ -125,6 +125,15 @@ def test_pm_creates_the_task_in_the_clients_project_and_the_request_is_planned(
     assert bug.status_events.last().actor == pm
 
 
+def test_a_summary_with_line_breaks_goes_to_jira_as_one_line(client, pm, bug, tracker):
+    # The window's input cannot hold a line break; a pasted or hand-made one can, and Jira
+    # Server refuses a summary with one.
+    create(client, pm, bug, summary="Duplicate leads\r\n  from the web form")
+
+    [task] = tracker.created
+    assert task["summary"] == "Duplicate leads from the web form"
+
+
 def test_the_thread_says_planned_with_the_task_key_and_the_reply(client, pm, anna, bug, tracker):
     create(client, pm, bug)
     bug.refresh_from_db()
