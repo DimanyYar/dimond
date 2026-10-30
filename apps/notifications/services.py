@@ -610,7 +610,27 @@ def send_discord_posts(now: datetime | None = None) -> int:
         )
         .order_by("created_at", "pk")
     )
-    return sum(_send_queued(post, now) for post in due)
+    return sum(_send_or_set_aside(post, now) for post in due)
+
+
+NOT_BUILT_POST = "dimond could not build this post"
+
+
+def _send_or_set_aside(post: DiscordPost, now: datetime) -> bool:
+    # Broad on purpose: whatever breaks one post must not hold up every post behind it, and
+    # a post that dimond cannot build fails the same way on every try.
+    try:
+        return _send_queued(post, now)
+    except Exception as error:  # noqa: BLE001 (see the comment above)
+        logger.exception("Discord post %s not built", post.pk)
+        # The try may have counted itself in memory before it broke; count it once.
+        post.refresh_from_db(fields=["attempts"])
+        post.attempts += 1
+        post.tried_at = now
+        post.status, post.error = DiscordPostStatus.FAILED, NOT_BUILT_POST
+        post.error_detail = f"{type(error).__name__}: {error}"
+        post.save(update_fields=["attempts", "tried_at", "status", "error", "error_detail"])
+        return False
 
 
 def _send_queued(post: DiscordPost, now: datetime) -> bool:
