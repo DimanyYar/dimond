@@ -7,7 +7,7 @@ import pytest
 from apps.accounts.models import Company, User
 from apps.notifications import services as notifications
 from apps.notifications.models import DiscordPost, DiscordPostKind, DiscordPostStatus
-from apps.notifications.services import NOT_BUILT_POST, send_discord_posts
+from apps.notifications.services import NOT_BUILT_POST, NOT_SURE_POST, send_discord_posts
 from apps.requests import services
 from apps.requests.models import Message, Request, RequestType, WhenNeeded
 
@@ -104,3 +104,28 @@ def test_a_later_post_about_the_same_request_is_not_held_back(pm, anna, fake_dis
     assert send_discord_posts() == 1
     [body] = fake_discord.bodies()[-1:]
     assert "And on Firefox." in body["content"]
+
+
+def test_a_post_that_broke_after_discord_took_it_is_not_called_unbuilt_or_sent_again(
+    pm, anna, fake_discord, monkeypatch
+):
+    request = planned(pm, anna, "Duplicate leads")
+    send_discord_posts()
+    services.post_message(anna, request, "It happens on Safari only.")
+    post_in_topic = notifications.discord.post_in_topic
+
+    def post_then_break(webhook: str, topic: str, text: str) -> str:
+        post_in_topic(webhook, topic, text)
+        raise RuntimeError("database gone")
+
+    monkeypatch.setattr(notifications.discord, "post_in_topic", post_then_break)
+    fake_discord.posts.clear()
+
+    send_discord_posts()
+    send_discord_posts()
+
+    assert len(fake_discord.posts) == 1
+    post = DiscordPost.objects.get(kind=DiscordPostKind.REPLY)
+    assert post.status == DiscordPostStatus.FAILED
+    assert post.error == NOT_SURE_POST
+    assert post.attempts == 1
