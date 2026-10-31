@@ -693,7 +693,32 @@ def send_discord_posts(now: datetime | None = None) -> int:
         )
         .order_by("created_at", "pk")
     )
-    return sum(_send_queued(post, now) for post in due)
+    return sum(_send_or_set_aside(post, now) for post in due)
+
+
+NOT_BUILT_POST = "dimond could not build this post"
+NOT_SURE_POST = "dimond could not tell whether this post went out"
+
+
+def _send_or_set_aside(post: DiscordPost, now: datetime) -> bool:
+    # Broad on purpose: whatever breaks one post must not hold up every post behind it, a
+    # post that dimond cannot build fails the same way on every try, and one that broke
+    # after Discord may have taken it would be posted twice by a retry.
+    try:
+        return _send_queued(post, now)
+    except Exception as error:  # noqa: BLE001 (see the comment above)
+        logger.exception("Discord post %s set aside", post.pk)
+        # _try_post stamps the try just before calling Discord: if it did, Discord may
+        # have the post already, and the try counted itself in memory.
+        reached_discord = post.tried_at == now
+        post.refresh_from_db(fields=["attempts"])
+        post.attempts += 1
+        post.tried_at = now
+        post.status = DiscordPostStatus.FAILED
+        post.error = NOT_SURE_POST if reached_discord else NOT_BUILT_POST
+        post.error_detail = f"{type(error).__name__}: {error}"
+        post.save(update_fields=["attempts", "tried_at", "status", "error", "error_detail"])
+        return False
 
 
 def _send_queued(post: DiscordPost, now: datetime) -> bool:
@@ -741,11 +766,12 @@ def _send_task_topic(post: DiscordPost, request: Request, webhook: str, now: dat
         post.status, post.tried_at = DiscordPostStatus.SENT, now
         post.save(update_fields=["status", "tried_at"])
         return False
-    return _try_post(post, partial(_open_topic, request, webhook), now, retry=True) is not None
-
-
-def _open_topic(request: Request, webhook: str) -> str:
     name, text = _task_topic(request)
+    send = partial(_open_topic, request, webhook, name, text)
+    return _try_post(post, send, now, retry=True) is not None
+
+
+def _open_topic(request: Request, webhook: str, name: str, text: str) -> str:
     request.discord_topic = discord.start_topic(webhook, name, text)
     request.save(update_fields=["discord_topic"])
     return request.discord_topic
@@ -760,7 +786,8 @@ def _post_in_topic(request: Request, webhook: str, text: str) -> str:
         except discord.DiscordError as error:
             if not error.topic_gone:
                 raise
-    return discord.post_in_topic(webhook, _open_topic(request, webhook), text)
+    topic = _open_topic(request, webhook, *_task_topic(request))
+    return discord.post_in_topic(webhook, topic, text)
 
 
 def _try_post(
