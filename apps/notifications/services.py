@@ -26,6 +26,7 @@ from apps.requests.models import (
 
 from . import discord
 from .models import (
+    SUBJECT_LENGTH,
     DiscordPost,
     DiscordPostKind,
     DiscordPostStatus,
@@ -63,6 +64,7 @@ def send_email(
 
     Returns False when the mail server did not take it; the caller decides whether to retry.
     """
+    subject = _one_line_subject(subject)
     message = EmailMultiAlternatives(subject=subject, body=body, to=[user.email])
     if html is not None:
         message.attach_alternative(html, "text/html")
@@ -94,6 +96,24 @@ def send_email(
         journal.error_detail = ""
     journal.save()
     return journal.status == EmailStatus.SENT
+
+
+# How much of the end a long subject keeps: the news, such as "— Mark T. replied".
+SUBJECT_END = 100
+
+
+def _one_line_subject(text: str) -> str:
+    """Subjects carry names and titles people typed. Django refuses a whole email whose
+    subject has a line break, and the journal row is saved after the email went out, so a
+    subject too long for it would send the email again every round.
+
+    A long one is cut in the middle, inside the title: the start names the request and the
+    end says what happened, so two emails about one request keep different subjects and
+    their journal rows stay apart."""
+    line = " ".join(text.split())
+    if len(line) <= SUBJECT_LENGTH:
+        return line
+    return line[: SUBJECT_LENGTH - SUBJECT_END - 1] + "…" + line[-SUBJECT_END:]
 
 
 def in_plain_words(error: Exception) -> str:
@@ -379,28 +399,115 @@ def _send_updates_for(request_id: int, stop_on_failure: bool) -> int:
         if not events and not messages:
             return 0
         request = Request.objects.select_related("company__owner").get(pk=request_id)
-        found = [_status_news(event) for event in events] + [_message_news(m) for m in messages]
-        news = sorted((item for item in found if item is not None), key=lambda item: item.at)
-        emails: list[tuple[Callable[[User, Request, list[News]], bool], User, list[News]]] = [
-            (_send_update, person, theirs)
-            for person in (update_recipients(request) if news else [])
-            if (theirs := [item for item in news if item.actor_id != person.pk])
-        ]
-        pm = pm_recipient(request)
-        pm_news = _pm_news(request, events, messages) if pm else []
-        if pm and pm_news:
-            emails.append((_send_pm_update, pm, pm_news))
-        attempts: list[bool] = []
-        for send, person, theirs in emails:
-            attempts.append(send(person, request, theirs))
-            if stop_on_failure and not attempts[-1]:
-                break
-        if attempts and not any(attempts):
+        # Broad on purpose, here and below: whatever breaks one request's emails must not stop
+        # every other request's, and a retry would email again the people already reached.
+        readers: list[Reader] = []
+        try:
+            # Every email is built before any goes out: a broken one stops the whole batch,
+            # not half of it. Savepoints keep a database error from spoiling the round.
+            with transaction.atomic():
+                readers = _readers(request, events, messages)
+                emails = [_build(reader, request) for reader in readers]
+        except Exception as error:  # noqa: BLE001 (see the comment above)
+            missed = [(kind, person) for kind, person, _ in readers]
+            for kind, person in missed or [(EmailKind.PM_UPDATE, request.company.owner)]:
+                _set_aside(person, kind, request, NOT_BUILT, error)
+            _mark_emailed(events, messages)
+            return 0
+        attempts, set_aside = _send_built(emails, request, stop_on_failure)
+        if attempts and not any(attempts) and not set_aside:
             # The mail server took none of them: try the whole batch again next round.
             return 0
-        StatusEvent.objects.filter(pk__in=[event.pk for event in events]).update(emailed=True)
-        Message.objects.filter(pk__in=[message.pk for message in messages]).update(emailed=True)
+        _mark_emailed(events, messages)
     return sum(attempts)
+
+
+# Who gets an email about a batch of news, and which of that news is theirs.
+Reader = tuple[EmailKind, User, list[News]]
+
+
+@dataclass(frozen=True)
+class UpdateEmail:
+    person: User
+    kind: EmailKind
+    subject: str
+    text: str
+    html: str
+
+
+def _readers(request: Request, events: list[StatusEvent], messages: list[Message]) -> list[Reader]:
+    """Each client gets the news they did not make themselves, then the PM theirs."""
+    found = [_status_news(event) for event in events] + [_message_news(m) for m in messages]
+    news = sorted((item for item in found if item is not None), key=lambda item: item.at)
+    readers: list[Reader] = [
+        (EmailKind.REQUEST_UPDATE, person, theirs)
+        for person in (update_recipients(request) if news else [])
+        if (theirs := [item for item in news if item.actor_id != person.pk])
+    ]
+    pm = pm_recipient(request)
+    pm_news = _pm_news(request, events, messages) if pm else []
+    if pm and pm_news:
+        readers.append((EmailKind.PM_UPDATE, pm, pm_news))
+    return readers
+
+
+def _build(reader: Reader, request: Request) -> UpdateEmail:
+    kind, person, news = reader
+    build = _update if kind == EmailKind.REQUEST_UPDATE else _pm_update
+    return UpdateEmail(person, kind, *build(person, request, news))
+
+
+def _send_built(
+    emails: list[UpdateEmail], request: Request, stop_on_failure: bool
+) -> tuple[list[bool], bool]:
+    """Sends the batch in order. Returns whether each went out, and whether the batch was set
+    aside after an error."""
+    attempts: list[bool] = []
+    set_aside = False
+    for index, email in enumerate(emails):
+        try:
+            with transaction.atomic():
+                attempts.append(
+                    send_email(email.person, email.kind, email.subject, email.text, email.html)
+                )
+        except Exception as error:  # noqa: BLE001 (see _send_updates_for)
+            # The mail server may have taken it before the error, so its row says dimond
+            # cannot tell. The people after it are not emailed; nothing is tried again.
+            _set_aside(email.person, email.kind, request, NOT_SURE, error)
+            for later in emails[index + 1 :]:
+                _set_aside(later.person, later.kind, request, AFTER_ERROR, error)
+            set_aside = True
+            break
+        if stop_on_failure and not attempts[-1]:
+            break
+    return attempts, set_aside
+
+
+def _mark_emailed(events: list[StatusEvent], messages: list[Message]) -> None:
+    StatusEvent.objects.filter(pk__in=[event.pk for event in events]).update(emailed=True)
+    Message.objects.filter(pk__in=[message.pk for message in messages]).update(emailed=True)
+
+
+NOT_BUILT = "dimond could not build this email"
+NOT_SURE = "dimond could not tell whether this email went out"
+AFTER_ERROR = "Held back: another email of the same update broke"
+
+
+def _set_aside(
+    person: User, kind: EmailKind, request: Request, reason: str, error: Exception
+) -> None:
+    """A row in Logs → Emails for someone whose email about the request was set aside, so the
+    PM sees who missed it and why."""
+    logger.exception("Update email about request %s to user %s set aside", request.pk, person.pk)
+    Email.objects.create(
+        user=person,
+        to=person.email,
+        kind=kind,
+        subject=f"{request.key} · {request.title}",
+        status=EmailStatus.FAILED,
+        error=reason,
+        error_detail=f"{type(error).__name__}: {error}",
+    )
 
 
 def _context(request: Request, news: list[News]) -> dict[str, object]:
@@ -416,7 +523,7 @@ def _context(request: Request, news: list[News]) -> dict[str, object]:
     }
 
 
-def _send_update(person: User, request: Request, news: list[News]) -> bool:
+def _update(person: User, request: Request, news: list[News]) -> tuple[str, str, str]:
     """One email about the latest news a person did not make themselves, with the earlier
     news of the same few minutes under it."""
     status = ClientStatus(request.status)
@@ -425,16 +532,14 @@ def _send_update(person: User, request: Request, news: list[News]) -> bool:
         "pill": PILLS.get(status, PLAIN_PILL),
         "for_team": person.notify == Notify.COMPANY,
     }
-    return send_email(
-        person,
-        EmailKind.REQUEST_UPDATE,
+    return (
         f"{request.key} · {request.title} — {news[-1].subject}",
         render_to_string("notifications/email/request_update.txt", context),
         render_to_string("notifications/email/request_update.html", context),
     )
 
 
-def _send_pm_update(pm: User, request: Request, news: list[News]) -> bool:
+def _pm_update(pm: User, request: Request, news: list[News]) -> tuple[str, str, str]:
     """The PM's email about their client's request (mockup 5.7 · Email to the PM)."""
     status = ClientStatus(request.status)
     if news[-1].kind is NEW_REQUEST:
@@ -442,9 +547,7 @@ def _send_pm_update(pm: User, request: Request, news: list[News]) -> bool:
     else:
         meta = status.label + (f" · {request.jira_key}" if request.jira_key else "")
     context = _context(request, news) | {"meta": meta}
-    return send_email(
-        pm,
-        EmailKind.PM_UPDATE,
+    return (
         f"{request.company.name} · {request.key} · {request.title} — {news[-1].subject}",
         render_to_string("notifications/email/pm_update.txt", context),
         render_to_string("notifications/email/pm_update.html", context),
@@ -590,7 +693,32 @@ def send_discord_posts(now: datetime | None = None) -> int:
         )
         .order_by("created_at", "pk")
     )
-    return sum(_send_queued(post, now) for post in due)
+    return sum(_send_or_set_aside(post, now) for post in due)
+
+
+NOT_BUILT_POST = "dimond could not build this post"
+NOT_SURE_POST = "dimond could not tell whether this post went out"
+
+
+def _send_or_set_aside(post: DiscordPost, now: datetime) -> bool:
+    # Broad on purpose: whatever breaks one post must not hold up every post behind it, a
+    # post that dimond cannot build fails the same way on every try, and one that broke
+    # after Discord may have taken it would be posted twice by a retry.
+    try:
+        return _send_queued(post, now)
+    except Exception as error:  # noqa: BLE001 (see the comment above)
+        logger.exception("Discord post %s set aside", post.pk)
+        # _try_post stamps the try just before calling Discord: if it did, Discord may
+        # have the post already, and the try counted itself in memory.
+        reached_discord = post.tried_at == now
+        post.refresh_from_db(fields=["attempts"])
+        post.attempts += 1
+        post.tried_at = now
+        post.status = DiscordPostStatus.FAILED
+        post.error = NOT_SURE_POST if reached_discord else NOT_BUILT_POST
+        post.error_detail = f"{type(error).__name__}: {error}"
+        post.save(update_fields=["attempts", "tried_at", "status", "error", "error_detail"])
+        return False
 
 
 def _send_queued(post: DiscordPost, now: datetime) -> bool:
@@ -638,11 +766,12 @@ def _send_task_topic(post: DiscordPost, request: Request, webhook: str, now: dat
         post.status, post.tried_at = DiscordPostStatus.SENT, now
         post.save(update_fields=["status", "tried_at"])
         return False
-    return _try_post(post, partial(_open_topic, request, webhook), now, retry=True) is not None
-
-
-def _open_topic(request: Request, webhook: str) -> str:
     name, text = _task_topic(request)
+    send = partial(_open_topic, request, webhook, name, text)
+    return _try_post(post, send, now, retry=True) is not None
+
+
+def _open_topic(request: Request, webhook: str, name: str, text: str) -> str:
     request.discord_topic = discord.start_topic(webhook, name, text)
     request.save(update_fields=["discord_topic"])
     return request.discord_topic
@@ -657,7 +786,8 @@ def _post_in_topic(request: Request, webhook: str, text: str) -> str:
         except discord.DiscordError as error:
             if not error.topic_gone:
                 raise
-    return discord.post_in_topic(webhook, _open_topic(request, webhook), text)
+    topic = _open_topic(request, webhook, *_task_topic(request))
+    return discord.post_in_topic(webhook, topic, text)
 
 
 def _try_post(

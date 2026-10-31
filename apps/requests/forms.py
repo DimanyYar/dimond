@@ -90,13 +90,25 @@ WHEN_NEEDED_COPY: dict[str, dict[str, str]] = {
 }
 
 
+class TitleField(forms.CharField):
+    """A request's title, always one line. The page's input has none, but a hand-made request
+    can send line breaks; the title ends up in email subjects and the Jira summary, which hold
+    one line."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            max_length=200, error_messages={"required": "Give it a title in one line."}
+        )
+
+    def to_python(self, value: Any) -> str:
+        return " ".join(str(super().to_python(value)).split())
+
+
 class RequestForm(forms.Form):
     """The request form, empty for a new request or filled in when editing one."""
 
     type = forms.ChoiceField(choices=FORM_TYPES, initial=RequestType.BUG)
-    title = forms.CharField(
-        max_length=200, error_messages={"required": "Give it a title in one line."}
-    )
+    title = TitleField()
     description = forms.CharField(required=False, widget=forms.Textarea)
     steps = forms.CharField(required=False, widget=forms.Textarea)
     why = forms.CharField(
@@ -148,9 +160,7 @@ class VoiceRequestForm(forms.Form):
     """ "Just say it": the recording, a title, the text draft the browser wrote (checked by the
     client) and, if the client wants, the type."""
 
-    title = forms.CharField(
-        max_length=200, error_messages={"required": "Give it a title in one line."}
-    )
+    title = TitleField()
     text = forms.CharField(required=False, max_length=5000)
     type = forms.ChoiceField(choices=FORM_TYPES, required=False)
     recording = forms.FileField(error_messages={"required": "Record your request first."})

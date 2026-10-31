@@ -39,8 +39,11 @@ and pytest. A red PR is not reviewed.
 
 ### Review
 
-1. **CodeRabbit** reviews every PR automatically. The author fixes its findings or replies
-   why not.
+1. **CodeRabbit** reviews every PR that is not a draft automatically; drafts are skipped
+   (`auto_review.drafts: false` in `.coderabbit.yaml`). The author also posts
+   `@coderabbitai review` as a PR comment, after opening the PR and after pushing fixes: a
+   manual request starts a review even where automatic ones are off, so drafts get reviewed
+   too. The author fixes its findings or replies why not.
 2. **Dmitry** reviews for intent: does it do what the PRD says, and is the change
    understandable. "I don't understand this part" is a valid review comment.
 
