@@ -90,18 +90,23 @@ WHEN_NEEDED_COPY: dict[str, dict[str, str]] = {
 }
 
 
-class TitleField(forms.CharField):
-    """A request's title, always one line. The page's input has none, but a hand-made request
-    can send line breaks; the title ends up in email subjects and the Jira summary, which hold
-    one line."""
+class OneLineField(forms.CharField):
+    """Text that must stay on one line, whatever was pasted or sent by hand: line breaks and
+    runs of spaces become one space. Email subjects hold one line, and Jira Server refuses a
+    summary with a line break."""
+
+    def to_python(self, value: Any) -> str:
+        return " ".join(str(super().to_python(value)).split())
+
+
+class TitleField(OneLineField):
+    """A request's title. The page's input has none, but a hand-made request can send line
+    breaks; the title ends up in email subjects and the Jira summary."""
 
     def __init__(self) -> None:
         super().__init__(
             max_length=200, error_messages={"required": "Give it a title in one line."}
         )
-
-    def to_python(self, value: Any) -> str:
-        return " ".join(str(super().to_python(value)).split())
 
 
 class RequestForm(forms.Form):
@@ -411,7 +416,7 @@ class JiraTaskForm(_FilesToJira):
     is the client's own and is not chosen here."""
 
     issue_type = forms.ChoiceField()
-    summary = forms.CharField(max_length=255, error_messages={"required": "Name the task."})
+    summary = OneLineField(max_length=255, error_messages={"required": "Name the task."})
     description = forms.CharField(widget=forms.Textarea, required=False)
     sprint = sprint_field()
 
