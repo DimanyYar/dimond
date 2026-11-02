@@ -8,6 +8,7 @@ its own base URL as http, and a redirect would send the password to wherever it 
 import re
 from collections.abc import Callable
 from datetime import date, datetime
+from functools import cached_property
 from typing import Any
 from urllib.parse import quote
 
@@ -280,15 +281,8 @@ class JiraTracker:
 
     def _sprint_field(self) -> str:
         """Empty without Jira Software: then tasks come without sprints."""
-        found = self._call(
-            "field",
-            lambda data: [
-                item["id"]
-                for item in data
-                if item.get("schema", {}).get("custom") == SPRINT_FIELD_TYPE
-            ],
-        )
-        return str(found[0]) if found else ""
+        found = self._custom_field_ids(SPRINT_FIELD_TYPE)
+        return found[0] if found else ""
 
     def file_content(self, file: TaskFile) -> bytes:
         try:
@@ -301,12 +295,21 @@ class JiraTracker:
         return response.content
 
     def _epic_name_fields(self) -> list[str]:
+        return self._custom_field_ids(EPIC_NAME_TYPE)
+
+    def _custom_field_ids(self, custom_type: str) -> list[str]:
+        return [field_id for kind, field_id in self._custom_fields if kind == custom_type]
+
+    @cached_property
+    def _custom_fields(self) -> list[tuple[str, str]]:
+        """(type, id) of each custom field. Asked once per tracker: a tracker lives for one
+        sync run or one request, and one sync run reads many projects."""
         return self._call(
             "field",
             lambda data: [
-                item["id"]
+                (item["schema"]["custom"], str(item["id"]))
                 for item in data
-                if item.get("schema", {}).get("custom") == EPIC_NAME_TYPE
+                if "custom" in item.get("schema", {})
             ],
         )
 

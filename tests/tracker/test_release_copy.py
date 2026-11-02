@@ -175,3 +175,12 @@ def test_project_no_client_uses_any_more_leaves_the_copy(atlas):
 
     assert not TrackerTask.objects.exists()
     assert not TrackerVersion.objects.exists()
+
+
+def test_one_sync_run_asks_jira_for_its_field_list_once(jira):
+    tracker = jira.tracker()
+
+    tracker.release_tasks("FI", ["20130"], [], date.min)
+    tracker.release_tasks("FI", ["20150"], [], date.min)
+
+    assert [r.url.path for r in jira.seen].count("/rest/api/2/field") == 1
