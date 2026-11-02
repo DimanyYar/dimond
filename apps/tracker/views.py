@@ -1,10 +1,12 @@
 import hmac
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
@@ -12,6 +14,7 @@ from apps.accounts.models import User
 from apps.accounts.selectors import has_clients_page
 
 from . import selectors, services
+from .models import TrackerVersion
 
 
 def _pm(request: HttpRequest) -> User:
@@ -34,6 +37,35 @@ def logs(request: HttpRequest) -> HttpResponse:
     return render(
         request, "tracker/logs.html", {"show": show, "page": selectors.logs_page(pm, show)}
     )
+
+
+def _number(value: str | None) -> int | None:
+    return int(value) if value and value.isdigit() else None
+
+
+@require_GET
+@login_required
+def releases(request: HttpRequest) -> HttpResponse:
+    """Releases (canvas 7 · PMReleaseView): the client's releases on the left, the chosen one's
+    dates, progress and warnings on the right."""
+    page = selectors.releases_page(
+        _pm(request), _number(request.GET.get("client")), _number(request.GET.get("release"))
+    )
+    return render(request, "tracker/releases.html", {"page": page})
+
+
+@require_POST
+@login_required
+def release_visibility(request: HttpRequest, pk: int) -> HttpResponse:
+    """Hide or Show: only dimond's list changes (D-006); Jira and clients see nothing."""
+    try:
+        version = selectors.release_for(_pm(request), pk)
+    except TrackerVersion.DoesNotExist:
+        raise Http404 from None
+    hidden = request.POST.get("hidden") == "1"
+    services.set_release_hidden(version, hidden)
+    query = urlencode({"client": request.POST.get("client", ""), "release": pk})
+    return redirect(f"{reverse('releases')}?{query}")
 
 
 @require_POST

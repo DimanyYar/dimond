@@ -1,24 +1,35 @@
 """What the PM reads about the Jira sync: the Logs page and the sync line in the sidebar
-(PRD: Jira sync; mockup 4.x · PM logs). A PM sees only events about their own clients
-(ADR 0014); whole-run news, such as Jira not answering, is everyone's."""
+(PRD: Jira sync; mockup 4.x · PM logs), and the Releases page built on the copy of each
+client's releases (#30; ADR 0026). A PM sees only their own clients (ADR 0014); whole-run
+news, such as Jira not answering, is everyone's."""
 
+import re
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, timedelta
 from enum import StrEnum
 from urllib.parse import urlsplit
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Prefetch, Q, QuerySet
 from django.utils import timezone
 from django.utils.timesince import timesince
 
-from apps.accounts.models import User
-from apps.accounts.selectors import has_clients_page
+from apps.accounts.models import Company, User
+from apps.accounts.selectors import clients_for, has_clients_page
 from apps.requests.models import CLOSED_STATUSES, JIRA_STATUSES, ClientStatus, Request
 
 from .base import TrackerNotConfigured
 from .connection import current_tracker
-from .models import SyncEvent, SyncOutcome, SyncRun, TrackerKind, TrackerSettings
-from .services import STUCK_AFTER
+from .models import (
+    SyncEvent,
+    SyncOutcome,
+    SyncRun,
+    TrackerKind,
+    TrackerSettings,
+    TrackerTask,
+    TrackerVersion,
+)
+from .services import HIDDEN_BUCKET, RECENT_BUCKET, RELEASED_READ, STUCK_AFTER
 
 RUNS_SHOWN = 50
 # Tasks named in a webhook run's subtitle; a bulk edit names the first ones and counts the rest.
@@ -283,3 +294,336 @@ def _paused_reason(row: TrackerSettings) -> str:
     if row.sync_paused_at is None or row.tracker != TrackerKind.JIRA:
         return ""
     return row.sync_paused_reason
+
+
+# The Releases page (#30, step 30b; canvas 7 · PMReleaseView). Progress comes from subtasks,
+# not the parent's Jira status (D-004): in FI a story stays in To Do while its subtasks move.
+
+SUB_BUG = "Sub-bug"
+TRACKS = ("FE", "BE", "QA", "Other", "QA bug")
+TRACK_PREFIX = re.compile(r"^\[(FE|BE|QA)\]", re.IGNORECASE)
+
+
+class ReleaseGroup(StrEnum):
+    OPEN = "Open"
+    HOTFIXES = "Hotfixes"
+    RELEASED = "Released"
+    BUCKETS = "Buckets"
+
+
+class Health(StrEnum):
+    STALE = "Stale"
+    EMPTY = "Empty"
+    NO_DATE = "No date"
+    RECENT = "Last 30 days"
+    RELEASED = "Released"
+    NONE = ""
+
+
+def track_of(subtask: TrackerTask) -> str:
+    """Which part of the team a subtask belongs to: its [FE]/[BE]/[QA] prefix, or "QA bug" for
+    a bug found in testing."""
+    if subtask.issue_type == SUB_BUG:
+        return "QA bug"
+    found = TRACK_PREFIX.match(subtask.summary)
+    return found.group(1).upper() if found else "Other"
+
+
+def _is_done(task: TrackerTask) -> bool:
+    subtasks = list(task.subtasks.all())
+    if not subtasks:
+        return task.status_category == "done"
+    return all(sub.status_category == "done" for sub in subtasks)
+
+
+def _is_started(task: TrackerTask) -> bool:
+    return any(t.status_category != "new" for t in [task, *task.subtasks.all()])
+
+
+@dataclass(frozen=True)
+class Track:
+    name: str
+    total: int
+    done: int
+    in_progress: int
+
+    @property
+    def done_pct(self) -> int:
+        return round(self.done * 100 / self.total)
+
+    @property
+    def progress_pct(self) -> int:
+        return round(self.in_progress * 100 / self.total)
+
+
+@dataclass(frozen=True)
+class Release:
+    version: TrackerVersion
+    group: ReleaseGroup
+    hidden: bool
+    tasks: list[TrackerTask]
+    # Tasks are not read for the Unreleased bucket (D-008), so there is nothing to count.
+    tasks_read: bool
+    start: date | None
+    # The previous release when it has no date yet: this one starts the day after it ships.
+    starts_after: str
+    stale: bool
+    client_requests: int
+    jira_url: str
+
+    @property
+    def subtasks(self) -> list[TrackerTask]:
+        return [sub for task in self.tasks for sub in task.subtasks.all()]
+
+    @property
+    def done(self) -> int:
+        return sum(_is_done(task) for task in self.tasks)
+
+    @property
+    def in_progress(self) -> int:
+        return sum(_is_started(task) and not _is_done(task) for task in self.tasks)
+
+    @property
+    def done_pct(self) -> int:
+        return round(self.done * 100 / len(self.tasks)) if self.tasks else 0
+
+    @property
+    def health(self) -> Health:
+        if self.group == ReleaseGroup.RELEASED:
+            return Health.RELEASED
+        if self.group == ReleaseGroup.HOTFIXES:
+            return Health.RECENT
+        if self.group == ReleaseGroup.BUCKETS:
+            return Health.NONE
+        if self.stale:
+            return Health.STALE
+        if not self.tasks:
+            return Health.EMPTY
+        return Health.NONE if self.version.release_date else Health.NO_DATE
+
+    @property
+    def date_line(self) -> str:
+        version = self.version
+        if self.group == ReleaseGroup.RELEASED:
+            return f"Released {_day(version.release_date)}"
+        if self.group == ReleaseGroup.HOTFIXES:
+            return "Done in the last 30 days · a Jira bucket, not a release"
+        if self.group == ReleaseGroup.BUCKETS:
+            return "Jira bucket · dimond doesn’t read its tasks"
+        if self.stale:
+            return f"{self.done} of {len(self.tasks)} done, never released"
+        if self.start:
+            starts = f"Starts {_day(self.start)}"
+        elif self.starts_after:
+            starts = f"Starts the day after {self.starts_after} ships"
+        else:
+            starts = "No start date"
+        ships = (
+            f"ships {_day(version.release_date)}" if version.release_date else "no release date yet"
+        )
+        return f"{starts} · {ships}"
+
+    @property
+    def tracks(self) -> list[Track]:
+        by_track: dict[str, list[TrackerTask]] = {}
+        for sub in self.subtasks:
+            by_track.setdefault(track_of(sub), []).append(sub)
+        return [
+            Track(
+                name,
+                len(subs),
+                sum(s.status_category == "done" for s in subs),
+                sum(s.status_category == "indeterminate" for s in subs),
+            )
+            for name in TRACKS
+            if (subs := by_track.get(name))
+        ]
+
+    @property
+    def warnings(self) -> list[str]:
+        """What the PM should look at in an open release (canvas 7 · PMReleaseView)."""
+        if self.group != ReleaseGroup.OPEN:
+            return []
+        if self.stale:
+            left = len(self.tasks) - self.done
+            return [
+                f"Looks forgotten: {self.done} of {len(self.tasks)} done, {left} not done. "
+                "Release it or archive it in Jira, and move what isn’t done."
+            ]
+        found = []
+        if self.tasks and not self.version.release_date:
+            if self.client_requests:
+                found.append(
+                    f"No release date in Jira: {_count(self.client_requests, 'client request')} "
+                    "in it show no date for this release."
+                )
+            else:
+                found.append("No release date in Jira.")
+        unplanned = [t for t in self.tasks if t.issue_type == "Story" and not t.subtasks.all()]
+        if len(unplanned) == 1:
+            found.append(
+                f"“{unplanned[0].summary}” has no subtasks yet: nobody has planned the work."
+            )
+        elif unplanned:
+            found.append(
+                f"{len(unplanned)} stories have no subtasks yet: nobody has planned the work."
+            )
+        moving = [t for t in self.tasks if _is_started(t) and not _is_done(t)]
+        qa = [s for t in moving for s in t.subtasks.all() if track_of(s) == "QA"]
+        if qa and all(s.status_category == "new" for s in qa):
+            found.append(
+                "QA hasn’t started on any task in progress; "
+                f"{_count(len(qa), 'QA subtask')} {'is' if len(qa) == 1 else 'are'} To Do."
+            )
+        return found
+
+
+def _day(day: date | None) -> str:
+    return f"{day:%b} {day.day}" if day else ""
+
+
+def _count(n: int, thing: str) -> str:
+    return f"{n} {thing}{'' if n == 1 else 's'}"
+
+
+@dataclass(frozen=True)
+class ReleasesPage:
+    clients: list[Company]
+    client: Company | None
+    releases: list[Release]
+    selected: Release | None
+
+    @property
+    def shown(self) -> list[Release]:
+        return [r for r in self.releases if not r.hidden]
+
+    @property
+    def hidden(self) -> list[Release]:
+        return [r for r in self.releases if r.hidden]
+
+
+def _group(version: TrackerVersion) -> ReleaseGroup:
+    if version.name == RECENT_BUCKET:
+        return ReleaseGroup.HOTFIXES
+    if version.name == HIDDEN_BUCKET:
+        return ReleaseGroup.BUCKETS
+    return ReleaseGroup.RELEASED if version.released else ReleaseGroup.OPEN
+
+
+def _jira_address() -> str:
+    try:
+        return current_tracker().address
+    except TrackerNotConfigured:
+        return ""
+
+
+def _start(version: TrackerVersion, previous: TrackerVersion | None) -> tuple[date | None, str]:
+    """When an open release starts: Jira's start date, else the day after the previous release
+    (D-006); if that one has no date yet either, its name for "the day after … ships"."""
+    if version.start_date or not previous:
+        return version.start_date, ""
+    if previous.release_date:
+        return previous.release_date + timedelta(days=1), ""
+    return None, previous.name
+
+
+def _is_stale(version: TrackerVersion, versions: list[TrackerVersion]) -> bool:
+    """A release that looks forgotten: never marked released, though a later one already is,
+    or its release date has passed."""
+    later_released = any(
+        _group(v) == ReleaseGroup.RELEASED and v.position > version.position for v in versions
+    )
+    overdue = bool(version.release_date and version.release_date < timezone.localdate())
+    return later_released or overdue
+
+
+def _is_hidden(version: TrackerVersion) -> bool:
+    try:
+        return version.visibility.hidden
+    except ObjectDoesNotExist:
+        return _group(version) == ReleaseGroup.BUCKETS
+
+
+def _tasks_by_version(project_key: str) -> dict[int, list[TrackerTask]]:
+    tasks = TrackerTask.objects.filter(
+        project_key=project_key, parent__isnull=True
+    ).prefetch_related("subtasks", "versions")
+    by_version: dict[int, list[TrackerTask]] = {}
+    for task in tasks:
+        for version in task.versions.all():
+            by_version.setdefault(version.pk, []).append(task)
+    return by_version
+
+
+def _releases(client: Company) -> list[Release]:
+    versions = list(
+        TrackerVersion.objects.filter(project_key=client.jira_project).select_related("visibility")
+    )
+    by_version = _tasks_by_version(client.jira_project)
+    requests = set(client.requests.exclude(jira_key="").values_list("jira_key", flat=True))
+    address = _jira_address()
+    # Only the newest released ones have their tasks copied (D-008); older ones are history.
+    released = sorted(
+        (v for v in versions if _group(v) == ReleaseGroup.RELEASED and v.release_date),
+        key=lambda v: v.release_date or date.min,
+        reverse=True,
+    )[:RELEASED_READ]
+    releases = []
+    previous: TrackerVersion | None = None
+    for version in versions:
+        group = _group(version)
+        own = by_version.get(version.pk, [])
+        if group != ReleaseGroup.RELEASED or version in released:
+            start, starts_after = (
+                _start(version, previous) if group == ReleaseGroup.OPEN else (None, "")
+            )
+            releases.append(
+                Release(
+                    version=version,
+                    group=group,
+                    hidden=_is_hidden(version),
+                    tasks=own,
+                    tasks_read=group != ReleaseGroup.BUCKETS,
+                    start=start,
+                    starts_after=starts_after,
+                    stale=group == ReleaseGroup.OPEN and bool(own) and _is_stale(version, versions),
+                    client_requests=sum(task.key in requests for task in own),
+                    jira_url=f"{address}/projects/{version.project_key}/versions/{version.jira_id}"
+                    if address
+                    else "",
+                )
+            )
+        if group in (ReleaseGroup.OPEN, ReleaseGroup.RELEASED):
+            previous = version
+    order = list(ReleaseGroup)
+    return sorted(
+        releases,
+        key=lambda r: (
+            order.index(r.group),
+            # Newest release first; the rest in Jira's own order.
+            -(r.version.release_date or date.min).toordinal()
+            if r.group == ReleaseGroup.RELEASED
+            else r.version.position,
+        ),
+    )
+
+
+def releases_page(pm: User, client_pk: int | None, version_pk: int | None) -> ReleasesPage:
+    """The Releases page of one of this PM's clients (canvas 7 · PMReleaseView): the list on
+    the left and the chosen release. Another PM's client or release is the same as none."""
+    clients = list(clients_for(pm).exclude(jira_project=""))
+    client = next((c for c in clients if c.pk == client_pk), clients[0] if clients else None)
+    releases = _releases(client) if client else []
+    shown = [r for r in releases if not r.hidden]
+    selected = next(
+        (r for r in releases if r.version.pk == version_pk),
+        next((r for r in shown if r.group == ReleaseGroup.OPEN), shown[0] if shown else None),
+    )
+    return ReleasesPage(clients, client, releases, selected)
+
+
+def release_for(pm: User, version_pk: int) -> TrackerVersion:
+    """A release of one of this PM's clients. Raises TrackerVersion.DoesNotExist for anyone
+    else's, exactly as for a missing one."""
+    projects = clients_for(pm).exclude(jira_project="").values_list("jira_project", flat=True)
+    return TrackerVersion.objects.get(pk=version_pk, project_key__in=projects)

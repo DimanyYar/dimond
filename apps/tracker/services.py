@@ -47,6 +47,7 @@ from .base import (
 )
 from .connection import current_tracker, login_fingerprint
 from .models import (
+    ReleaseVisibility,
     SyncEvent,
     SyncOutcome,
     SyncRun,
@@ -657,3 +658,10 @@ def _forget_old_runs(now: datetime) -> None:
     SyncRun.objects.filter(
         started_at__lt=now - KEEP_QUIET_RUNS, outcome=SyncOutcome.SUCCEEDED, events__isnull=True
     ).delete()
+
+
+def set_release_hidden(version: TrackerVersion, hidden: bool) -> None:
+    """Hides a release from the PM's Releases list or brings it back (D-006 in the project
+    notes). Only dimond's list changes; Jira and clients see nothing. The caller has already
+    checked the release is one of this PM's clients' (selectors.release_for)."""
+    ReleaseVisibility.objects.update_or_create(version=version, defaults={"hidden": hidden})
