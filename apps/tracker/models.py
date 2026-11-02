@@ -91,6 +91,13 @@ class SyncRun(models.Model):
         help_text="Failed because Jira did not answer (a timeout or a server error): worth one "
         "more try soon, unlike a refusal.",
     )
+    releases_copied = models.PositiveIntegerField(
+        default=0, help_text="Tasks and subtasks of releases copied from Jira (ADR 0026)."
+    )
+    releases_error = models.TextField(
+        blank=True,
+        help_text="Why copying the releases failed; the status sync went on regardless.",
+    )
 
     class Meta:
         ordering = ["-started_at", "-pk"]
@@ -118,3 +125,59 @@ class SyncEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.task_key}: {self.what}"
+
+
+class TrackerVersion(models.Model):
+    """A copy of a fix version of a client's Jira project, for the Releases page (#30; ADR
+    0026). The sync rewrites it on every run; Jira stays the source of truth."""
+
+    project_key = models.CharField(max_length=32)
+    jira_id = models.CharField(max_length=32, unique=True)
+    name = models.CharField(max_length=255)
+    start_date = models.DateField(null=True, blank=True)
+    release_date = models.DateField(null=True, blank=True)
+    released = models.BooleanField(default=False)
+    # The project's own order of versions in Jira, which "the previous release" follows.
+    position = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["project_key", "position"]
+
+    def __str__(self) -> str:
+        return f"{self.project_key} {self.name}"
+
+
+class TrackerSprint(models.Model):
+    jira_id = models.PositiveIntegerField(unique=True)
+    name = models.CharField(max_length=255)
+    state = models.CharField(max_length=20)
+    starts = models.DateTimeField(null=True, blank=True)
+    ends = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class TrackerTask(models.Model):
+    """A copy of a task or subtask of a release, linked to a request or not (ADR 0026)."""
+
+    project_key = models.CharField(max_length=32)
+    key = models.CharField(max_length=32, unique=True)
+    summary = models.CharField(max_length=255)
+    issue_type = models.CharField(max_length=64)
+    parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.CASCADE, related_name="subtasks"
+    )
+    status = models.CharField(max_length=64)
+    status_category = models.CharField(max_length=20)
+    assignee_login = models.CharField(max_length=255, blank=True)
+    assignee_name = models.CharField(max_length=255, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    versions = models.ManyToManyField(TrackerVersion, blank=True, related_name="tasks")
+    sprints = models.ManyToManyField(TrackerSprint, blank=True, related_name="tasks")
+
+    class Meta:
+        ordering = ["key"]
+
+    def __str__(self) -> str:
+        return self.key

@@ -1,0 +1,10 @@
+{"startAt": 0, "maxResults": 50, "total": 2, "issues": [
+ {"id": "48201", "key": "FI-2241", "fields": {"summary": "[BE] Source filter in the leads API",
+   "issuetype": {"name": "Sub-task", "subtask": true}, "parent": {"id": "48160", "key": "FI-2214"},
+   "assignee": {"name": "olga.p", "displayName": "Olga Petrova"}, "resolutiondate": "2026-10-24T12:00:00.000+0300",
+   "status": {"name": "Done", "statusCategory": {"key": "done"}}, "fixVersions": [], "customfield_10004": null}},
+ {"id": "48204", "key": "FI-2244", "fields": {"summary": "Archived sources are still listed",
+   "issuetype": {"name": "Sub-bug", "subtask": true}, "parent": {"id": "48160", "key": "FI-2214"},
+   "assignee": {"name": "ivan.k", "displayName": "Ivan Kuznetsov"}, "resolutiondate": null,
+   "status": {"name": "In Progress", "statusCategory": {"key": "indeterminate"}}, "fixVersions": [], "customfield_10004": null}}
+]}

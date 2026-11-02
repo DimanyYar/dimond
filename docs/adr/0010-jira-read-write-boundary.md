@@ -21,7 +21,9 @@ and formatted by dimond itself, never as Jira's HTML (ADR 0025, Oct 27, 2026). A
 tag needs
 no service account; a mention would have pointed at Dmitry while the sync signs in as him, and
 every mention of him would have reached the client. dimond's own answers quote the question,
-so the tag inside a quote never counts. The answer goes as soon as the client sends it, without the
+so the tag inside a quote never counts. For the Releases page it also reads, never writes,
+each client's project versions and the tasks and subtasks of its releases (added Nov 2, 2026,
+ADR 0026). The answer goes as soon as the client sends it, without the
 PM (decided Oct 20, 2026); the client's words are escaped so they never mention anyone or
 open a new question. If Jira does not take it, nothing retries by itself: the PM sees why and
 sends it again. Descriptions are never synced

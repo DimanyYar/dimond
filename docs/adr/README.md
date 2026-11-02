@@ -27,3 +27,4 @@ Why the project is built the way it is. Read the record before changing what it 
 - [0023. Each person's own time zone, from the tzdata package](0023-time-zone-per-person.md)
 - [0024. Discord topics for the team through each client's webhook](0024-discord-topics-through-webhooks.md)
 - [0025. Jira formatting is read by dimond, never taken as HTML](0025-jira-formatting-read-by-dimond.md)
+- [0026. dimond keeps a copy of the release tasks of each client's project](0026-copy-of-release-tasks.md)

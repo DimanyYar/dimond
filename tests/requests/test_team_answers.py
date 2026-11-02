@@ -33,11 +33,12 @@ from apps.tracker.base import (
 from apps.tracker.connection import login_fingerprint
 from apps.tracker.models import TrackerKind, TrackerSettings
 from apps.tracker.services import sync_tasks
+from tests.tracker.fakes import NoReleases
 
 pytestmark = pytest.mark.django_db
 
 
-class FakeJira:
+class FakeJira(NoReleases):
     def __init__(self) -> None:
         self.status = "Code review"
         self.comments: list[Comment] = []

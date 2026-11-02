@@ -15,11 +15,12 @@ from apps.requests.selectors import PmReason, pm_reasons, request_page, requests
 from apps.tracker.base import Account, Issue, IssueNotFound, TrackerUnreachable
 from apps.tracker.models import SyncEvent, SyncOutcome, SyncRun
 from apps.tracker.services import sync_tasks
+from tests.tracker.fakes import NoReleases
 
 pytestmark = pytest.mark.django_db
 
 
-class FakeJira:
+class FakeJira(NoReleases):
     """Answers with the statuses a test sets; a key it does not know is a deleted task, and
     `moved` maps an old key to the task Jira answers with when asked for it by that key."""
 

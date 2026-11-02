@@ -6,7 +6,7 @@ mockups.
 
 import base64
 import time
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from itertools import count
 
 from .base import (
@@ -17,9 +17,12 @@ from .base import (
     Project,
     ProjectNotFound,
     Release,
+    ReleaseTask,
     Sprint,
     TaskFile,
+    TaskSprint,
     TrackerRefused,
+    Version,
 )
 from .jira_markup import to_text
 
@@ -126,6 +129,97 @@ SPRINTS = {
 CLOSING_SPRINT = 104
 
 
+# Atlas's releases as Jira FI keeps them (canvas 7, "What Jira FI really looks like"): open
+# versions have no date yet, 25.8.0 was never released, Hot Fix and Unreleased are buckets.
+VERSIONS = {
+    "FI": [
+        Version("20090", "25.1.0", None, date(2025, 3, 4), released=True, archived=True),
+        Version("20100", "25.8.0", None, None, released=False, archived=False),
+        Version("20110", "26.6.0", None, date(2026, 8, 26), released=True, archived=False),
+        Version("20120", "26.7.0", None, date(2026, 9, 30), released=True, archived=False),
+        Version("20130", "26.8.0", None, None, released=False, archived=False),
+        Version("20135", "26.8.5", None, None, released=False, archived=False),
+        Version("20140", "26.9.0", None, None, released=False, archived=False),
+        Version("20150", "Hot Fix", None, None, released=False, archived=False),
+        Version("20160", "Unreleased", None, None, released=False, archived=False),
+    ]
+}
+SPRINT_11 = TaskSprint(
+    100,
+    "Sprint 11",
+    "closed",
+    datetime(2026, 9, 29, tzinfo=UTC),
+    datetime(2026, 10, 20, tzinfo=UTC),
+)
+SPRINT_12 = TaskSprint(
+    101,
+    "Sprint 12",
+    "active",
+    datetime(2026, 10, 20, tzinfo=UTC),
+    datetime(2026, 11, 10, tzinfo=UTC),
+)
+OLGA, IVAN, ANNA = "Olga Petrova", "Ivan Kuznetsov", "Anna Sokolova"
+# Key, title, type, status, then the fix version's id for a task or the parent's key for a
+# subtask, and who it is assigned to. Stories stay unassigned in To Do while subtasks move.
+RELEASE_ROWS = [
+    ("FI-2214", "Filter the leads list by source", "Story", "To Do", "20130", ""),
+    ("FI-2241", "[BE] Source filter in the leads API", "Sub-task", "Done", "FI-2214", OLGA),
+    (
+        "FI-2242",
+        "[FE] Source dropdown on the leads list",
+        "Sub-task",
+        "Code review",
+        "FI-2214",
+        IVAN,
+    ),
+    ("FI-2243", "[QA] Test the source filter", "Sub-task", "To Do", "FI-2214", ANNA),
+    ("FI-2244", "Archived sources are still listed", "Sub-bug", "In Progress", "FI-2214", IVAN),
+    ("FI-2208", "Lead form: validate phone numbers", "Story", "To Do", "20130", ""),
+    ("FI-2245", "[BE] Phone number rules", "Sub-task", "Done", "FI-2208", OLGA),
+    ("FI-2246", "[FE] Phone field hints", "Sub-task", "In Progress", "FI-2208", IVAN),
+    ("FI-2231", "Web form: leads created twice on submit", "Bug", "To Do", "20130", OLGA),
+    ("FI-2197", "Export leads to CSV in the background", "Story", "To Do", "20140", ""),
+    ("FI-2248", "[BE] Background export job", "Sub-task", "To Do", "FI-2197", ""),
+    ("FI-2120", "Remove the old lead widget", "Task", "Done", "20100", IVAN),
+    ("FI-2150", "Leads list: sort by date", "Story", "Done", "20120", ""),
+    ("FI-2151", "[FE] Sort control", "Sub-task", "Done", "FI-2150", IVAN),
+    ("FI-2101", "Faster leads search", "Task", "Done", "20110", OLGA),
+    ("FI-2090", "Sign-in link expired too early", "Bug", "Done", "20150", OLGA),
+    ("FI-2060", "CSV export timed out", "Bug", "Done", "20150", IVAN),
+    ("FI-2010", "Lead scoring ideas", "Story", "To Do", "20160", ""),
+]
+RELEASE_SPRINTS = {"FI-2214": (SPRINT_12,), "FI-2208": (SPRINT_11, SPRINT_12)}
+# Hot Fix shows what was closed lately, so one demo fix stays recent whenever the demo runs.
+RESOLVED = {
+    "FI-2150": datetime(2026, 9, 29, tzinfo=UTC),
+    "FI-2090": datetime.now(UTC) - timedelta(days=3),
+    "FI-2060": datetime.now(UTC) - timedelta(days=45),
+}
+
+
+def _release_task(
+    key: str, summary: str, issue_type: str, status: str, version_or_parent: str, who: str
+) -> ReleaseTask:
+    parent = version_or_parent if "-" in version_or_parent else ""
+    return ReleaseTask(
+        key=key,
+        summary=summary,
+        issue_type=issue_type,
+        subtask=bool(parent),
+        parent_key=parent,
+        status=status,
+        status_category={"To Do": "new", "Done": "done"}.get(status, "indeterminate"),
+        assignee_login=who.split()[0].lower() if who else "",
+        assignee_name=who,
+        version_ids=() if parent else (version_or_parent,),
+        sprints=RELEASE_SPRINTS.get(key, ()),
+        resolved=RESOLVED.get(key),
+    )
+
+
+RELEASE_TASKS = [_release_task(*row) for row in RELEASE_ROWS]
+
+
 # New demo tasks are not stored, but their keys are saved on requests, which must stay unique
 # across restarts: numbering starts from the second the process started, so a restart begins
 # above every key the previous run gave out.
@@ -207,6 +301,26 @@ class MockTracker:
         """The demo keeps no comments: a known task is enough to say it went well."""
         self.issue(key)
         return str(next(_new_numbers))
+
+    def versions(self, project_key: str) -> list[Version]:
+        self._check_project(project_key)
+        return list(VERSIONS.get(project_key, []))
+
+    def release_tasks(
+        self, project_key: str, version_ids: list[str], recent_ids: list[str], closed_since: date
+    ) -> list[ReleaseTask]:
+        self._check_project(project_key)
+
+        def wanted(task: ReleaseTask) -> bool:
+            if task.subtask or not task.key.startswith(f"{project_key}-"):
+                return False
+            if set(task.version_ids) & set(version_ids):
+                return True
+            recent = task.resolved is not None and task.resolved.date() >= closed_since
+            return recent and bool(set(task.version_ids) & set(recent_ids))
+
+        parents = {task.key for task in RELEASE_TASKS if wanted(task)}
+        return [t for t in RELEASE_TASKS if t.key in parents or t.parent_key in parents]
 
     def file_content(self, file: TaskFile) -> bytes:
         if file.id not in FILES:

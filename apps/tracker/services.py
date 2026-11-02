@@ -1,8 +1,9 @@
 """The Jira sync: every linked task's status comes back to its request (PRD: Jira sync;
 ADR 0010, 0019)."""
 
+import logging
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -11,7 +12,7 @@ from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 
-from apps.accounts.models import User
+from apps.accounts.models import Company, User
 from apps.accounts.selectors import has_clients_page
 from apps.files.uploads import MAX_VIDEO_SIZE, CheckedFile, check_upload
 from apps.notifications.selectors import update_recipients
@@ -34,6 +35,7 @@ from .base import (
     Comment,
     Issue,
     IssueNotFound,
+    ReleaseTask,
     Tracker,
     TrackerCaptcha,
     TrackerError,
@@ -41,9 +43,21 @@ from .base import (
     TrackerRefused,
     TrackerSignInFailed,
     TrackerUnreachable,
+    Version,
 )
 from .connection import current_tracker, login_fingerprint
-from .models import SyncEvent, SyncOutcome, SyncRun, TrackerKind, TrackerSettings
+from .models import (
+    SyncEvent,
+    SyncOutcome,
+    SyncRun,
+    TrackerKind,
+    TrackerSettings,
+    TrackerSprint,
+    TrackerTask,
+    TrackerVersion,
+)
+
+logger = logging.getLogger(__name__)
 
 # How often the worker looks for a queued run (Sync now, a webhook) between its regular runs.
 QUEUE_CHECK_SECONDS = 3
@@ -64,6 +78,13 @@ KEEP_QUIET_RUNS = timedelta(days=7)
 KEEP_RUNS = timedelta(days=365)
 # The start of a team question quoted in the log; the thread has the rest.
 QUOTE_LENGTH = 120
+# Hot Fix and Unreleased are buckets, not releases (D-004 in the project notes): Hot Fix shows
+# only what was closed lately; Unreleased is hidden, so its tasks are not read at all.
+RECENT_BUCKET = "Hot Fix"
+HIDDEN_BUCKET = "Unreleased"
+RECENT_BUCKET_DAYS = 30
+# Released versions read with their tasks, newest first: older ones are history.
+RELEASED_READ = 2
 # A Jira task key as Jira writes it: project key, dash, number (FI-2214).
 TASK_KEY = re.compile(r"[A-Z][A-Z0-9_]*-[1-9][0-9]*")
 
@@ -212,6 +233,7 @@ def sync_tasks(queued: SyncRun | None = None) -> SyncRun:
         issues = tracker.issues([request.jira_key for request in linked])
         by_key = {issue.key: issue for issue in issues}
         changed = [r for r in linked if _sync_one(run, tracker, r, by_key.get(r.jira_key))]
+        run.releases_copied, run.releases_error = copy_releases(tracker)
     except TrackerSignInFailed as error:
         _pause(str(error), captcha=isinstance(error, TrackerCaptcha))
         return _finish(run, SyncOutcome.FAILED, error=str(error))
@@ -255,6 +277,142 @@ def _sync_one(run: SyncRun, tracker: Tracker, request: Request, issue: Issue | N
     # release date may well reach dimond without a webhook, so they never count as missed.
     status_moved = followed is not None and followed.jira_from not in ("", followed.jira_to)
     return not moved and (status_moved or asked)
+
+
+def copy_releases(tracker: Tracker) -> tuple[int, str]:
+    """Copies the releases of every client's Jira project for the Releases page (#30; ADR
+    0026): versions, their tasks and subtasks, linked to requests or not. Only reads Jira. A
+    project Jira does not answer for keeps its previous copy; the others go on. Returns how
+    many tasks were copied and what failed."""
+    projects = set(Company.objects.exclude(jira_project="").values_list("jira_project", flat=True))
+    copied, failures = 0, []
+    for project_key in sorted(projects):
+        try:
+            copied += _copy_project(tracker, project_key)
+        except TrackerSignInFailed:
+            raise
+        except TrackerError as error:
+            failures.append(f"{project_key}: {error}")
+            logger.warning("Releases of %s not copied: %s", project_key, error)
+    # A project no client uses any more.
+    TrackerTask.objects.exclude(project_key__in=projects).delete()
+    TrackerVersion.objects.exclude(project_key__in=projects).delete()
+    TrackerSprint.objects.filter(tasks__isnull=True).delete()
+    return copied, " ".join(failures)
+
+
+def _copy_project(tracker: Tracker, project_key: str) -> int:
+    """Jira is read whole first, so a failure halfway leaves the previous copy as it was."""
+    versions = [v for v in tracker.versions(project_key) if not v.archived]
+    released = sorted(
+        (v for v in versions if v.released and v.release_date),
+        key=lambda v: v.release_date or date.min,
+        reverse=True,
+    )
+    tasks = tracker.release_tasks(
+        project_key,
+        [v.id for v in versions if not v.released and v.name not in (RECENT_BUCKET, HIDDEN_BUCKET)]
+        + [v.id for v in released[:RELEASED_READ]],
+        [v.id for v in versions if v.name == RECENT_BUCKET],
+        timezone.localdate() - timedelta(days=RECENT_BUCKET_DAYS),
+    )
+    _save_copy(project_key, versions, tasks)
+    return len(tasks)
+
+
+@transaction.atomic
+def _save_copy(project_key: str, versions: list[Version], tasks: list[ReleaseTask]) -> None:
+    """Rows are updated in place, never dropped and made again, so anything dimond later keeps
+    about a release or a task stays attached to it."""
+    TrackerVersion.objects.bulk_create(
+        [
+            TrackerVersion(
+                project_key=project_key,
+                jira_id=v.id,
+                name=v.name,
+                start_date=v.start_date,
+                release_date=v.release_date,
+                released=v.released,
+                position=position,
+            )
+            for position, v in enumerate(versions)
+        ],
+        update_conflicts=True,
+        unique_fields=["jira_id"],
+        update_fields=_copied_fields(TrackerVersion, "jira_id"),
+    )
+    TrackerVersion.objects.filter(project_key=project_key).exclude(
+        jira_id__in=[v.id for v in versions]
+    ).delete()
+    sprints = {sprint.id: sprint for task in tasks for sprint in task.sprints}
+    TrackerSprint.objects.bulk_create(
+        [
+            TrackerSprint(jira_id=s.id, name=s.name, state=s.state, starts=s.starts, ends=s.ends)
+            for s in sprints.values()
+        ],
+        update_conflicts=True,
+        unique_fields=["jira_id"],
+        update_fields=["name", "state", "starts", "ends"],
+    )
+    TrackerTask.objects.bulk_create(
+        [
+            TrackerTask(
+                project_key=project_key,
+                key=t.key,
+                summary=t.summary,
+                issue_type=t.issue_type,
+                status=t.status,
+                status_category=t.status_category,
+                assignee_login=t.assignee_login,
+                assignee_name=t.assignee_name,
+                resolved_at=t.resolved,
+            )
+            for t in tasks
+        ],
+        update_conflicts=True,
+        unique_fields=["key"],
+        update_fields=_copied_fields(TrackerTask, "key"),
+    )
+    TrackerTask.objects.filter(project_key=project_key).exclude(
+        key__in=[t.key for t in tasks]
+    ).delete()
+    _link_copy(project_key, tasks, list(sprints))
+
+
+def _copied_fields(model: type[TrackerTask | TrackerVersion], key: str) -> list[str]:
+    """Every column Jira fills, for rows already there; the parent is linked afterwards."""
+    return [f.name for f in model._meta.concrete_fields if f.name not in ("id", key, "parent")]
+
+
+def _link_copy(project_key: str, tasks: list[ReleaseTask], sprint_ids: list[int]) -> None:
+    task_pk = dict(TrackerTask.objects.filter(project_key=project_key).values_list("key", "pk"))
+    version_pk = dict(
+        TrackerVersion.objects.filter(project_key=project_key).values_list("jira_id", "pk")
+    )
+    sprint_pk = dict(
+        TrackerSprint.objects.filter(jira_id__in=sprint_ids).values_list("jira_id", "pk")
+    )
+    # A subtask whose parent is in no release read stands on its own.
+    TrackerTask.objects.bulk_update(
+        [TrackerTask(pk=task_pk[t.key], parent_id=task_pk.get(t.parent_key)) for t in tasks],
+        ["parent"],
+    )
+    in_version = TrackerTask.versions.through
+    in_version.objects.filter(trackertask__project_key=project_key).delete()
+    in_version.objects.bulk_create(
+        in_version(trackertask_id=task_pk[t.key], trackerversion_id=version_pk[v])
+        for t in tasks
+        for v in t.version_ids
+        # An archived version is not copied.
+        if v in version_pk
+    )
+    in_sprint = TrackerTask.sprints.through
+    in_sprint.objects.filter(trackertask__project_key=project_key).delete()
+    in_sprint.objects.bulk_create(
+        in_sprint(trackertask_id=task_pk[t.key], trackersprint_id=sprint_pk[s.id])
+        for t in tasks
+        for s in t.sprints
+    )
 
 
 def _webhooks_trusted(run: SyncRun) -> bool:
@@ -479,7 +637,17 @@ def _finish(
 ) -> SyncRun:
     run.outcome, run.checked, run.error, run.jira_silent = outcome, checked, error, jira_silent
     run.finished_at = timezone.now()
-    run.save(update_fields=["outcome", "checked", "error", "jira_silent", "finished_at"])
+    run.save(
+        update_fields=[
+            "outcome",
+            "checked",
+            "error",
+            "jira_silent",
+            "finished_at",
+            "releases_copied",
+            "releases_error",
+        ]
+    )
     _forget_old_runs(run.finished_at)
     return run
 

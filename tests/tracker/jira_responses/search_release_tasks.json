@@ -1,0 +1,14 @@
+{"startAt": 0, "maxResults": 50, "total": 2, "issues": [
+ {"id": "48160", "key": "FI-2214", "fields": {"summary": "Filter the leads list by source",
+   "issuetype": {"name": "Story", "subtask": false}, "assignee": null, "resolutiondate": null,
+   "status": {"name": "To Do", "statusCategory": {"key": "new"}},
+   "fixVersions": [{"id": "20130", "name": "26.8.0", "archived": false, "released": false}],
+   "customfield_10004": ["com.atlassian.greenhopper.service.sprint.Sprint@1f2e3d[id=412,rapidViewId=88,state=CLOSED,name=FI 11, leads,startDate=2026-09-29T10:00:00.000+03:00,endDate=2026-10-20T10:00:00.000+03:00,completeDate=2026-10-20T11:02:00.000+03:00,sequence=412,goal=]",
+                         "com.atlassian.greenhopper.service.sprint.Sprint@4a5b6c[id=418,rapidViewId=88,state=ACTIVE,name=FI 12,startDate=2026-10-20T10:00:00.000+03:00,endDate=2026-11-10T10:00:00.000+03:00,completeDate=<null>,sequence=418,goal=]"]}},
+ {"id": "48170", "key": "FI-2090", "fields": {"summary": "Sign-in link expired too early",
+   "issuetype": {"name": "Bug", "subtask": false}, "assignee": {"name": "olga.p", "displayName": "Olga Petrova"},
+   "resolutiondate": "2026-10-30T16:20:00.000+0300",
+   "status": {"name": "Done", "statusCategory": {"key": "done"}},
+   "fixVersions": [{"id": "20150", "name": "Hot Fix", "archived": false, "released": false}],
+   "customfield_10004": null}}
+]}
