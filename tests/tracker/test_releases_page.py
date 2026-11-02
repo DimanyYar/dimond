@@ -220,3 +220,10 @@ def test_a_client_without_a_copy_yet_waits_for_the_next_sync(client, pm):
     Company.objects.create(name="Atlas", owner=pm, jira_project="FI")
 
     assert "No releases yet" in open_page(client, pm)
+
+
+@pytest.mark.parametrize("value", ["²", "9" * 30, "abc"])
+def test_a_wrong_client_or_release_in_the_address_opens_the_default_one(client, pm, atlas, value):
+    page = open_page(client, pm, f"?client={value}&release={value}")
+
+    assert "Atlas · Jira project FI" in page

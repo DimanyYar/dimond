@@ -6574,7 +6574,7 @@ details[open] .run-chevron {
 .releases-clients .chip[aria-current="true"] {
   background: var(--ink);
   border-color: var(--ink);
-  color: #ffffff;
+  color: var(--surface);
 }
 
 .releases-body {

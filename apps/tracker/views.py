@@ -39,8 +39,16 @@ def logs(request: HttpRequest) -> HttpResponse:
     )
 
 
+# A longer number would not fit the database's id column, and the query would fail.
+ID_DIGITS = 18
+
+
 def _number(value: str | None) -> int | None:
-    return int(value) if value and value.isdigit() else None
+    """An id from the address, or None for anything else. isdigit() alone lets "²" through,
+    which int() then refuses."""
+    if value and len(value) <= ID_DIGITS and value.isascii() and value.isdecimal():
+        return int(value)
+    return None
 
 
 @require_GET
