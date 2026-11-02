@@ -177,7 +177,7 @@ def test_a_story_without_subtasks_is_a_warning(pm, atlas):
     )
 
 
-def test_an_open_release_older_than_a_released_one_looks_forgotten(pm, atlas):
+def test_an_open_release_with_a_lower_number_than_a_released_one_looks_forgotten(pm, atlas):
     selected = release(pm, "25.8.0")
 
     assert selected.health == "Stale"
@@ -227,3 +227,10 @@ def test_a_wrong_client_or_release_in_the_address_opens_the_default_one(client, 
     page = open_page(client, pm, f"?client={value}&release={value}")
 
     assert "Atlas · Jira project FI" in page
+
+
+def test_a_hotfix_release_added_later_in_jira_does_not_make_the_next_release_stale(pm, atlas):
+    # In FI 26.7.5 is added after 26.8.0 in Jira's list and released first.
+    TrackerVersion.objects.filter(name="26.7.0").update(position=99)
+
+    assert release(pm, "26.8.0").health == "No date"

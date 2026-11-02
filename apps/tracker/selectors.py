@@ -302,6 +302,7 @@ def _paused_reason(row: TrackerSettings) -> str:
 SUB_BUG = "Sub-bug"
 TRACKS = ("FE", "BE", "QA", "Other", "QA bug")
 TRACK_PREFIX = re.compile(r"^\[(FE|BE|QA)\]", re.IGNORECASE)
+VERSION_NUMBER = re.compile(r"[0-9]+(\.[0-9]+)*")
 
 
 class ReleaseGroup(StrEnum):
@@ -527,14 +528,26 @@ def _start(version: TrackerVersion, previous: TrackerVersion | None) -> tuple[da
     return None, previous.name
 
 
+def _version_number(version: TrackerVersion) -> tuple[int, ...] | None:
+    """A version name such as 26.7.5 as numbers to compare; None for a name like "Q3 web"."""
+    if not VERSION_NUMBER.fullmatch(version.name):
+        return None
+    return tuple(int(part) for part in version.name.split("."))
+
+
 def _is_stale(version: TrackerVersion, versions: list[TrackerVersion]) -> bool:
-    """A release that looks forgotten: never marked released, though a later one already is,
-    or its release date has passed."""
-    later_released = any(
-        _group(v) == ReleaseGroup.RELEASED and v.position > version.position for v in versions
+    """A release that looks forgotten: never marked released, though one with a higher number
+    already is, or its release date has passed. Numbers, not Jira's order: in FI hotfix
+    releases such as 26.7.5 are added after 26.8.0, and that one is not forgotten."""
+    number = _version_number(version)
+    passed = number is not None and any(
+        _group(v) == ReleaseGroup.RELEASED
+        and (other := _version_number(v)) is not None
+        and other > number
+        for v in versions
     )
     overdue = bool(version.release_date and version.release_date < timezone.localdate())
-    return later_released or overdue
+    return passed or overdue
 
 
 def _is_hidden(version: TrackerVersion) -> bool:
