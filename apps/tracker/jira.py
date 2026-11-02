@@ -8,6 +8,7 @@ its own base URL as http, and a redirect would send the password to wherever it 
 import re
 from collections.abc import Callable
 from datetime import date, datetime
+from functools import cached_property
 from typing import Any
 from urllib.parse import quote
 
@@ -23,8 +24,10 @@ from .base import (
     Project,
     ProjectNotFound,
     Release,
+    ReleaseTask,
     Sprint,
     TaskFile,
+    TaskSprint,
     TrackerCaptcha,
     TrackerError,
     TrackerForbidden,
@@ -32,6 +35,7 @@ from .base import (
     TrackerRefused,
     TrackerSignInFailed,
     TrackerUnreachable,
+    Version,
     tags_the_client,
 )
 from .jira_markup import QUOTED, files_shown, to_text
@@ -52,6 +56,14 @@ TEXT_SEARCH_OPERATORS = re.compile(r"[^\w\s]")
 EPIC_NAME_TYPE = "com.pyxis.greenhopper.jira:gh-epic-label"
 # Boards and sprints belong to Jira Software and live outside REST API v2.
 AGILE_PATH = "rest/agile/1.0"
+# The Sprint field, like the epic's name, has a different number in every Jira
+# (customfield_10004 on j.shakuro.com).
+SPRINT_TYPE = "com.atlassian.greenhopper.service.sprint.Sprint"
+SPRINT_FIELD_TYPE = "com.pyxis.greenhopper.jira:gh-sprint"
+RELEASE_FIELDS = "summary,status,issuetype,parent,assignee,fixVersions,resolutiondate"
+# Jira 8.13 gives a task's sprints as text: "…Sprint@1f2e[id=412,state=ACTIVE,name=FI 12,…]".
+SPRINT_TEXT = re.compile(r"\[(.*)\]$")
+SPRINT_PART = re.compile(r",(?=\w+=)")
 
 
 class JiraTracker:
@@ -134,7 +146,11 @@ class JiraTracker:
         checked = [key for key in keys if ISSUE_KEY.fullmatch(key)]
         found: list[Issue] = []
         for start in range(0, len(checked), LINKED_BATCH):
-            found += self._all_pages(f"key in ({','.join(checked[start : start + LINKED_BATCH])})")
+            found += self._all_pages(
+                f"key in ({','.join(checked[start : start + LINKED_BATCH])})",
+                ISSUE_FIELDS,
+                self._issue,
+            )
         return found
 
     def create_issue(
@@ -221,6 +237,53 @@ class JiraTracker:
             missing=IssueNotFound(key),
         )
 
+    def versions(self, project_key: str) -> list[Version]:
+        return self._call(
+            f"project/{self._checked_project(project_key)}/versions",
+            lambda data: [_version(item) for item in data],
+            missing=ProjectNotFound(project_key),
+        )
+
+    def release_tasks(
+        self, project_key: str, version_ids: list[str], recent_ids: list[str], closed_since: date
+    ) -> list[ReleaseTask]:
+        project_key = self._checked_project(project_key)
+        wanted = []
+        if version_ids:
+            wanted.append(f"fixVersion in ({_ids(version_ids)})")
+        if recent_ids:
+            wanted.append(
+                f'(fixVersion in ({_ids(recent_ids)}) AND resolved >= "{closed_since:%Y-%m-%d}")'
+            )
+        if not wanted:
+            return []
+        sprint_field = self._sprint_field()
+        fields = f"{RELEASE_FIELDS},{sprint_field}" if sprint_field else RELEASE_FIELDS
+
+        def parse(item: Any) -> ReleaseTask:
+            return _release_task(item, sprint_field)
+
+        found = {
+            task.key: task
+            for task in self._all_pages(
+                f'project = "{project_key}" AND ({" OR ".join(wanted)}) ORDER BY key',
+                fields,
+                parse,
+            )
+        }
+        # Subtasks carry no fix version in FI, so they come by their parents' keys.
+        parents = [key for key, task in found.items() if not task.subtask]
+        for start in range(0, len(parents), LINKED_BATCH):
+            batch = ",".join(parents[start : start + LINKED_BATCH])
+            for task in self._all_pages(f"parent in ({batch}) ORDER BY key", fields, parse):
+                found.setdefault(task.key, task)
+        return list(found.values())
+
+    def _sprint_field(self) -> str:
+        """Empty without Jira Software: then tasks come without sprints."""
+        found = self._custom_field_ids(SPRINT_FIELD_TYPE)
+        return found[0] if found else ""
+
     def file_content(self, file: TaskFile) -> bytes:
         try:
             response = self._client.get(
@@ -232,12 +295,21 @@ class JiraTracker:
         return response.content
 
     def _epic_name_fields(self) -> list[str]:
+        return self._custom_field_ids(EPIC_NAME_TYPE)
+
+    def _custom_field_ids(self, custom_type: str) -> list[str]:
+        return [field_id for kind, field_id in self._custom_fields if kind == custom_type]
+
+    @cached_property
+    def _custom_fields(self) -> list[tuple[str, str]]:
+        """(type, id) of each custom field. Asked once per tracker: a tracker lives for one
+        sync run or one request, and one sync run reads many projects."""
         return self._call(
             "field",
             lambda data: [
-                item["id"]
+                (item["schema"]["custom"], str(item["id"]))
                 for item in data
-                if item.get("schema", {}).get("custom") == EPIC_NAME_TYPE
+                if "custom" in item.get("schema", {})
             ],
         )
 
@@ -269,17 +341,17 @@ class JiraTracker:
             return []
         return [found] if found.project_key == project_key and not found.done else []
 
-    def _all_pages(self, jql: str) -> list[Issue]:
+    def _all_pages[T](self, jql: str, fields: str, parse: Callable[[Any], T]) -> list[T]:
         """A Jira admin can cap search pages below what we ask for, so pages are read until
         Jira has given every task it counted."""
-        found: list[Issue] = []
+        found: list[T] = []
         while True:
             total, page = self._call(
                 "search",
-                lambda data: (int(data["total"]), [self._issue(item) for item in data["issues"]]),
+                lambda data: (int(data["total"]), [parse(item) for item in data["issues"]]),
                 {
                     "jql": jql,
-                    "fields": ISSUE_FIELDS,
+                    "fields": fields,
                     "startAt": len(found),
                     "maxResults": LINKED_BATCH,
                     # With validation on, one deleted task's key makes Jira refuse the whole
@@ -420,6 +492,66 @@ class JiraTracker:
             raise TrackerRefused("Jira said the file is larger than its attachment limit.")
         if response.is_error:
             raise TrackerUnreachable(f"Jira answered {response.status_code} to {path}.")
+
+
+def _ids(version_ids: list[str]) -> str:
+    """Version ids go into JQL as numbers; anything else never reaches the query."""
+    return ",".join(i for i in version_ids if i.isascii() and i.isdecimal())
+
+
+def _day(value: str | None) -> date | None:
+    return date.fromisoformat(value) if value else None
+
+
+def _moment(value: str | None) -> datetime | None:
+    return datetime.fromisoformat(value) if value and value != "<null>" else None
+
+
+def _version(item: Any) -> Version:
+    return Version(
+        id=str(item["id"]),
+        name=item["name"],
+        start_date=_day(item.get("startDate")),
+        release_date=_day(item.get("releaseDate")),
+        released=bool(item["released"]),
+        archived=bool(item["archived"]),
+    )
+
+
+def _sprint(text: str) -> TaskSprint:
+    """One value of the Sprint field. Split only before "word=", so a comma inside a sprint's
+    name stays in the name."""
+    inside = SPRINT_TEXT.search(text)
+    if not text.startswith(SPRINT_TYPE) or inside is None:
+        raise KeyError(f"sprint {text[:60]!r}")
+    parts = dict(part.split("=", 1) for part in SPRINT_PART.split(inside.group(1)))
+    return TaskSprint(
+        id=int(parts["id"]),
+        name=parts["name"],
+        state=parts["state"].lower(),
+        starts=_moment(parts.get("startDate")),
+        ends=_moment(parts.get("endDate")),
+    )
+
+
+def _release_task(item: Any, sprint_field: str) -> ReleaseTask:
+    fields = item["fields"]
+    status = fields["status"]
+    assignee = fields.get("assignee") or {}
+    return ReleaseTask(
+        key=item["key"],
+        summary=fields["summary"],
+        issue_type=fields["issuetype"]["name"],
+        subtask=bool(fields["issuetype"]["subtask"]),
+        parent_key=(fields.get("parent") or {}).get("key", ""),
+        status=status["name"],
+        status_category=status["statusCategory"]["key"],
+        assignee_login=assignee.get("name", ""),
+        assignee_name=assignee.get("displayName", ""),
+        version_ids=tuple(str(v["id"]) for v in fields.get("fixVersions", [])),
+        sprints=tuple(_sprint(text) for text in (fields.get(sprint_field) or [])),
+        resolved=_moment(fields.get("resolutiondate")),
+    )
 
 
 def _jira_complaints(response: httpx.Response) -> str:

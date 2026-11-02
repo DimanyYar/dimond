@@ -101,6 +101,53 @@ class Issue:
     comments: tuple[Comment, ...] = ()
 
 
+@dataclass(frozen=True)
+class Version:
+    """A fix version of a project, with or without a date: the Releases page lists them all
+    (#30). Jira's own id stays the same when the version is renamed."""
+
+    id: str
+    name: str
+    start_date: date | None
+    release_date: date | None
+    released: bool
+    archived: bool
+
+
+@dataclass(frozen=True)
+class TaskSprint:
+    """A sprint a task is or was in, as the task itself says."""
+
+    id: int
+    name: str
+    # active, future or closed.
+    state: str
+    starts: datetime | None
+    ends: datetime | None
+
+
+@dataclass(frozen=True)
+class ReleaseTask:
+    """A task or subtask of a release, for the Releases page (#30). In FI a story stays in To Do
+    while its [FE]/[BE]/[QA] subtasks move, and only the parent has a fix version."""
+
+    key: str
+    summary: str
+    issue_type: str
+    subtask: bool
+    # The parent's key for a subtask, else empty.
+    parent_key: str
+    status: str
+    # new, indeterminate or done: what the status means, whatever the project calls it.
+    status_category: str
+    assignee_login: str
+    assignee_name: str
+    # Ids of its fix versions; a subtask usually has none.
+    version_ids: tuple[str, ...]
+    sprints: tuple[TaskSprint, ...]
+    resolved: datetime | None
+
+
 class TrackerError(Exception):
     """A problem the PM can read and act on; the message says what happened in plain words."""
 
@@ -178,6 +225,17 @@ class Tracker(Protocol):
 
     def add_comment(self, key: str, body: str) -> str:
         """Adds a comment in the tracker's markup and returns its id."""
+        ...
+
+    def versions(self, project_key: str) -> list[Version]:
+        """Every fix version of the project, archived ones too, in the project's own order."""
+        ...
+
+    def release_tasks(
+        self, project_key: str, version_ids: list[str], recent_ids: list[str], closed_since: date
+    ) -> list[ReleaseTask]:
+        """Tasks with a fix version in `version_ids`, those in `recent_ids` closed on or after
+        `closed_since` (the Hot Fix bucket), and the subtasks of both. Each task once."""
         ...
 
     def file_content(self, file: TaskFile) -> bytes:

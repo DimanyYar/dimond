@@ -16,13 +16,14 @@ from apps.tracker.base import Comment, Issue, TrackerUnreachable
 from apps.tracker.connection import login_fingerprint
 from apps.tracker.models import SyncEvent, SyncOutcome, SyncRun, TrackerKind, TrackerSettings
 from apps.tracker.services import ask_for_sync, sync_tasks
+from tests.tracker.fakes import NoReleases
 
 pytestmark = pytest.mark.django_db
 
 TOKEN = "s3cret-token-from-env"
 
 
-class FakeJira:
+class FakeJira(NoReleases):
     def __init__(self) -> None:
         self.statuses: dict[str, str] = {}
         self.comments: dict[str, tuple[Comment, ...]] = {}

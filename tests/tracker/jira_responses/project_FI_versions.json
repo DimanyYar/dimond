@@ -1,0 +1,9 @@
+[
+ {"self": "https://j.shakuro.com/rest/api/2/version/20090", "id": "20090", "name": "25.1.0", "archived": true, "released": true, "releaseDate": "2025-03-04", "projectId": 10512},
+ {"self": "https://j.shakuro.com/rest/api/2/version/20110", "id": "20110", "name": "26.6.0", "archived": false, "released": true, "releaseDate": "2026-08-26", "projectId": 10512},
+ {"self": "https://j.shakuro.com/rest/api/2/version/20120", "id": "20120", "name": "26.7.0", "archived": false, "released": true, "startDate": "2026-08-27", "releaseDate": "2026-09-30", "projectId": 10512},
+ {"self": "https://j.shakuro.com/rest/api/2/version/20105", "id": "20105", "name": "26.5.0", "archived": false, "released": true, "releaseDate": "2026-07-29", "projectId": 10512},
+ {"self": "https://j.shakuro.com/rest/api/2/version/20130", "id": "20130", "name": "26.8.0", "archived": false, "released": false, "projectId": 10512},
+ {"self": "https://j.shakuro.com/rest/api/2/version/20150", "id": "20150", "name": "Hot Fix", "archived": false, "released": false, "projectId": 10512},
+ {"self": "https://j.shakuro.com/rest/api/2/version/20160", "id": "20160", "name": "Unreleased", "archived": false, "released": false, "projectId": 10512}
+]

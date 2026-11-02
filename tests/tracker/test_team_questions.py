@@ -32,6 +32,7 @@ from apps.tracker.base import (
 from apps.tracker.mock import DEMO_PICTURE
 from apps.tracker.models import SyncOutcome
 from apps.tracker.services import sync_tasks
+from tests.tracker.fakes import NoReleases
 
 pytestmark = pytest.mark.django_db
 
@@ -59,7 +60,7 @@ def comment(
     )
 
 
-class FakeJira:
+class FakeJira(NoReleases):
     """Answers with the task's status and comments a test sets, and with the files' bytes."""
 
     def __init__(self) -> None:

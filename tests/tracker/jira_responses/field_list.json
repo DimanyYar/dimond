@@ -1,0 +1,5 @@
+[
+ {"id": "summary", "name": "Summary", "custom": false, "schema": {"type": "string", "system": "summary"}},
+ {"id": "customfield_10002", "name": "Epic Name", "custom": true, "schema": {"type": "string", "custom": "com.pyxis.greenhopper.jira:gh-epic-label", "customId": 10002}},
+ {"id": "customfield_10004", "name": "Sprint", "custom": true, "schema": {"type": "array", "items": "string", "custom": "com.pyxis.greenhopper.jira:gh-sprint", "customId": 10004}}
+]
