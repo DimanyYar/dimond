@@ -181,3 +181,17 @@ class TrackerTask(models.Model):
 
     def __str__(self) -> str:
         return self.key
+
+
+class ReleaseVisibility(models.Model):
+    """The PM hid a release from the Releases list, or showed one hidden by default (D-006 in
+    the project notes). Only dimond's list changes: Jira and clients see nothing. A release
+    without a row follows the default, where only the Unreleased bucket is hidden."""
+
+    version = models.OneToOneField(
+        TrackerVersion, on_delete=models.CASCADE, related_name="visibility"
+    )
+    hidden = models.BooleanField()
+
+    def __str__(self) -> str:
+        return f"{self.version}: {'hidden' if self.hidden else 'shown'}"

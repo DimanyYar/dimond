@@ -1,0 +1,123 @@
+{% extends "layouts/pm.html" %}
+{% comment %}
+Releases (canvas 7 · PMReleaseView), part 1: the client's releases on the left, the chosen
+one's dates, health, numbers, subtasks by track and warnings on the right. The task table
+comes in 30c. Hiding changes only this list (D-006): Jira and clients see nothing.
+{% endcomment %}
+{% block title %}Releases · dimon.d{% endblock %}
+
+{% block content %}
+<div class="releases">
+  <header class="releases-header">
+    <div>
+      {% if page.client %}<p class="muted">{{ page.client }} · Jira project {{ page.client.jira_project }}</p>{% endif %}
+      <h1>Releases</h1>
+    </div>
+    {% if page.clients|length > 1 %}
+      <nav class="releases-clients" aria-label="Client">
+        {% for client in page.clients %}
+          <a class="chip" href="?client={{ client.pk }}"{% if client == page.client %} aria-current="true"{% endif %}>{{ client }}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
+  </header>
+
+  {% if not page.client %}
+    <section class="card empty-state">
+      <h2>No client has a Jira project yet</h2>
+      <p class="muted">Add the Jira project key on the client’s page, and its releases show up here after the next sync.</p>
+    </section>
+  {% elif not page.releases %}
+    <section class="card empty-state">
+      <h2>No releases yet</h2>
+      <p class="muted">dimond copies {{ page.client }}’s releases from Jira on every sync. They show up here after the next one.</p>
+    </section>
+  {% else %}
+    <div class="releases-body">
+      <nav class="release-list" aria-label="Releases of {{ page.client }}">
+        {% for release in page.shown %}
+          {% ifchanged release.group %}<h2 class="release-group">{{ release.group }}</h2>{% endifchanged %}
+          <a class="release-item" href="?client={{ page.client.pk }}&amp;release={{ release.version.pk }}"{% if release == page.selected %} aria-current="page"{% endif %}>
+            <span class="release-item-head">
+              <strong>{{ release.version.name }}</strong>
+              {% if release.version.release_date %}<span class="muted">{{ release.version.release_date|date:"M j" }}</span>{% endif %}
+              {% if release.health %}<span class="health health-{{ release.health|slugify }}">{{ release.health }}</span>{% endif %}
+            </span>
+            {% if release.tasks %}<span class="release-bar" aria-hidden="true"><span style="width: {{ release.done_pct }}%"></span></span>{% endif %}
+            <span class="muted release-item-meta">{% if not release.tasks_read %}Tasks not read{% elif release.tasks %}{{ release.tasks|length }} task{{ release.tasks|length|pluralize }} · {{ release.done }} done{% else %}No tasks yet{% endif %}</span>
+          </a>
+        {% endfor %}
+        {% if page.hidden %}
+          <details class="release-hidden">
+            <summary>Hidden ({{ page.hidden|length }})</summary>
+            {% for release in page.hidden %}
+              <form class="release-hidden-item" method="post" action="{% url 'release_visibility' release.version.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="client" value="{{ page.client.pk }}">
+                <input type="hidden" name="hidden" value="0">
+                <span><strong>{{ release.version.name }}</strong> <span class="muted">{{ release.group }}</span></span>
+                <button class="btn btn-small" type="submit">Show</button>
+              </form>
+            {% endfor %}
+            <p class="muted release-hidden-note">Hidden only in this list. Jira and clients see no change.</p>
+          </details>
+        {% endif %}
+      </nav>
+
+      {% with release=page.selected %}
+      {% if release %}
+      <section class="card release" aria-labelledby="release-name">
+        <div class="release-head">
+          <h2 id="release-name">{{ release.version.name }}</h2>
+          {% if release.health %}<span class="health health-{{ release.health|slugify }}">{{ release.health }}</span>{% endif %}
+          <span class="release-actions">
+            {% if release.jira_url %}<a class="btn btn-small" href="{{ release.jira_url }}" target="_blank" rel="noopener">Open in Jira</a>{% endif %}
+            {% if not release.hidden %}
+              <form method="post" action="{% url 'release_visibility' release.version.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="client" value="{{ page.client.pk }}">
+                <input type="hidden" name="hidden" value="1">
+                <button class="btn btn-small" type="submit" title="Hide this release from the list">Hide</button>
+              </form>
+            {% endif %}
+          </span>
+        </div>
+        <p class="muted">{{ release.date_line }}</p>
+
+        {% if release.warnings %}
+          <ul class="release-warnings" role="note">
+            {% for warning in release.warnings %}<li>{{ warning }}</li>{% endfor %}
+          </ul>
+        {% endif %}
+
+        {% if release.tasks %}
+          <dl class="release-stats">
+            <div><dt>Tasks</dt><dd>{{ release.tasks|length }}</dd></div>
+            <div><dt>Done</dt><dd>{{ release.done }}</dd></div>
+            <div><dt>In progress</dt><dd>{{ release.in_progress }}</dd></div>
+            <div><dt>Client requests</dt><dd>{{ release.client_requests }}</dd></div>
+          </dl>
+        {% endif %}
+
+        {% if release.tracks %}
+          <section class="release-tracks" aria-label="Subtasks by track">
+            <h3>Subtasks by track</h3>
+            {% for track in release.tracks %}
+              <div class="release-track">
+                <span><strong>{{ track.name }}</strong> <span class="muted">{{ track.done }} of {{ track.total }} done · {{ track.in_progress }} in progress</span></span>
+                <span class="track-bar" aria-hidden="true"><span class="track-done" style="width: {{ track.done_pct }}%"></span><span class="track-moving" style="width: {{ track.progress_pct }}%"></span></span>
+              </div>
+            {% endfor %}
+          </section>
+        {% elif not release.tasks_read %}
+          <p class="muted">dimond doesn’t read the tasks of this bucket. Open it in Jira to see them.</p>
+        {% elif not release.tasks %}
+          <p class="muted">No tasks in this release yet.</p>
+        {% endif %}
+      </section>
+      {% endif %}
+      {% endwith %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
