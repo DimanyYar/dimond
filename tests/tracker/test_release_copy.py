@@ -88,6 +88,7 @@ def test_subtasks_come_by_their_parents_keys(jira):
 
 
 def test_sprints_are_read_from_the_tasks_sprint_field(jira):
+    # The closed sprint's goal runs over several lines, as FI's goals often do.
     story = jira.tracker().release_tasks("FI", ["20130"], [], date.min)[0]
 
     closed, active = story.sprints
