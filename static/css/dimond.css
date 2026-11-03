@@ -31,6 +31,8 @@
   --accent-pressed: #e04c00;
   --accent-soft: #fff1e8;
   --accent-text: #b33a00;
+  /* Links that leave dimond for Jira (canvas 7). */
+  --link-out: #2f5fc4;
   --info: #03b2cb;
   --info-soft: #eefafc;
   --info-line: #b7e6ee;
@@ -6872,8 +6874,24 @@ details[open] .run-chevron {
   gap: 8px;
 }
 
+/* A subtask starts under its task's title (canvas 7): past the arrow and the type icon. */
 .subtask-cell {
-  padding-left: 32px;
+  padding-left: 56px;
+}
+
+.subtask-row td {
+  background: var(--surface-side);
+  border-bottom-color: var(--canvas);
+}
+
+.subtask-row .task-title,
+.subtask-row .task-state {
+  font-size: 13px;
+}
+
+/* A task the client asked for stands out a little, as in the mockup. */
+.task-row-client td {
+  background: color-mix(in srgb, var(--accent-soft) 50%, var(--surface));
 }
 
 .task-toggle,
@@ -6921,7 +6939,7 @@ details[open] .run-chevron {
 }
 
 .subtask-row .task-title {
-  font-weight: 500;
+  font-weight: 400;
 }
 
 a.task-title:hover {
@@ -6933,7 +6951,16 @@ a.task-title:hover {
 }
 
 .task-key a {
-  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--link-out);
+  font-weight: 600;
+  text-underline-offset: 2px;
+}
+
+.task-key strong {
+  color: var(--ink);
 }
 
 .issue-icon {
@@ -6975,8 +7002,8 @@ a.task-title:hover {
 }
 
 .track-chip {
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
+  padding: 2px 6px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
   background: var(--surface-2);

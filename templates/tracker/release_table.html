@@ -32,7 +32,7 @@ titles open Jira in a new tab. `table` is selectors.Table.
         </thead>
         {% for row in table.rows %}
           <tbody class="task-group">
-            <tr class="task-row">
+            <tr class="task-row{% if row.request %} task-row-client{% endif %}">
               <td>
                 <span class="task-cell">
                   {% if row.subtasks %}
@@ -45,7 +45,7 @@ titles open Jira in a new tab. `table` is selectors.Table.
                   {% include "tracker/issue_type_icon.html" with type=row.task.issue_type %}
                   <span class="task-text">
                     {% if row.url %}<a class="task-title" href="{{ row.url }}" target="_blank" rel="noopener">{{ row.task.summary }}</a>{% else %}<span class="task-title">{{ row.task.summary }}</span>{% endif %}
-                    <span class="muted task-key">{% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener">{{ row.task.key }}</a>{% else %}{{ row.task.key }}{% endif %} · {{ row.task.issue_type }}</span>
+                    <span class="muted task-key">{% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener">{{ row.task.key }}<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" aria-hidden="true"><path d="M4 2H2v6h6V6M6 1h3v3M9 1L5 5"/></svg></a>{% else %}{{ row.task.key }}{% endif %} · {{ row.task.issue_type }}</span>
                   </span>
                 </span>
               </td>
@@ -74,7 +74,7 @@ titles open Jira in a new tab. `table` is selectors.Table.
                     {% include "tracker/issue_type_icon.html" with type=sub.task.issue_type %}
                     <span class="task-text">
                       {% if sub.url %}<a class="task-title" href="{{ sub.url }}" target="_blank" rel="noopener">{{ sub.task.summary }}</a>{% else %}<span class="task-title">{{ sub.task.summary }}</span>{% endif %}
-                      <span class="muted task-key">{% if sub.url %}<a href="{{ sub.url }}" target="_blank" rel="noopener">{{ sub.task.key }}</a>{% else %}{{ sub.task.key }}{% endif %} · <strong>{{ sub.track }}</strong></span>
+                      <span class="muted task-key">{% if sub.url %}<a href="{{ sub.url }}" target="_blank" rel="noopener">{{ sub.task.key }}<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" aria-hidden="true"><path d="M4 2H2v6h6V6M6 1h3v3M9 1L5 5"/></svg></a>{% else %}{{ sub.task.key }}{% endif %} · {{ sub.task.issue_type }} · <strong>{{ sub.track }}</strong></span>
                     </span>
                   </span>
                 </td>
