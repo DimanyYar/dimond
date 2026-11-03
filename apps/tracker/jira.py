@@ -62,7 +62,8 @@ SPRINT_TYPE = "com.atlassian.greenhopper.service.sprint.Sprint"
 SPRINT_FIELD_TYPE = "com.pyxis.greenhopper.jira:gh-sprint"
 RELEASE_FIELDS = "summary,status,issuetype,parent,assignee,fixVersions,resolutiondate"
 # Jira 8.13 gives a task's sprints as text: "…Sprint@1f2e[id=412,state=ACTIVE,name=FI 12,…]".
-SPRINT_TEXT = re.compile(r"\[(.*)\]$")
+# A sprint's goal may run over several lines, so the brackets are matched across line breaks.
+SPRINT_TEXT = re.compile(r"\[(.*)\]$", re.DOTALL)
 SPRINT_PART = re.compile(r",(?=\w+=)")
 
 
