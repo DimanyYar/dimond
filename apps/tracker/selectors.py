@@ -363,6 +363,9 @@ class Release:
     group: ReleaseGroup
     hidden: bool
     tasks: list[TrackerTask]
+    # Subtasks with a fix version of their own whose parent is in another release: their work
+    # counts in this release's tracks, but they are not tasks of it.
+    other_subtasks: list[TrackerTask]
     # Tasks are not read for the Unreleased bucket (D-008), so there is nothing to count.
     tasks_read: bool
     start: date | None
@@ -374,7 +377,9 @@ class Release:
 
     @property
     def subtasks(self) -> list[TrackerTask]:
-        return [sub for task in self.tasks for sub in task.subtasks.all()]
+        found = {sub.pk: sub for task in self.tasks for sub in task.subtasks.all()}
+        found.update((sub.pk, sub) for sub in self.other_subtasks)
+        return list(found.values())
 
     @property
     def done(self) -> int:
@@ -557,22 +562,34 @@ def _is_hidden(version: TrackerVersion) -> bool:
         return _group(version) == ReleaseGroup.BUCKETS
 
 
-def _tasks_by_version(project_key: str) -> dict[int, list[TrackerTask]]:
-    tasks = TrackerTask.objects.filter(
-        project_key=project_key, parent__isnull=True
-    ).prefetch_related("subtasks", "versions")
+def _tasks_by_version(
+    project_key: str,
+) -> tuple[dict[int, list[TrackerTask]], dict[int, list[TrackerTask]]]:
+    """Each release's tasks, and the subtasks that sit in it while their parent does not."""
+    tasks = TrackerTask.objects.filter(project_key=project_key).prefetch_related(
+        "subtasks", "versions"
+    )
     by_version: dict[int, list[TrackerTask]] = {}
+    subtasks_only: dict[int, list[TrackerTask]] = {}
+    parents_in: dict[int, set[int]] = {}
     for task in tasks:
-        for version in task.versions.all():
-            by_version.setdefault(version.pk, []).append(task)
-    return by_version
+        if task.parent_id is None:
+            for version in task.versions.all():
+                by_version.setdefault(version.pk, []).append(task)
+                parents_in.setdefault(task.pk, set()).add(version.pk)
+    for task in tasks:
+        if task.parent_id is not None:
+            for version in task.versions.all():
+                if version.pk not in parents_in.get(task.parent_id, set()):
+                    subtasks_only.setdefault(version.pk, []).append(task)
+    return by_version, subtasks_only
 
 
 def _releases(client: Company) -> list[Release]:
     versions = list(
         TrackerVersion.objects.filter(project_key=client.jira_project).select_related("visibility")
     )
-    by_version = _tasks_by_version(client.jira_project)
+    by_version, subtasks_only = _tasks_by_version(client.jira_project)
     requests = set(client.requests.exclude(jira_key="").values_list("jira_key", flat=True))
     address = _jira_address()
     # Only the newest released ones have their tasks copied (D-008); older ones are history.
@@ -585,7 +602,10 @@ def _releases(client: Company) -> list[Release]:
     previous: TrackerVersion | None = None
     for version in versions:
         group = _group(version)
-        own = by_version.get(version.pk, [])
+        # The Unreleased bucket's tasks are not read (D-008): the few that also sit in a read
+        # release would pass for the whole bucket.
+        read = group != ReleaseGroup.BUCKETS
+        own = by_version.get(version.pk, []) if read else []
         if group != ReleaseGroup.RELEASED or version in released:
             start, starts_after = (
                 _start(version, previous) if group == ReleaseGroup.OPEN else (None, "")
@@ -596,7 +616,8 @@ def _releases(client: Company) -> list[Release]:
                     group=group,
                     hidden=_is_hidden(version),
                     tasks=own,
-                    tasks_read=group != ReleaseGroup.BUCKETS,
+                    other_subtasks=subtasks_only.get(version.pk, []) if read else [],
+                    tasks_read=read,
                     start=start,
                     starts_after=starts_after,
                     stale=group == ReleaseGroup.OPEN and bool(own) and _is_stale(version, versions),

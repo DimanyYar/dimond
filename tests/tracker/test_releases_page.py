@@ -234,3 +234,27 @@ def test_a_hotfix_release_added_later_in_jira_does_not_make_the_next_release_sta
     TrackerVersion.objects.filter(name="26.7.0").update(position=99)
 
     assert release(pm, "26.8.0").health == "No date"
+
+
+def test_a_subtask_in_another_release_counts_in_that_releases_tracks_not_its_tasks(pm, atlas):
+    # FI-2246 ([FE] Phone field hints) moved to 26.9.0 while its story stays in 26.8.0.
+    TrackerTask.objects.get(key="FI-2246").versions.add(version("26.9.0"))
+
+    selected = release(pm, "26.9.0")
+
+    assert len(selected.tasks) == 1
+    assert {t.name: t.total for t in selected.tracks} == {"BE": 1, "FE": 1}
+
+
+def test_a_subtask_in_its_parents_release_too_is_counted_once(pm, atlas):
+    TrackerTask.objects.get(key="FI-2246").versions.add(version("26.8.0"))
+
+    assert {t.name: t.total for t in release(pm, "26.8.0").tracks}["FE"] == 2
+
+
+def test_the_unreleased_bucket_shows_no_numbers_even_if_a_read_task_is_in_it(pm, atlas):
+    TrackerTask.objects.get(key="FI-2214").versions.add(version("Unreleased"))
+
+    selected = release(pm, "Unreleased")
+
+    assert (selected.tasks, selected.tracks, selected.tasks_read) == ([], [], False)
