@@ -1,8 +1,10 @@
 {% extends "layouts/pm.html" %}
+{% load static %}
 {% comment %}
-Releases (canvas 7 · PMReleaseView), part 1: the client's releases on the left, the chosen
-one's dates, health, numbers, subtasks by track and warnings on the right. The task table
-comes in 30c. Hiding changes only this list (D-006): Jira and clients see nothing.
+Releases (canvas 7 · PMReleaseView): the client's releases on the left, the chosen one's
+dates, health, numbers, subtasks by track, warnings and task table on the right. Hiding
+changes only this list (D-006): Jira and clients see nothing. Choosing a release or a filter
+swaps the page in place (filters.js); without scripts they are plain links.
 {% endcomment %}
 {% block title %}Releases · dimon.d{% endblock %}
 
@@ -33,7 +35,7 @@ comes in 30c. Hiding changes only this list (D-006): Jira and clients see nothin
       <p class="muted">dimond copies {{ page.client }}’s releases from Jira on every sync. They show up here after the next one.</p>
     </section>
   {% else %}
-    <div class="releases-body">
+    <div class="releases-body" data-region="results">
       <nav class="release-list" aria-label="Releases of {{ page.client }}">
         {% for release in page.shown %}
           {% ifchanged release.group %}<h2 class="release-group">{{ release.group }}</h2>{% endifchanged %}
@@ -114,10 +116,16 @@ comes in 30c. Hiding changes only this list (D-006): Jira and clients see nothin
         {% elif not release.tasks %}
           <p class="muted">No tasks in this release yet.</p>
         {% endif %}
+
+        {% if release.tasks %}
+          {% include "tracker/release_table.html" with table=page.table %}
+        {% endif %}
       </section>
       {% endif %}
       {% endwith %}
     </div>
   {% endif %}
 </div>
+<script type="module" src="{% static 'js/filters.js' %}"></script>
+<script type="module" src="{% static 'js/release-table.js' %}"></script>
 {% endblock %}

@@ -6785,3 +6785,255 @@ details[open] .run-chevron {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* The task table of a release (30c; canvas 7 · PMReleaseView). */
+.release-table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.release-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.release-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.release-filters .chip {
+  gap: 6px;
+  text-decoration: none;
+}
+
+.release-filters .chip[aria-current="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+
+.release-filters .chip[aria-pressed="false"] {
+  color: var(--muted);
+}
+
+.release-filters .chip[aria-pressed="false"] .issue-icon {
+  opacity: 0.4;
+}
+
+.release-table-scroll {
+  overflow-x: auto;
+}
+
+.release-table table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.release-table th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: left;
+}
+
+.release-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--hairline-soft);
+  vertical-align: top;
+}
+
+.release-table td:first-child {
+  min-width: 260px;
+}
+
+.release-table td:nth-child(2) {
+  min-width: 170px;
+}
+
+.release-table td:nth-child(n + 3) {
+  white-space: nowrap;
+}
+
+.release-table .people {
+  flex-wrap: nowrap;
+}
+
+.task-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.subtask-cell {
+  padding-left: 32px;
+}
+
+.task-toggle,
+.task-toggle-space {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+}
+
+.task-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: -3px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.task-toggle:hover {
+  background: var(--surface-2);
+}
+
+.task-toggle svg {
+  transition: transform 120ms;
+}
+
+.task-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+.task-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.task-title {
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.subtask-row .task-title {
+  font-weight: 500;
+}
+
+a.task-title:hover {
+  text-decoration: underline;
+}
+
+.task-key {
+  font-size: 12px;
+}
+
+.task-key a {
+  color: inherit;
+}
+
+.issue-icon {
+  flex: 0 0 16px;
+  margin-top: 2px;
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.issue-icon rect {
+  stroke: none;
+  fill: #5b8fd9;
+}
+
+.issue-icon-story rect {
+  fill: #2f8a4c;
+}
+
+.issue-icon-task rect {
+  fill: #2f6fde;
+}
+
+.issue-icon-bug rect {
+  fill: #d0453a;
+}
+
+.issue-icon-sub-bug rect {
+  fill: #e0776d;
+}
+
+.track-chips,
+.people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.track-chip {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface-2);
+}
+
+.track-chip-done {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
+.track-chip-moving {
+  background: var(--info-soft);
+}
+
+.track-chip-bug {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.task-state {
+  display: inline-block;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface-2);
+}
+
+.task-state-in-progress,
+.task-state-indeterminate {
+  background: var(--info-soft);
+}
+
+.task-state-done {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
+.task-jira-says {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.person {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.release-table-empty {
+  margin: 0;
+}

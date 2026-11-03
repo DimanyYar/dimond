@@ -55,9 +55,17 @@ def _number(value: str | None) -> int | None:
 @login_required
 def releases(request: HttpRequest) -> HttpResponse:
     """Releases (canvas 7 · PMReleaseView): the client's releases on the left, the chosen one's
-    dates, progress and warnings on the right."""
+    dates, progress, warnings and task table on the right."""
+    try:
+        show = selectors.TableFilter(request.GET.get("show", selectors.TableFilter.ALL))
+    except ValueError:
+        show = selectors.TableFilter.ALL
     page = selectors.releases_page(
-        _pm(request), _number(request.GET.get("client")), _number(request.GET.get("release"))
+        _pm(request),
+        _number(request.GET.get("client")),
+        _number(request.GET.get("release")),
+        show,
+        selectors.task_types(request.GET.get("types")),
     )
     return render(request, "tracker/releases.html", {"page": page})
 

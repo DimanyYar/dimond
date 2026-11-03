@@ -1,0 +1,2 @@
+{% comment %}A Jira issue type as a small coloured icon, as Jira draws them. `type` is its name.{% endcomment %}
+<svg class="issue-icon issue-icon-{{ type|slugify }}" width="16" height="16" viewBox="0 0 16 16" role="img" aria-label="{{ type }}"><rect width="16" height="16" rx="3"/>{% if type == "Story" %}<path d="M5 3.5h6v9l-3-2.2-3 2.2z"/>{% elif type == "Bug" or type == "Sub-bug" %}<path d="M5 8h6"/><path d="M8 5v6"/>{% elif type == "Task" %}<path d="M4.5 8.2l2.3 2.3 4.7-5"/>{% else %}<path d="M4 4h4v4H4zM8 8h4v4H8z"/>{% endif %}</svg>
