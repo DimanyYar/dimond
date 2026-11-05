@@ -2,6 +2,7 @@
 (#30; ADR 0026): versions, their tasks and subtasks, linked to requests or not. Jira answers
 from saved responses or the demo tracker; no test reaches Jira."""
 
+from dataclasses import replace
 from datetime import UTC, date, datetime
 
 import httpx
@@ -9,7 +10,7 @@ import pytest
 
 from apps.accounts.models import Company
 from apps.tracker import mock
-from apps.tracker.base import TrackerUnreachable
+from apps.tracker.base import TaskSprint, TrackerUnreachable
 from apps.tracker.jira import JiraTracker
 from apps.tracker.mock import MockTracker
 from apps.tracker.models import SyncOutcome, TrackerSprint, TrackerTask, TrackerVersion
@@ -122,7 +123,8 @@ def test_only_open_versions_hot_fix_and_last_two_released_are_read(jira, atlas):
 def test_the_tasks_of_open_sprints_are_read_too(jira, atlas):
     copy_releases(jira.tracker())
 
-    assert jira.jql()[0].endswith("OR sprint in (1931,1874,1902)) ORDER BY key")
+    # Board 412: the active sprint and the next one; board 418: its next one.
+    assert jira.jql()[0].endswith("OR sprint in (1874,1902,1931)) ORDER BY key")
 
 
 def test_a_sprint_task_with_no_release_is_copied_with_its_subtasks(atlas):
@@ -141,6 +143,25 @@ def test_sprints_keep_their_board_also_when_known_only_from_a_task(atlas):
     boards = dict(TrackerSprint.objects.values_list("name", "board"))
     assert boards["Sprint 12"] == "FI board"
     assert boards["Sprint 11"] == "FI board"
+
+
+def test_later_future_sprints_are_named_but_their_tasks_are_not_read(atlas, monkeypatch):
+    # FI keeps buckets that never close behind its next sprint: ~1,000 tasks.
+    bucket = TaskSprint(103, "Ideas bucket", "future", None, None, board_id=88)
+    idea = replace(mock.RELEASE_TASKS[0], key="FI-2290", version_ids=(), sprints=(bucket,))
+    monkeypatch.setattr(mock, "RELEASE_TASKS", [*mock.RELEASE_TASKS, idea])
+
+    copy_releases(MockTracker())
+
+    read = dict(TrackerSprint.objects.values_list("name", "tasks_read"))
+    assert read == {
+        "Sprint 11": True,
+        "Sprint 12": True,
+        "Bugs bucket": True,
+        "Ideas bucket": False,
+        "Old bucket": False,
+    }
+    assert not TrackerTask.objects.filter(key="FI-2290").exists()
 
 
 def test_sync_copies_releases_with_their_subtasks(atlas):
