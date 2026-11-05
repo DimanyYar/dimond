@@ -10,7 +10,7 @@ import pytest
 
 from apps.accounts.models import Company
 from apps.tracker import mock
-from apps.tracker.base import TaskSprint, TrackerUnreachable
+from apps.tracker.base import ProjectNotFound, TaskSprint, TrackerUnreachable
 from apps.tracker.jira import JiraTracker
 from apps.tracker.mock import MockTracker
 from apps.tracker.models import SyncOutcome, TrackerSprint, TrackerTask, TrackerVersion
@@ -233,3 +233,45 @@ def test_one_sync_run_asks_jira_for_its_field_list_once(jira):
     tracker.release_tasks("FI", ["20150"], [], date.min)
 
     assert [r.url.path for r in jira.seen].count("/rest/api/2/field") == 1
+
+
+def test_without_agile_boards_releases_are_still_copied(atlas, monkeypatch):
+    def no_agile(self, project_key):
+        raise ProjectNotFound(project_key)
+
+    monkeypatch.setattr(MockTracker, "open_sprints", no_agile)
+
+    copied, failed = copy_releases(MockTracker())
+
+    assert (copied > 0, failed) == (True, "")
+    assert TrackerVersion.objects.filter(name="26.8.0").exists()
+
+
+def test_a_closed_sprint_keeps_its_board_when_the_board_has_no_open_sprints(atlas, monkeypatch):
+    copy_releases(MockTracker())
+    monkeypatch.setitem(mock.SPRINTS, "FI", [])
+
+    copy_releases(MockTracker())
+
+    assert TrackerSprint.objects.get(name="Sprint 11").board == "FI board"
+
+
+def test_after_a_failed_project_its_empty_open_sprints_stay(atlas, monkeypatch):
+    copy_releases(MockTracker())
+
+    def silent(self, project_key):
+        raise TrackerUnreachable("Jira at https://jira.example.com did not answer.")
+
+    monkeypatch.setattr(MockTracker, "versions", silent)
+    copy_releases(MockTracker())
+
+    assert TrackerSprint.objects.filter(name="Ideas bucket").exists()
+
+
+def test_the_next_sprint_of_every_board_is_read(pm):
+    Company.objects.create(name="Harbor Foods", owner=pm, jira_project="HF")
+
+    copy_releases(MockTracker())
+
+    read = dict(TrackerSprint.objects.values_list("name", "tasks_read"))
+    assert (read["Web bucket"], read["Mobile bucket"]) == (True, True)
