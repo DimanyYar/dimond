@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 from enum import StrEnum
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Prefetch, Q, QuerySet
@@ -372,8 +372,14 @@ class Release:
     # The previous release when it has no date yet: this one starts the day after it ships.
     starts_after: str
     stale: bool
-    client_requests: int
+    # The client requests linked to this release's tasks, by task key.
+    requests: dict[str, Request]
+    jira_address: str
     jira_url: str
+
+    @property
+    def client_requests(self) -> int:
+        return len(self.requests)
 
     @property
     def subtasks(self) -> list[TrackerTask]:
@@ -492,12 +498,196 @@ def _count(n: int, thing: str) -> str:
     return f"{n} {thing}{'' if n == 1 else 's'}"
 
 
+# The task table (30c; canvas 7 · PMReleaseView): a task per row, its subtasks under it.
+
+
+class TableFilter(StrEnum):
+    ALL = "all"
+    CLIENT = "client"
+    NOT_DONE = "open"
+
+
+TASK_TYPES = frozenset({"Story", "Task", "Bug"})
+
+
+class TaskState(StrEnum):
+    IN_PROGRESS = "In progress"
+    TO_DO = "To Do"
+    DONE = "Done"
+
+
+@dataclass(frozen=True)
+class Chip:
+    label: str
+    # done, moving, todo or bug: the chip's colour.
+    state: str
+
+
+@dataclass(frozen=True)
+class SubtaskRow:
+    task: TrackerTask
+    track: str
+    url: str
+
+
+@dataclass(frozen=True)
+class TaskRow:
+    task: TrackerTask
+    state: TaskState
+    # Jira's own status when it says something else than the subtasks do (D-004).
+    jira_says: str
+    chips: list[Chip]
+    people: list[str]
+    when: str
+    request: Request | None
+    subtasks: list[SubtaskRow]
+    url: str
+
+    @property
+    def unplanned(self) -> bool:
+        return self.task.issue_type == "Story" and not self.subtasks
+
+
+@dataclass(frozen=True)
+class FilterLink:
+    label: str
+    query: str
+    on: bool
+
+
+@dataclass(frozen=True)
+class Table:
+    rows: list[TaskRow]
+    filters: list[FilterLink]
+    type_filters: list[FilterLink]
+    # Hot Fix lists when each task was done; the others list the sprint.
+    when_column: str
+
+
+def _state(task: TrackerTask) -> TaskState:
+    if _is_done(task):
+        return TaskState.DONE
+    return TaskState.IN_PROGRESS if _is_started(task) else TaskState.TO_DO
+
+
+JIRA_STATE = {
+    "done": TaskState.DONE,
+    "indeterminate": TaskState.IN_PROGRESS,
+    "new": TaskState.TO_DO,
+}
+
+
+def _chips(subtasks: list[TrackerTask]) -> list[Chip]:
+    by_track: dict[str, list[TrackerTask]] = {}
+    for sub in subtasks:
+        by_track.setdefault(track_of(sub), []).append(sub)
+    chips = []
+    for name in TRACKS:
+        subs = by_track.get(name)
+        if not subs:
+            continue
+        if name == "QA bug":
+            chips.append(Chip(_count(len(subs), "QA bug"), "bug"))
+            continue
+        done = sum(s.status_category == "done" for s in subs)
+        if done == len(subs):
+            state = "done"
+        elif any(s.status_category != "new" for s in subs):
+            state = "moving"
+        else:
+            state = "todo"
+        chips.append(Chip(f"{name} {done}/{len(subs)}", state))
+    return chips
+
+
+def _when(task: TrackerTask, hotfix: bool) -> str:
+    if hotfix:
+        return f"done {_day(timezone.localdate(task.resolved_at))}" if task.resolved_at else ""
+    # The active sprint, else the newest one: Jira numbers sprints in the order they are made.
+    sprints = sorted(task.sprints.all(), key=lambda s: (s.state == "active", s.jira_id))
+    return sprints[-1].name if sprints else ""
+
+
+def _row(release: Release, task: TrackerTask) -> TaskRow:
+    subtasks = sorted(task.subtasks.all(), key=lambda s: TRACKS.index(track_of(s)))
+    state = _state(task)
+    names = [task.assignee_name, *(s.assignee_name for s in subtasks)]
+    return TaskRow(
+        task=task,
+        state=state,
+        jira_says=task.status if JIRA_STATE.get(task.status_category) != state else "",
+        chips=_chips(subtasks),
+        people=list(dict.fromkeys(n for n in names if n))[:PEOPLE_SHOWN],
+        when=_when(task, release.group == ReleaseGroup.HOTFIXES),
+        request=release.requests.get(task.key),
+        subtasks=[SubtaskRow(s, track_of(s), _browse(release, s)) for s in subtasks],
+        url=_browse(release, task),
+    )
+
+
+def _browse(release: Release, task: TrackerTask) -> str:
+    return f"{release.jira_address}/browse/{task.key}" if release.jira_address else ""
+
+
+PEOPLE_SHOWN = 4
+STATE_ORDER = list(TaskState)
+
+
+def _wanted(row: TaskRow, show: TableFilter) -> bool:
+    if show == TableFilter.CLIENT:
+        return row.request is not None
+    if show == TableFilter.NOT_DONE:
+        return row.state != TaskState.DONE
+    return True
+
+
+def _table(client: Company, release: Release, show: TableFilter, types: frozenset[str]) -> Table:
+    rows = [_row(release, task) for task in release.tasks]
+    shown = [
+        row
+        for row in rows
+        if _wanted(row, show)
+        and (row.task.issue_type in types or row.task.issue_type not in TASK_TYPES)
+    ]
+    shown.sort(key=lambda r: (r.request is None, STATE_ORDER.index(r.state), r.task.key))
+
+    def query(show_: TableFilter, types_: frozenset[str]) -> str:
+        parts = {"client": str(client.pk), "release": str(release.version.pk)}
+        if show_ != TableFilter.ALL:
+            parts["show"] = show_.value
+        if types_ != TASK_TYPES:
+            parts["types"] = ",".join(sorted(types_)) or "none"
+        return urlencode(parts)
+
+    labels = {
+        TableFilter.ALL: "All",
+        TableFilter.CLIENT: "Client requests",
+        TableFilter.NOT_DONE: "Not done",
+    }
+    return Table(
+        rows=shown,
+        filters=[FilterLink(labels[f], query(f, types), f == show) for f in TableFilter],
+        type_filters=[
+            FilterLink(t, query(show, types ^ {t}), t in types) for t in ("Story", "Task", "Bug")
+        ],
+        when_column="Done" if release.group == ReleaseGroup.HOTFIXES else "Sprint",
+    )
+
+
+def task_types(value: str | None) -> frozenset[str]:
+    """The Story / Task / Bug chips from the address: "Story,Bug", or "none" for none on."""
+    if value is None:
+        return TASK_TYPES
+    return frozenset(value.split(",")) & TASK_TYPES
+
+
 @dataclass(frozen=True)
 class ReleasesPage:
     clients: list[Company]
     client: Company | None
     releases: list[Release]
     selected: Release | None
+    table: Table | None
 
     @property
     def shown(self) -> list[Release]:
@@ -567,7 +757,7 @@ def _tasks_by_version(
 ) -> tuple[dict[int, list[TrackerTask]], dict[int, list[TrackerTask]]]:
     """Each release's tasks, and the subtasks that sit in it while their parent does not."""
     tasks = TrackerTask.objects.filter(project_key=project_key).prefetch_related(
-        "subtasks", "versions"
+        "subtasks", "versions", "sprints"
     )
     by_version: dict[int, list[TrackerTask]] = {}
     subtasks_only: dict[int, list[TrackerTask]] = {}
@@ -590,7 +780,11 @@ def _releases(client: Company) -> list[Release]:
         TrackerVersion.objects.filter(project_key=client.jira_project).select_related("visibility")
     )
     by_version, subtasks_only = _tasks_by_version(client.jira_project)
-    requests = set(client.requests.exclude(jira_key="").values_list("jira_key", flat=True))
+    keys = {task.key for tasks in by_version.values() for task in tasks}
+    # Only what the table shows: the request's number and its link, both from its id.
+    requests = {
+        r.jira_key: r for r in client.requests.filter(jira_key__in=keys).only("pk", "jira_key")
+    }
     address = _jira_address()
     # Only the newest released ones have their tasks copied (D-008); older ones are history.
     released = sorted(
@@ -621,7 +815,8 @@ def _releases(client: Company) -> list[Release]:
                     start=start,
                     starts_after=starts_after,
                     stale=group == ReleaseGroup.OPEN and bool(own) and _is_stale(version, versions),
-                    client_requests=sum(task.key in requests for task in own),
+                    requests={t.key: requests[t.key] for t in own if t.key in requests},
+                    jira_address=address,
                     jira_url=f"{address}/projects/{version.project_key}/versions/{version.jira_id}"
                     if address
                     else "",
@@ -642,9 +837,16 @@ def _releases(client: Company) -> list[Release]:
     )
 
 
-def releases_page(pm: User, client_pk: int | None, version_pk: int | None) -> ReleasesPage:
+def releases_page(
+    pm: User,
+    client_pk: int | None,
+    version_pk: int | None,
+    show: TableFilter = TableFilter.ALL,
+    types: frozenset[str] = TASK_TYPES,
+) -> ReleasesPage:
     """The Releases page of one of this PM's clients (canvas 7 · PMReleaseView): the list on
-    the left and the chosen release. Another PM's client or release is the same as none."""
+    the left, the chosen release and its task table. Another PM's client or release is the
+    same as none."""
     clients = list(clients_for(pm).exclude(jira_project=""))
     client = next((c for c in clients if c.pk == client_pk), clients[0] if clients else None)
     releases = _releases(client) if client else []
@@ -653,7 +855,8 @@ def releases_page(pm: User, client_pk: int | None, version_pk: int | None) -> Re
         (r for r in releases if r.version.pk == version_pk),
         next((r for r in shown if r.group == ReleaseGroup.OPEN), shown[0] if shown else None),
     )
-    return ReleasesPage(clients, client, releases, selected)
+    table = _table(client, selected, show, types) if client and selected else None
+    return ReleasesPage(clients, client, releases, selected, table)
 
 
 def release_for(pm: User, version_pk: int) -> TrackerVersion:

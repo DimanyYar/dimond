@@ -1,0 +1,95 @@
+{% comment %}
+The task table of a release (30c; canvas 7 · PMReleaseView): one row per task, its subtasks
+under it behind the arrow (release-table.js). Status comes from the subtasks (D-004); keys and
+titles open Jira in a new tab. `table` is selectors.Table.
+{% endcomment %}
+<section class="release-table" aria-label="Tasks">
+  <div class="release-filters">
+    <span class="release-filter-group" role="group" aria-label="Show">
+      {% for link in table.filters %}
+        <a class="chip" href="?{{ link.query }}"{% if link.on %} aria-current="true"{% endif %}>{{ link.label }}</a>
+      {% endfor %}
+    </span>
+    <span class="release-filter-group" role="group" aria-label="Task types">
+      {% for link in table.type_filters %}
+        <a class="chip" href="?{{ link.query }}" aria-pressed="{% if link.on %}true{% else %}false{% endif %}">{% include "tracker/issue_type_icon.html" with type=link.label %}{{ link.label }}</a>
+      {% endfor %}
+    </span>
+  </div>
+
+  {% if table.rows %}
+    <div class="release-table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Task</th>
+            <th scope="col">Subtasks</th>
+            <th scope="col">Status</th>
+            <th scope="col">People</th>
+            <th scope="col">{{ table.when_column }}</th>
+            <th scope="col">Client</th>
+          </tr>
+        </thead>
+        {% for row in table.rows %}
+          <tbody class="task-group">
+            <tr class="task-row{% if row.request %} task-row-client{% endif %}">
+              <td>
+                <span class="task-cell">
+                  {% if row.subtasks %}
+                    <button class="task-toggle" type="button" aria-expanded="false" data-subtasks aria-label="Show {{ row.subtasks|length }} subtask{{ row.subtasks|length|pluralize }} of {{ row.task.key }}">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+                    </button>
+                  {% else %}
+                    <span class="task-toggle-space" aria-hidden="true"></span>
+                  {% endif %}
+                  {% include "tracker/issue_type_icon.html" with type=row.task.issue_type %}
+                  <span class="task-text">
+                    {% if row.url %}<a class="task-title" href="{{ row.url }}" target="_blank" rel="noopener">{{ row.task.summary }}</a>{% else %}<span class="task-title">{{ row.task.summary }}</span>{% endif %}
+                    <span class="muted task-key">{% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener">{{ row.task.key }}<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" aria-hidden="true"><path d="M4 2H2v6h6V6M6 1h3v3M9 1L5 5"/></svg></a>{% else %}{{ row.task.key }}{% endif %} · {{ row.task.issue_type }}</span>
+                  </span>
+                </span>
+              </td>
+              <td>
+                <span class="track-chips">
+                  {% for chip in row.chips %}<span class="track-chip track-chip-{{ chip.state }}">{{ chip.label }}</span>{% endfor %}
+                  {% if row.unplanned %}<span class="muted">no subtasks yet</span>{% endif %}
+                </span>
+              </td>
+              <td>
+                <span class="task-state task-state-{{ row.state|slugify }}">{{ row.state }}</span>
+                {% if row.jira_says %}<span class="muted task-jira-says">Jira says {{ row.jira_says }}</span>{% endif %}
+              </td>
+              <td>
+                <span class="people">
+                  {% for name in row.people %}<span class="person" title="{{ name }}" aria-label="{{ name }}">{% for word in name.split|slice:":2" %}{{ word|first|upper }}{% endfor %}</span>{% endfor %}
+                </span>
+              </td>
+              <td class="muted">{{ row.when }}</td>
+              <td>{% if row.request %}<a href="{{ row.request.get_absolute_url }}">{{ row.request.key }}</a>{% endif %}</td>
+            </tr>
+            {% for sub in row.subtasks %}
+              <tr class="subtask-row" hidden>
+                <td>
+                  <span class="task-cell subtask-cell">
+                    {% include "tracker/issue_type_icon.html" with type=sub.task.issue_type %}
+                    <span class="task-text">
+                      {% if sub.url %}<a class="task-title" href="{{ sub.url }}" target="_blank" rel="noopener">{{ sub.task.summary }}</a>{% else %}<span class="task-title">{{ sub.task.summary }}</span>{% endif %}
+                      <span class="muted task-key">{% if sub.url %}<a href="{{ sub.url }}" target="_blank" rel="noopener">{{ sub.task.key }}<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" aria-hidden="true"><path d="M4 2H2v6h6V6M6 1h3v3M9 1L5 5"/></svg></a>{% else %}{{ sub.task.key }}{% endif %} · {{ sub.task.issue_type }} · <strong>{{ sub.track }}</strong></span>
+                    </span>
+                  </span>
+                </td>
+                <td></td>
+                <td><span class="task-state task-state-{{ sub.task.status_category }}">{{ sub.task.status }}</span></td>
+                <td>{% if sub.task.assignee_name %}<span class="people"><span class="person" title="{{ sub.task.assignee_name }}" aria-label="{{ sub.task.assignee_name }}">{% for word in sub.task.assignee_name.split|slice:":2" %}{{ word|first|upper }}{% endfor %}</span></span>{% endif %}</td>
+                <td></td>
+                <td class="muted">with task</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        {% endfor %}
+      </table>
+    </div>
+  {% else %}
+    <p class="muted release-table-empty">No tasks match these filters.</p>
+  {% endif %}
+</section>
