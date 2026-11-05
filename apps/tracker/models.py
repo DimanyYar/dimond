@@ -150,6 +150,9 @@ class TrackerVersion(models.Model):
 class TrackerSprint(models.Model):
     jira_id = models.PositiveIntegerField(unique=True)
     name = models.CharField(max_length=255)
+    # The scrum board the sprint belongs to; empty for an old closed sprint of a board that has
+    # no open sprints left.
+    board = models.CharField(max_length=255, blank=True)
     state = models.CharField(max_length=20)
     starts = models.DateTimeField(null=True, blank=True)
     ends = models.DateTimeField(null=True, blank=True)

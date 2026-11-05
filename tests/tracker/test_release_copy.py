@@ -12,7 +12,7 @@ from apps.tracker import mock
 from apps.tracker.base import TrackerUnreachable
 from apps.tracker.jira import JiraTracker
 from apps.tracker.mock import MockTracker
-from apps.tracker.models import SyncOutcome, TrackerTask, TrackerVersion
+from apps.tracker.models import SyncOutcome, TrackerSprint, TrackerTask, TrackerVersion
 from apps.tracker.services import copy_releases, sync_tasks
 
 from .test_jira import URL, saved
@@ -26,6 +26,9 @@ class ReleasesJira:
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.seen.append(request)
+        if request.url.path.startswith("/rest/agile/1.0/"):
+            agile = request.url.path.removeprefix("/rest/agile/1.0/").replace("/", "_")
+            return saved(f"{agile}_FI.json" if agile == "board" else f"{agile}s.json")
         path = request.url.path.removeprefix("/rest/api/2/")
         if path == "search":
             jql = request.url.params["jql"]
@@ -114,6 +117,30 @@ def test_only_open_versions_hot_fix_and_last_two_released_are_read(jira, atlas):
     assert "fixVersion in (20130,20120,20110) OR (fixVersion in (20150)" in jira.jql()[0]
     assert not TrackerVersion.objects.filter(name="25.1.0").exists()  # archived
     assert TrackerVersion.objects.get(name="Unreleased").tasks.count() == 0
+
+
+def test_the_tasks_of_open_sprints_are_read_too(jira, atlas):
+    copy_releases(jira.tracker())
+
+    assert jira.jql()[0].endswith("OR sprint in (1931,1874,1902)) ORDER BY key")
+
+
+def test_a_sprint_task_with_no_release_is_copied_with_its_subtasks(atlas):
+    copy_releases(MockTracker())
+
+    task = TrackerTask.objects.get(key="FI-2260")
+    assert list(task.versions.all()) == []
+    assert task.sprints.get().name == "Sprint 12"
+    assert list(task.subtasks.values_list("key", flat=True)) == ["FI-2261"]
+
+
+def test_sprints_keep_their_board_also_when_known_only_from_a_task(atlas):
+    copy_releases(MockTracker())
+
+    # Sprint 11 is closed: no board lists it, but the task's sprint field names the board.
+    boards = dict(TrackerSprint.objects.values_list("name", "board"))
+    assert boards["Sprint 12"] == "FI board"
+    assert boards["Sprint 11"] == "FI board"
 
 
 def test_sync_copies_releases_with_their_subtasks(atlas):

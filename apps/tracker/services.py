@@ -36,6 +36,7 @@ from .base import (
     Issue,
     IssueNotFound,
     ReleaseTask,
+    Sprint,
     Tracker,
     TrackerCaptcha,
     TrackerError,
@@ -305,6 +306,8 @@ def copy_releases(tracker: Tracker) -> tuple[int, str]:
 def _copy_project(tracker: Tracker, project_key: str) -> int:
     """Jira is read whole first, so a failure halfway leaves the previous copy as it was."""
     versions = [v for v in tracker.versions(project_key) if not v.archived]
+    # Every task of the open sprints, also those with no release yet, for the Sprints mode.
+    open_sprints = tracker.open_sprints(project_key)
     released = sorted(
         (v for v in versions if v.released and v.release_date),
         key=lambda v: v.release_date or date.min,
@@ -316,13 +319,16 @@ def _copy_project(tracker: Tracker, project_key: str) -> int:
         + [v.id for v in released[:RELEASED_READ]],
         [v.id for v in versions if v.name == RECENT_BUCKET],
         timezone.localdate() - timedelta(days=RECENT_BUCKET_DAYS),
+        [s.id for s in open_sprints],
     )
-    _save_copy(project_key, versions, tasks)
+    _save_copy(project_key, versions, tasks, open_sprints)
     return len(tasks)
 
 
 @transaction.atomic
-def _save_copy(project_key: str, versions: list[Version], tasks: list[ReleaseTask]) -> None:
+def _save_copy(
+    project_key: str, versions: list[Version], tasks: list[ReleaseTask], open_sprints: list[Sprint]
+) -> None:
     """Rows are updated in place, never dropped and made again, so anything dimond later keeps
     about a release or a task stays attached to it."""
     TrackerVersion.objects.bulk_create(
@@ -345,15 +351,31 @@ def _save_copy(project_key: str, versions: list[Version], tasks: list[ReleaseTas
     TrackerVersion.objects.filter(project_key=project_key).exclude(
         jira_id__in=[v.id for v in versions]
     ).delete()
-    sprints = {sprint.id: sprint for task in tasks for sprint in task.sprints}
+    boards = {s.board_id: s.board for s in open_sprints}
+    sprints = {
+        s.id: TrackerSprint(
+            jira_id=s.id,
+            name=s.name,
+            board=boards.get(s.board_id or 0, ""),
+            state=s.state,
+            starts=s.starts,
+            ends=s.ends,
+        )
+        for task in tasks
+        for s in task.sprints
+    }
+    # A sprint's own answer from its board is newer than what a task remembers of it.
+    sprints |= {
+        s.id: TrackerSprint(
+            jira_id=s.id, name=s.name, board=s.board, state=s.state, starts=s.starts, ends=s.ends
+        )
+        for s in open_sprints
+    }
     TrackerSprint.objects.bulk_create(
-        [
-            TrackerSprint(jira_id=s.id, name=s.name, state=s.state, starts=s.starts, ends=s.ends)
-            for s in sprints.values()
-        ],
+        list(sprints.values()),
         update_conflicts=True,
         unique_fields=["jira_id"],
-        update_fields=["name", "state", "starts", "ends"],
+        update_fields=["name", "board", "state", "starts", "ends"],
     )
     TrackerTask.objects.bulk_create(
         [

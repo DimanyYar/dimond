@@ -6,9 +6,9 @@ its own base URL as http, and a redirect would send the password to wherever it 
 """
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import date, datetime
-from functools import cached_property
+from functools import cached_property, partial
 from typing import Any
 from urllib.parse import quote
 
@@ -197,13 +197,13 @@ class JiraTracker:
         )
         found: dict[int, Sprint] = {}
         for board_id, board in boards:
-            for sprint_id, name in self._agile_pages(
+            for sprint in self._agile_pages(
                 f"board/{board_id}/sprint",
                 {"state": "active,future"},
-                lambda item: (int(item["id"]), str(item["name"])),
+                partial(_board_sprint, board_id=board_id, board=board),
             ):
                 # One sprint can sit on several boards of the project; it is listed once.
-                found.setdefault(sprint_id, Sprint(id=sprint_id, name=name, board=board))
+                found.setdefault(sprint.id, sprint)
         return list(found.values())
 
     def move_to_sprint(self, key: str, sprint_id: int) -> None:
@@ -246,7 +246,12 @@ class JiraTracker:
         )
 
     def release_tasks(
-        self, project_key: str, version_ids: list[str], recent_ids: list[str], closed_since: date
+        self,
+        project_key: str,
+        version_ids: list[str],
+        recent_ids: list[str],
+        closed_since: date,
+        sprint_ids: Sequence[int] = (),
     ) -> list[ReleaseTask]:
         project_key = self._checked_project(project_key)
         wanted = []
@@ -256,6 +261,8 @@ class JiraTracker:
             wanted.append(
                 f'(fixVersion in ({_ids(recent_ids)}) AND resolved >= "{closed_since:%Y-%m-%d}")'
             )
+        if sprint_ids:
+            wanted.append(f"sprint in ({','.join(str(i) for i in sprint_ids)})")
         if not wanted:
             return []
         sprint_field = self._sprint_field()
@@ -532,6 +539,19 @@ def _sprint(text: str) -> TaskSprint:
         state=parts["state"].lower(),
         starts=_moment(parts.get("startDate")),
         ends=_moment(parts.get("endDate")),
+        board_id=int(parts["rapidViewId"]) if parts.get("rapidViewId", "").isdecimal() else None,
+    )
+
+
+def _board_sprint(item: Any, board_id: int, board: str) -> Sprint:
+    return Sprint(
+        id=int(item["id"]),
+        name=str(item["name"]),
+        board=board,
+        board_id=board_id,
+        state=str(item["state"]),
+        starts=_moment(item.get("startDate")),
+        ends=_moment(item.get("endDate")),
     )
 
 
