@@ -780,7 +780,11 @@ def _releases(client: Company) -> list[Release]:
         TrackerVersion.objects.filter(project_key=client.jira_project).select_related("visibility")
     )
     by_version, subtasks_only = _tasks_by_version(client.jira_project)
-    requests = {r.jira_key: r for r in client.requests.exclude(jira_key="")}
+    keys = {task.key for tasks in by_version.values() for task in tasks}
+    # Only what the table shows: the request's number and its link, both from its id.
+    requests = {
+        r.jira_key: r for r in client.requests.filter(jira_key__in=keys).only("pk", "jira_key")
+    }
     address = _jira_address()
     # Only the newest released ones have their tasks copied (D-008); older ones are history.
     released = sorted(
