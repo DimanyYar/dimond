@@ -19,10 +19,16 @@ subtasks), and a Jira that is down would leave the page empty.
 - **What is read, only reading:** all versions of the project except archived ones; the
   tasks of open versions and of the last two released; from the Hot Fix bucket only tasks
   closed in the last 30 days; the subtasks of all of them. The Unreleased bucket keeps its
-  version but no tasks (hidden, ~180 tasks). Fields: title, type, status and its category,
-  assignee, fix versions, sprints, closed date. **Never** descriptions or comments.
-- About 4–6 requests per project per run: versions, the Sprint field's id, the tasks, their
-  subtasks by 50 parents.
+  version but no tasks (hidden, ~180 tasks). **Also the tasks of the active sprints and of
+  the next future sprint of each scrum board**, with or without a fix version, for the
+  Sprints mode of the page (#30d, added 2026-11-05). Later future sprints are only named:
+  in FI they are buckets that never close, ~1,000 tasks (~45 requests a run instead of
+  ~8). A closed sprint is known only from the tasks that name it, so no run pages through a
+  board's whole history. Fields: title,
+  type, status and its category, assignee, fix versions, sprints, closed date. **Never**
+  descriptions or comments.
+- About 6–8 requests per project per run: versions, the scrum boards and their open
+  sprints, the Sprint field's id, the tasks, their subtasks by 50 parents.
 - A project Jira does not answer for keeps its previous copy; the error is kept on the run
   (`releases_error`) and in the container log, and the status sync of requests goes on.
 - Rows are updated in place by Jira's id or key, so what dimond later keeps about a release

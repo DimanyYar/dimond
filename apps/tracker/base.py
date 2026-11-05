@@ -5,6 +5,7 @@ object with these methods and gets plain values back.
 """
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Protocol
@@ -46,6 +47,12 @@ class Sprint:
     id: int
     name: str
     board: str
+    # What the Releases page's Sprints mode shows (#30); the Create task window needs none.
+    board_id: int = 0
+    # active or future.
+    state: str = "future"
+    starts: datetime | None = None
+    ends: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -124,6 +131,8 @@ class TaskSprint:
     state: str
     starts: datetime | None
     ends: datetime | None
+    # The board the sprint was made on (Jira's rapidViewId); none on an older Jira.
+    board_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -232,10 +241,16 @@ class Tracker(Protocol):
         ...
 
     def release_tasks(
-        self, project_key: str, version_ids: list[str], recent_ids: list[str], closed_since: date
+        self,
+        project_key: str,
+        version_ids: list[str],
+        recent_ids: list[str],
+        closed_since: date,
+        sprint_ids: Sequence[int] = (),
     ) -> list[ReleaseTask]:
         """Tasks with a fix version in `version_ids`, those in `recent_ids` closed on or after
-        `closed_since` (the Hot Fix bucket), and the subtasks of both. Each task once."""
+        `closed_since` (the Hot Fix bucket), those in the sprints `sprint_ids` with or without
+        a fix version, and the subtasks of all of them. Each task once."""
         ...
 
     def file_content(self, file: TaskFile) -> bytes:

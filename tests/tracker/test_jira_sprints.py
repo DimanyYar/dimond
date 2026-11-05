@@ -2,6 +2,7 @@
 Agile API, against saved Jira 8.13 answers. No test here reaches Jira."""
 
 import json
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -42,14 +43,37 @@ def test_open_sprints_of_every_scrum_board_are_listed_once():
 
     sprints = jira.open_sprints("FI")
 
-    assert sprints == [
-        Sprint(1931, "Sprint 12", "FI board"),
-        Sprint(1874, "Bugs bucket", "FI board"),
-        Sprint(1902, "Mobile bucket", "FI mobile"),
+    assert [(s.id, s.name, s.board) for s in sprints] == [
+        (1931, "Sprint 12", "FI board"),
+        (1874, "Bugs bucket", "FI board"),
+        (1902, "Mobile bucket", "FI mobile"),
     ]
     assert seen[0].url.params["projectKeyOrId"] == "FI"
     assert seen[0].url.params["type"] == "scrum"
     assert seen[1].url.params["state"] == "active,future"
+
+
+def test_open_sprints_come_with_their_board_state_and_dates():
+    jira = agile_answering(
+        {
+            "board": saved("board_FI.json"),
+            "board/412/sprint": saved("board_412_sprints.json"),
+            "board/418/sprint": page([]),
+        }
+    )
+
+    active, future = jira.open_sprints("FI")
+
+    assert active == Sprint(
+        1931,
+        "Sprint 12",
+        "FI board",
+        board_id=412,
+        state="active",
+        starts=datetime(2026, 10, 20, 6, tzinfo=UTC),
+        ends=datetime(2026, 11, 3, 6, tzinfo=UTC),
+    )
+    assert (future.state, future.starts) == ("future", None)
 
 
 def test_a_project_without_a_scrum_board_has_no_sprints():
@@ -62,8 +86,8 @@ def test_sprints_are_read_page_after_page():
     seen: list[httpx.Request] = []
     pages = iter(
         [
-            page([{"id": 1, "name": "Bucket 1"}], last=False),
-            page([{"id": 2, "name": "Bucket 2"}]),
+            page([{"id": 1, "name": "Bucket 1", "state": "future"}], last=False),
+            page([{"id": 2, "name": "Bucket 2", "state": "future"}]),
         ]
     )
 

@@ -6,6 +6,7 @@ mockups.
 
 import base64
 import time
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from itertools import count
 
@@ -117,12 +118,23 @@ ISSUES = [
 # Northwind has none, so its tasks can only go to the backlog.
 SPRINTS = {
     "FI": [
-        Sprint(101, "Sprint 12", "FI board"),
-        Sprint(102, "Bugs bucket", "FI board"),
-        Sprint(103, "Ideas bucket", "FI board"),
-        Sprint(104, "Old bucket", "FI board"),
+        Sprint(
+            101,
+            "Sprint 12",
+            "FI board",
+            board_id=88,
+            state="active",
+            starts=datetime(2026, 10, 20, tzinfo=UTC),
+            ends=datetime(2026, 11, 10, tzinfo=UTC),
+        ),
+        Sprint(102, "Bugs bucket", "FI board", board_id=88),
+        Sprint(103, "Ideas bucket", "FI board", board_id=88),
+        Sprint(104, "Old bucket", "FI board", board_id=88),
     ],
-    "HF": [Sprint(201, "Web bucket", "HF web"), Sprint(202, "Mobile bucket", "HF mobile")],
+    "HF": [
+        Sprint(201, "Web bucket", "HF web", board_id=91),
+        Sprint(202, "Mobile bucket", "HF mobile", board_id=92),
+    ],
 }
 # Plays a sprint someone closed after the PM opened the window: still listed, but Jira refuses
 # to put a task in it.
@@ -150,6 +162,7 @@ SPRINT_11 = TaskSprint(
     "closed",
     datetime(2026, 9, 29, tzinfo=UTC),
     datetime(2026, 10, 20, tzinfo=UTC),
+    board_id=88,
 )
 SPRINT_12 = TaskSprint(
     101,
@@ -157,10 +170,12 @@ SPRINT_12 = TaskSprint(
     "active",
     datetime(2026, 10, 20, tzinfo=UTC),
     datetime(2026, 11, 10, tzinfo=UTC),
+    board_id=88,
 )
 OLGA, IVAN, ANNA = "Olga Petrova", "Ivan Kuznetsov", "Anna Sokolova"
-# Key, title, type, status, then the fix version's id for a task or the parent's key for a
-# subtask, and who it is assigned to. Stories stay unassigned in To Do while subtasks move.
+# Key, title, type, status, then the fix version's id for a task (empty: a sprint's task with no
+# release yet) or the parent's key for a subtask, and who it is assigned to. Stories stay
+# unassigned in To Do while subtasks move.
 RELEASE_ROWS = [
     ("FI-2214", "Filter the leads list by source", "Story", "To Do", "20130", ""),
     ("FI-2241", "[BE] Source filter in the leads API", "Sub-task", "Done", "FI-2214", OLGA),
@@ -187,8 +202,14 @@ RELEASE_ROWS = [
     ("FI-2090", "Sign-in link expired too early", "Bug", "Done", "20150", OLGA),
     ("FI-2060", "CSV export timed out", "Bug", "Done", "20150", IVAN),
     ("FI-2010", "Lead scoring ideas", "Story", "To Do", "20160", ""),
+    ("FI-2260", "Remove unused lead fields", "Task", "In Progress", "", OLGA),
+    ("FI-2261", "[BE] Drop the old columns", "Sub-task", "In Progress", "FI-2260", OLGA),
 ]
-RELEASE_SPRINTS = {"FI-2214": (SPRINT_12,), "FI-2208": (SPRINT_11, SPRINT_12)}
+RELEASE_SPRINTS = {
+    "FI-2214": (SPRINT_12,),
+    "FI-2208": (SPRINT_11, SPRINT_12),
+    "FI-2260": (SPRINT_12,),
+}
 # Hot Fix shows what was closed lately, so one demo fix stays recent whenever the demo runs.
 RESOLVED = {
     "FI-2150": datetime(2026, 9, 29, tzinfo=UTC),
@@ -211,7 +232,7 @@ def _release_task(
         status_category={"To Do": "new", "Done": "done"}.get(status, "indeterminate"),
         assignee_login=who.split()[0].lower() if who else "",
         assignee_name=who,
-        version_ids=() if parent else (version_or_parent,),
+        version_ids=() if parent or not version_or_parent else (version_or_parent,),
         sprints=RELEASE_SPRINTS.get(key, ()),
         resolved=RESOLVED.get(key),
     )
@@ -307,7 +328,12 @@ class MockTracker:
         return list(VERSIONS.get(project_key, []))
 
     def release_tasks(
-        self, project_key: str, version_ids: list[str], recent_ids: list[str], closed_since: date
+        self,
+        project_key: str,
+        version_ids: list[str],
+        recent_ids: list[str],
+        closed_since: date,
+        sprint_ids: Sequence[int] = (),
     ) -> list[ReleaseTask]:
         self._check_project(project_key)
 
@@ -315,6 +341,8 @@ class MockTracker:
             if task.subtask or not task.key.startswith(f"{project_key}-"):
                 return False
             if set(task.version_ids) & set(version_ids):
+                return True
+            if {s.id for s in task.sprints} & set(sprint_ids):
                 return True
             recent = task.resolved is not None and task.resolved.date() >= closed_since
             return recent and bool(set(task.version_ids) & set(recent_ids))

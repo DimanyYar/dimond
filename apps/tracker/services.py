@@ -35,7 +35,9 @@ from .base import (
     Comment,
     Issue,
     IssueNotFound,
+    ProjectNotFound,
     ReleaseTask,
+    Sprint,
     Tracker,
     TrackerCaptcha,
     TrackerError,
@@ -286,10 +288,12 @@ def copy_releases(tracker: Tracker) -> tuple[int, str]:
     project Jira does not answer for keeps its previous copy; the others go on. Returns how
     many tasks were copied and what failed."""
     projects = set(Company.objects.exclude(jira_project="").values_list("jira_project", flat=True))
-    copied, failures = 0, []
+    copied, failures, open_sprints = 0, [], []
     for project_key in sorted(projects):
         try:
-            copied += _copy_project(tracker, project_key)
+            count, sprints = _copy_project(tracker, project_key)
+            copied += count
+            open_sprints += sprints
         except TrackerSignInFailed:
             raise
         except TrackerError as error:
@@ -298,13 +302,24 @@ def copy_releases(tracker: Tracker) -> tuple[int, str]:
     # A project no client uses any more.
     TrackerTask.objects.exclude(project_key__in=projects).delete()
     TrackerVersion.objects.exclude(project_key__in=projects).delete()
-    TrackerSprint.objects.filter(tasks__isnull=True).delete()
+    # A closed sprint no copied task names any more; open ones stay listed even when empty or
+    # unread, so the Sprints mode can name them. After a failed project its open sprints are
+    # unknown this run, so nothing is pruned until a run reads every project.
+    if not failures:
+        TrackerSprint.objects.filter(tasks__isnull=True).exclude(jira_id__in=open_sprints).delete()
     return copied, " ".join(failures)
 
 
-def _copy_project(tracker: Tracker, project_key: str) -> int:
-    """Jira is read whole first, so a failure halfway leaves the previous copy as it was."""
+def _copy_project(tracker: Tracker, project_key: str) -> tuple[int, list[int]]:
+    """Jira is read whole first, so a failure halfway leaves the previous copy as it was.
+    Returns how many tasks were copied and the ids of the project's open sprints."""
     versions = [v for v in tracker.versions(project_key) if not v.archived]
+    try:
+        open_sprints = tracker.open_sprints(project_key)
+    except ProjectNotFound:
+        # The project exists (its versions were just read): Jira has no Agile boards for it,
+        # e.g. without Jira Software. Releases are copied without sprints.
+        open_sprints = []
     released = sorted(
         (v for v in versions if v.released and v.release_date),
         key=lambda v: v.release_date or date.min,
@@ -316,13 +331,31 @@ def _copy_project(tracker: Tracker, project_key: str) -> int:
         + [v.id for v in released[:RELEASED_READ]],
         [v.id for v in versions if v.name == RECENT_BUCKET],
         timezone.localdate() - timedelta(days=RECENT_BUCKET_DAYS),
+        sorted(_sprints_read(open_sprints)),
     )
-    _save_copy(project_key, versions, tasks)
-    return len(tasks)
+    _save_copy(project_key, versions, tasks, open_sprints)
+    return len(tasks), [s.id for s in open_sprints]
+
+
+def _sprints_read(open_sprints: list[Sprint]) -> set[int]:
+    """The sprints whose tasks are copied, with or without a release: the active ones and the
+    next one of each board. Later future sprints are often buckets that never close (FI has
+    ~1,000 tasks in them), so they are only named (Tony, Nov 5)."""
+    read = {s.id for s in open_sprints if s.state == "active"}
+    boards_done: set[int | str] = set()
+    for sprint in open_sprints:
+        # A board without an id (an older Jira) is told apart by its name.
+        board = sprint.board_id or sprint.board
+        if sprint.state == "future" and board not in boards_done:
+            read.add(sprint.id)
+            boards_done.add(board)
+    return read
 
 
 @transaction.atomic
-def _save_copy(project_key: str, versions: list[Version], tasks: list[ReleaseTask]) -> None:
+def _save_copy(
+    project_key: str, versions: list[Version], tasks: list[ReleaseTask], open_sprints: list[Sprint]
+) -> None:
     """Rows are updated in place, never dropped and made again, so anything dimond later keeps
     about a release or a task stays attached to it."""
     TrackerVersion.objects.bulk_create(
@@ -345,15 +378,40 @@ def _save_copy(project_key: str, versions: list[Version], tasks: list[ReleaseTas
     TrackerVersion.objects.filter(project_key=project_key).exclude(
         jira_id__in=[v.id for v in versions]
     ).delete()
-    sprints = {sprint.id: sprint for task in tasks for sprint in task.sprints}
+    boards = {s.board_id: s.board for s in open_sprints}
+    # A closed sprint of a board with no open sprints left keeps the board an earlier run saw.
+    known_boards = dict(TrackerSprint.objects.exclude(board="").values_list("jira_id", "board"))
+    sprints = {
+        s.id: TrackerSprint(
+            jira_id=s.id,
+            name=s.name,
+            board=boards.get(s.board_id or 0) or known_boards.get(s.id, ""),
+            state=s.state,
+            starts=s.starts,
+            ends=s.ends,
+        )
+        for task in tasks
+        for s in task.sprints
+    }
+    # A sprint's own answer from its board is newer than what a task remembers of it.
+    read = _sprints_read(open_sprints)
+    sprints |= {
+        s.id: TrackerSprint(
+            jira_id=s.id,
+            name=s.name,
+            board=s.board,
+            state=s.state,
+            starts=s.starts,
+            ends=s.ends,
+            tasks_read=s.id in read,
+        )
+        for s in open_sprints
+    }
     TrackerSprint.objects.bulk_create(
-        [
-            TrackerSprint(jira_id=s.id, name=s.name, state=s.state, starts=s.starts, ends=s.ends)
-            for s in sprints.values()
-        ],
+        list(sprints.values()),
         update_conflicts=True,
         unique_fields=["jira_id"],
-        update_fields=["name", "state", "starts", "ends"],
+        update_fields=["name", "board", "state", "starts", "ends", "tasks_read"],
     )
     TrackerTask.objects.bulk_create(
         [

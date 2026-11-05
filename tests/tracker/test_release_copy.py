@@ -2,6 +2,7 @@
 (#30; ADR 0026): versions, their tasks and subtasks, linked to requests or not. Jira answers
 from saved responses or the demo tracker; no test reaches Jira."""
 
+from dataclasses import replace
 from datetime import UTC, date, datetime
 
 import httpx
@@ -9,10 +10,10 @@ import pytest
 
 from apps.accounts.models import Company
 from apps.tracker import mock
-from apps.tracker.base import TrackerUnreachable
+from apps.tracker.base import ProjectNotFound, TaskSprint, TrackerUnreachable
 from apps.tracker.jira import JiraTracker
 from apps.tracker.mock import MockTracker
-from apps.tracker.models import SyncOutcome, TrackerTask, TrackerVersion
+from apps.tracker.models import SyncOutcome, TrackerSprint, TrackerTask, TrackerVersion
 from apps.tracker.services import copy_releases, sync_tasks
 
 from .test_jira import URL, saved
@@ -26,6 +27,9 @@ class ReleasesJira:
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.seen.append(request)
+        if request.url.path.startswith("/rest/agile/1.0/"):
+            agile = request.url.path.removeprefix("/rest/agile/1.0/").replace("/", "_")
+            return saved(f"{agile}_FI.json" if agile == "board" else f"{agile}s.json")
         path = request.url.path.removeprefix("/rest/api/2/")
         if path == "search":
             jql = request.url.params["jql"]
@@ -116,6 +120,50 @@ def test_only_open_versions_hot_fix_and_last_two_released_are_read(jira, atlas):
     assert TrackerVersion.objects.get(name="Unreleased").tasks.count() == 0
 
 
+def test_the_tasks_of_open_sprints_are_read_too(jira, atlas):
+    copy_releases(jira.tracker())
+
+    # Board 412: the active sprint and the next one; board 418: its next one.
+    assert jira.jql()[0].endswith("OR sprint in (1874,1902,1931)) ORDER BY key")
+
+
+def test_a_sprint_task_with_no_release_is_copied_with_its_subtasks(atlas):
+    copy_releases(MockTracker())
+
+    task = TrackerTask.objects.get(key="FI-2260")
+    assert list(task.versions.all()) == []
+    assert task.sprints.get().name == "Sprint 12"
+    assert list(task.subtasks.values_list("key", flat=True)) == ["FI-2261"]
+
+
+def test_sprints_keep_their_board_also_when_known_only_from_a_task(atlas):
+    copy_releases(MockTracker())
+
+    # Sprint 11 is closed: no board lists it, but the task's sprint field names the board.
+    boards = dict(TrackerSprint.objects.values_list("name", "board"))
+    assert boards["Sprint 12"] == "FI board"
+    assert boards["Sprint 11"] == "FI board"
+
+
+def test_later_future_sprints_are_named_but_their_tasks_are_not_read(atlas, monkeypatch):
+    # FI keeps buckets that never close behind its next sprint: ~1,000 tasks.
+    bucket = TaskSprint(103, "Ideas bucket", "future", None, None, board_id=88)
+    idea = replace(mock.RELEASE_TASKS[0], key="FI-2290", version_ids=(), sprints=(bucket,))
+    monkeypatch.setattr(mock, "RELEASE_TASKS", [*mock.RELEASE_TASKS, idea])
+
+    copy_releases(MockTracker())
+
+    read = dict(TrackerSprint.objects.values_list("name", "tasks_read"))
+    assert read == {
+        "Sprint 11": True,
+        "Sprint 12": True,
+        "Bugs bucket": True,
+        "Ideas bucket": False,
+        "Old bucket": False,
+    }
+    assert not TrackerTask.objects.filter(key="FI-2290").exists()
+
+
 def test_sync_copies_releases_with_their_subtasks(atlas):
     run = sync_tasks()
 
@@ -185,3 +233,45 @@ def test_one_sync_run_asks_jira_for_its_field_list_once(jira):
     tracker.release_tasks("FI", ["20150"], [], date.min)
 
     assert [r.url.path for r in jira.seen].count("/rest/api/2/field") == 1
+
+
+def test_without_agile_boards_releases_are_still_copied(atlas, monkeypatch):
+    def no_agile(self, project_key):
+        raise ProjectNotFound(project_key)
+
+    monkeypatch.setattr(MockTracker, "open_sprints", no_agile)
+
+    copied, failed = copy_releases(MockTracker())
+
+    assert (copied > 0, failed) == (True, "")
+    assert TrackerVersion.objects.filter(name="26.8.0").exists()
+
+
+def test_a_closed_sprint_keeps_its_board_when_the_board_has_no_open_sprints(atlas, monkeypatch):
+    copy_releases(MockTracker())
+    monkeypatch.setitem(mock.SPRINTS, "FI", [])
+
+    copy_releases(MockTracker())
+
+    assert TrackerSprint.objects.get(name="Sprint 11").board == "FI board"
+
+
+def test_after_a_failed_project_its_empty_open_sprints_stay(atlas, monkeypatch):
+    copy_releases(MockTracker())
+
+    def silent(self, project_key):
+        raise TrackerUnreachable("Jira at https://jira.example.com did not answer.")
+
+    monkeypatch.setattr(MockTracker, "versions", silent)
+    copy_releases(MockTracker())
+
+    assert TrackerSprint.objects.filter(name="Ideas bucket").exists()
+
+
+def test_the_next_sprint_of_every_board_is_read(pm):
+    Company.objects.create(name="Harbor Foods", owner=pm, jira_project="HF")
+
+    copy_releases(MockTracker())
+
+    read = dict(TrackerSprint.objects.values_list("name", "tasks_read"))
+    assert (read["Web bucket"], read["Mobile bucket"]) == (True, True)
