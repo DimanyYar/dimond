@@ -131,7 +131,10 @@ SPRINTS = {
         Sprint(103, "Ideas bucket", "FI board", board_id=88),
         Sprint(104, "Old bucket", "FI board", board_id=88),
     ],
-    "HF": [Sprint(201, "Web bucket", "HF web"), Sprint(202, "Mobile bucket", "HF mobile")],
+    "HF": [
+        Sprint(201, "Web bucket", "HF web", board_id=91),
+        Sprint(202, "Mobile bucket", "HF mobile", board_id=92),
+    ],
 }
 # Plays a sprint someone closed after the PM opened the window: still listed, but Jira refuses
 # to put a task in it.
