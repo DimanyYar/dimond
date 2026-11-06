@@ -2,11 +2,12 @@
 {% load static %}
 {% comment %}
 The signed-in shell. Pages fill `nav` (the menu's links), `sidebar_footer`, `topbar_meta` (the
-right side of the phone top bar), `app_attributes` (the PM's collapsed menu) and `content`. On a phone the sidebar becomes a menu that
+right side of the phone top bar) and `content`. On wide screens anyone can collapse the menu to
+its icons (30e; canvas 7.3 · PMReleaseViewNav), kept per person. On a phone the sidebar becomes a menu that
 slides in from the ☰ in the top bar (mockups PM · phone, Client · phone).
 {% endcomment %}
 {% block body %}
-<div class="app" data-menu{% block app_attributes %}{% endblock %}>
+<div class="app" data-menu data-column="menu"{% if user.menu_collapsed %} data-collapsed{% endif %}>
   <aside class="sidebar" id="main-menu" aria-label="Menu">
     <div class="sidebar-head">
       <a class="brand" href="/"><span class="brand-mark">d.</span><span class="brand-name">dimon.d</span></a>
@@ -15,7 +16,10 @@ slides in from the ☰ in the top bar (mockups PM · phone, Client · phone).
       </button>
     </div>
     <nav class="nav" aria-label="Main">{% block nav %}{% endblock %}</nav>
-    <div class="sidebar-footer">{% block sidebar_footer %}{% endblock %}</div>
+    <div class="sidebar-footer">
+      {% block sidebar_footer %}{% endblock %}
+      {% include "accounts/collapse_button.html" with column="menu" collapsed=user.menu_collapsed name="the menu" text="Collapse" %}
+    </div>
   </aside>
   <div class="menu-scrim" data-menu-close hidden></div>
   <header class="topbar">
@@ -28,4 +32,5 @@ slides in from the ☰ in the top bar (mockups PM · phone, Client · phone).
   <main class="main">{% block content %}{% endblock %}</main>
 </div>
 <script type="module" src="{% static 'js/menu.js' %}"></script>
+<script type="module" src="{% static 'js/collapse.js' %}"></script>
 {% endblock %}

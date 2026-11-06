@@ -1,7 +1,8 @@
 """Collapsed columns and the phone layout (#30, 30e; canvas 7.3 · PMReleaseViewNav,
-PMReleaseViewCompact, MPMReleaseView): the PM narrows the menu or the release list, the choice
-stays with the person on every page and device, and on a phone the list hides behind the chosen
-release's button. The copy comes from the demo tracker; no test reaches Jira."""
+PMReleaseViewCompact, MPMReleaseView): the PM or the client narrows the menu, the PM also the
+release list; the choice stays with the person on every page and device, and on a phone the
+list hides behind the chosen release's button. The copy comes from the demo tracker; no test
+reaches Jira."""
 
 import pytest
 from django.urls import reverse
@@ -106,14 +107,17 @@ def test_an_unknown_column_is_refused(client, pm):
     assert collapse(client, "inbox").status_code == 400
 
 
-def test_a_client_has_no_columns_to_collapse(client, atlas):
+def test_a_client_collapses_their_menu_too(client, atlas):
     anna = User.objects.create_user("anna@atlas.test", company=atlas, name="Anna K.")
     client.force_login(anna)
 
-    assert collapse(client, "menu").status_code == 404
-    assert 'action="/account/columns/"' not in open_page(client, "/requests/")
+    collapse(client, "menu")
+
     anna.refresh_from_db()
-    assert not anna.menu_collapsed
+    assert anna.menu_collapsed
+    page = open_page(client, "/requests/")
+    assert 'data-column="menu" data-collapsed' in page
+    assert 'aria-label="Expand the menu"' in page
 
 
 def test_on_a_phone_the_chosen_release_opens_the_list(client, pm, atlas):

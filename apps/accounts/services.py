@@ -272,14 +272,14 @@ def choose_time_zone(person: User, time_zone: str) -> None:
 
 
 class Column(StrEnum):
-    """A column the PM can collapse to a narrow strip (30e)."""
+    """A column a person can collapse to a narrow strip (30e): the menu, the PM's release list."""
 
     MENU = "menu"
     RELEASE_LIST = "release_list"
 
 
 def collapse_column(person: User, column: Column, collapsed: bool) -> None:
-    """The PM narrows or widens a column; it stays that way on every page and device."""
+    """A person narrows or widens a column; it stays that way on every page and device."""
     field = f"{column.value}_collapsed"
     setattr(person, field, collapsed)
     person.save(update_fields=[field])

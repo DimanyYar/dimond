@@ -588,13 +588,13 @@ def sign_out_other_devices(request: HttpRequest) -> HttpResponse:
 @require_POST
 @login_required
 def collapse_column(request: HttpRequest) -> HttpResponse:
-    """The PM's Collapse / Expand button on the menu or the release list (30e)."""
-    pm = _pm(request)
+    """The Collapse / Expand button on the menu (PM and client) or the release list (30e)."""
+    person = _me(request)
     try:
         column = services.Column(request.POST.get("column", ""))
     except ValueError:
         return HttpResponseBadRequest()
-    services.collapse_column(pm, column, request.POST.get("collapsed") == "1")
+    services.collapse_column(person, column, request.POST.get("collapsed") == "1")
     if request.headers.get("X-Requested-With") == "fetch":
         # The page's script has already narrowed the column; it only needs to know it was kept.
         return HttpResponse(status=204)

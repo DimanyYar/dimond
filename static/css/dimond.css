@@ -7144,7 +7144,8 @@ a.task-title:hover {
     white-space: nowrap;
   }
 
-  .app[data-collapsed] .nav a {
+  /* :not(.nav-phone-only): the client's New request link lives only in the phone menu. */
+  .app[data-collapsed] .nav a:not(.nav-phone-only) {
     position: relative;
     display: flex;
     align-items: center;
@@ -7158,11 +7159,39 @@ a.task-title:hover {
     display: block;
   }
 
-  /* Logs still says something needs attention, as a small number on the icon's corner. */
-  .app[data-collapsed] .nav-badge {
+  /* Logs still says something needs attention, as a small number on the icon's corner. Only
+     the menu's badge: the Logs tabs have badges of their own. */
+  .app[data-collapsed] .nav .nav-badge {
     position: absolute;
     top: 2px;
     right: 0;
+  }
+
+  /* The tooltip must reach past the narrow column; the five icons always fit without scrolling. */
+  .app[data-collapsed] .sidebar {
+    overflow: visible;
+    z-index: 10;
+  }
+
+  /* The item's name shows at once on hover or keyboard focus, beside the icon: the browser's own
+     tooltip comes late, small, and not at all for some people. */
+  .app[data-collapsed] .nav a:hover .nav-label,
+  .app[data-collapsed] .nav a:focus-visible .nav-label {
+    left: calc(100% + 12px);
+    top: 50%;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    transform: translateY(-50%);
+    padding: 8px 12px;
+    border-radius: var(--radius-s);
+    background: var(--ink);
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+    pointer-events: none;
   }
 
   .app[data-collapsed] .sidebar-footer > :not(.collapse-form),
