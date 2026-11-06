@@ -2,7 +2,8 @@
 {% load static %}
 {% comment %}
 Releases (canvas 7 · PMReleaseView): the client's releases on the left, the chosen one's
-dates, health, numbers, subtasks by track, warnings and task table on the right. Hiding
+dates, health, numbers, subtasks by track, warnings and task table on the right. "Plan by:
+Sprints" (30d) shows the same card and table by sprint of the client's boards. Hiding
 changes only this list (D-006): Jira and clients see nothing. Choosing a release or a filter
 swaps the page in place (filters.js); without scripts they are plain links.
 {% endcomment %}
@@ -15,6 +16,13 @@ swaps the page in place (filters.js); without scripts they are plain links.
       {% if page.client %}<p class="muted">{{ page.client }} · Jira project {{ page.client.jira_project }}</p>{% endif %}
       <h1>Releases</h1>
     </div>
+    {% if page.client %}
+      <nav class="releases-modes" role="group" aria-label="Plan by">
+        {% for link in page.mode_links %}
+          <a class="chip" href="?{{ link.query }}"{% if link.on %} aria-current="true"{% endif %}>{{ link.label }}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
     {% if page.clients|length > 1 %}
       <nav class="releases-clients" aria-label="Client">
         {% for client in page.clients %}
@@ -31,18 +39,18 @@ swaps the page in place (filters.js); without scripts they are plain links.
     </section>
   {% elif not page.releases %}
     <section class="card empty-state">
-      <h2>No releases yet</h2>
-      <p class="muted">dimond copies {{ page.client }}’s releases from Jira on every sync. They show up here after the next one.</p>
+      <h2>No {% if page.plan_by == "sprints" %}sprints{% else %}releases{% endif %} yet</h2>
+      <p class="muted">dimond copies {{ page.client }}’s releases and sprints from Jira on every sync. They show up here after the next one.</p>
     </section>
   {% else %}
     <div class="releases-body" data-region="results">
-      <nav class="release-list" aria-label="Releases of {{ page.client }}">
+      <nav class="release-list" aria-label="{% if page.plan_by == 'sprints' %}Sprints{% else %}Releases{% endif %} of {{ page.client }}">
         {% for release in page.shown %}
           {% ifchanged release.group %}<h2 class="release-group">{{ release.group }}</h2>{% endifchanged %}
-          <a class="release-item" href="?client={{ page.client.pk }}&amp;release={{ release.version.pk }}"{% if release == page.selected %} aria-current="page"{% endif %}>
+          <a class="release-item" href="?{{ page.base }}&amp;{{ release.select }}"{% if release == page.selected %} aria-current="page"{% endif %}>
             <span class="release-item-head">
-              <strong>{{ release.version.name }}</strong>
-              {% if release.version.release_date %}<span class="muted">{{ release.version.release_date|date:"M j" }}</span>{% endif %}
+              <strong>{{ release.name }}</strong>
+              {% if release.day %}<span class="muted">{{ release.day|date:"M j" }}</span>{% endif %}
               {% if release.health %}<span class="health health-{{ release.health|slugify }}">{{ release.health }}</span>{% endif %}
             </span>
             {% if release.tasks %}<span class="release-bar" aria-hidden="true"><span style="width: {{ release.done_pct }}%"></span></span>{% endif %}
@@ -70,11 +78,11 @@ swaps the page in place (filters.js); without scripts they are plain links.
       {% if release %}
       <section class="card release" aria-labelledby="release-name">
         <div class="release-head">
-          <h2 id="release-name">{{ release.version.name }}</h2>
+          <h2 id="release-name">{{ release.name }}</h2>
           {% if release.health %}<span class="health health-{{ release.health|slugify }}">{{ release.health }}</span>{% endif %}
           <span class="release-actions">
             {% if release.jira_url %}<a class="btn btn-small" href="{{ release.jira_url }}" target="_blank" rel="noopener">Open in Jira</a>{% endif %}
-            {% if not release.hidden %}
+            {% if release.can_hide %}
               <form method="post" action="{% url 'release_visibility' release.version.pk %}">
                 {% csrf_token %}
                 <input type="hidden" name="client" value="{{ page.client.pk }}">
@@ -112,9 +120,9 @@ swaps the page in place (filters.js); without scripts they are plain links.
             {% endfor %}
           </section>
         {% elif not release.tasks_read %}
-          <p class="muted">dimond doesn’t read the tasks of this bucket. Open it in Jira to see them.</p>
+          <p class="muted">dimond doesn’t read the tasks of this {% if page.plan_by == "sprints" %}sprint{% else %}bucket{% endif %}. Open it in Jira to see them.</p>
         {% elif not release.tasks %}
-          <p class="muted">No tasks in this release yet.</p>
+          <p class="muted">No tasks in this {% if page.plan_by == "sprints" %}sprint{% else %}release{% endif %} yet.</p>
         {% endif %}
 
         {% if release.tasks %}

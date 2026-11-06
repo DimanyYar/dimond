@@ -60,12 +60,19 @@ def releases(request: HttpRequest) -> HttpResponse:
         show = selectors.TableFilter(request.GET.get("show", selectors.TableFilter.ALL))
     except ValueError:
         show = selectors.TableFilter.ALL
+    try:
+        plan_by = selectors.PlanBy(request.GET.get("mode", selectors.PlanBy.RELEASES))
+    except ValueError:
+        plan_by = selectors.PlanBy.RELEASES
+    sprint = request.GET.get("sprint")
     page = selectors.releases_page(
         _pm(request),
         _number(request.GET.get("client")),
         _number(request.GET.get("release")),
         show,
         selectors.task_types(request.GET.get("types")),
+        plan_by,
+        str(_number(sprint)) if sprint != "none" else sprint,
     )
     return render(request, "tracker/releases.html", {"page": page})
 

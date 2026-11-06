@@ -383,6 +383,7 @@ def _save_copy(
     known_boards = dict(TrackerSprint.objects.exclude(board="").values_list("jira_id", "board"))
     sprints = {
         s.id: TrackerSprint(
+            project_key=project_key,
             jira_id=s.id,
             name=s.name,
             board=boards.get(s.board_id or 0) or known_boards.get(s.id, ""),
@@ -397,6 +398,7 @@ def _save_copy(
     read = _sprints_read(open_sprints)
     sprints |= {
         s.id: TrackerSprint(
+            project_key=project_key,
             jira_id=s.id,
             name=s.name,
             board=s.board,
@@ -411,7 +413,7 @@ def _save_copy(
         list(sprints.values()),
         update_conflicts=True,
         unique_fields=["jira_id"],
-        update_fields=["name", "board", "state", "starts", "ends", "tasks_read"],
+        update_fields=["project_key", "name", "board", "state", "starts", "ends", "tasks_read"],
     )
     TrackerTask.objects.bulk_create(
         [

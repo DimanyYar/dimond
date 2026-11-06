@@ -6573,6 +6573,17 @@ details[open] .run-chevron {
   gap: var(--space-2);
 }
 
+.releases-modes {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.releases-modes .chip {
+  text-decoration: none;
+}
+
+.releases-modes .chip[aria-current="true"],
 .releases-clients .chip[aria-current="true"] {
   background: var(--ink);
   border-color: var(--ink);
@@ -6669,6 +6680,10 @@ details[open] .run-chevron {
 .health-stale {
   background: var(--accent-soft);
   color: var(--accent-text);
+}
+
+.health-active {
+  background: var(--info-soft);
 }
 
 .health-released {
