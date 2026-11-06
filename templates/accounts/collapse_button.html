@@ -1,0 +1,16 @@
+{% comment %}
+The PM's Collapse / Expand button of a column (30e; canvas 7.3 · PMReleaseViewNav, Compact).
+It sits inside the element marked data-column="{{ column }}". collapse.js narrows the column at
+once and saves the choice in the background; without scripts the form saves it and comes back
+here. `collapsed`: the column's state now; `name`: what the column is called in the label.
+{% endcomment %}
+<form class="collapse-form" method="post" action="{% url 'collapse_column' %}" data-collapse="{{ column }}">
+  {% csrf_token %}
+  <input type="hidden" name="column" value="{{ column }}">
+  <input type="hidden" name="collapsed" value="{% if collapsed %}0{% else %}1{% endif %}">
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <button class="collapse-button" type="submit" data-collapse-label="Collapse {{ name }}" data-expand-label="Expand {{ name }}" aria-label="{% if collapsed %}Expand{% else %}Collapse{% endif %} {{ name }}" title="{% if collapsed %}Expand{% else %}Collapse{% endif %} {{ name }}">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>
+    <span class="collapse-text" aria-hidden="true">{{ text }}</span>
+  </button>
+</form>

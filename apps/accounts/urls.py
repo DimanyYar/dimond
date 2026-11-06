@@ -11,6 +11,7 @@ urlpatterns = [
     path("account/name/", views.save_account_name, name="save_account_name"),
     path("account/time-zone/", views.save_account_time_zone, name="save_account_time_zone"),
     path("account/emails/", views.save_account_emails, name="save_account_emails"),
+    path("account/columns/", views.collapse_column, name="collapse_column"),
     path("account/sign-out-others/", views.sign_out_other_devices, name="sign_out_other_devices"),
     path("clients/", views.clients, name="clients"),
     path("clients/new/", views.new_client, name="new_client"),

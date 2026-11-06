@@ -3,6 +3,7 @@ import logging
 import secrets
 from collections.abc import Iterable
 from datetime import timedelta
+from enum import StrEnum
 
 from django.conf import settings
 from django.contrib.sessions.models import Session
@@ -268,6 +269,20 @@ def choose_time_zone(person: User, time_zone: str) -> None:
     """A person picks the zone every time on their pages shows in (PRD: account)."""
     person.time_zone = time_zone
     person.save(update_fields=["time_zone"])
+
+
+class Column(StrEnum):
+    """A column the PM can collapse to a narrow strip (30e)."""
+
+    MENU = "menu"
+    RELEASE_LIST = "release_list"
+
+
+def collapse_column(person: User, column: Column, collapsed: bool) -> None:
+    """The PM narrows or widens a column; it stays that way on every page and device."""
+    field = f"{column.value}_collapsed"
+    setattr(person, field, collapsed)
+    person.save(update_fields=[field])
 
 
 def choose_emails(person: User, notify: Notify) -> None:

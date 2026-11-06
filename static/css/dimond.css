@@ -7079,3 +7079,323 @@ a.task-title:hover {
 .release-table-empty {
   margin: 0;
 }
+
+/* Collapsed columns (30e; canvas 7.3 · PMReleaseViewNav, PMReleaseViewCompact): the PM's menu
+   narrows to its icons and the release list to short tiles. Wide screens only: on a phone the
+   menu sits behind the ☰ and the list behind the release button. */
+.nav-icon,
+.release-item-count,
+.release-picker {
+  display: none;
+}
+
+.collapse-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sidebar .collapse-button {
+  border-color: var(--panel-raised);
+  background: transparent;
+  color: var(--muted-on-panel);
+}
+
+.collapse-button:hover {
+  border-color: var(--ink);
+}
+
+.sidebar .collapse-button:hover {
+  border-color: var(--muted-on-panel);
+  color: #ffffff;
+}
+
+.release-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .app[data-collapsed] .sidebar {
+    flex-basis: 72px;
+    padding: var(--space-6) 0;
+    align-items: center;
+  }
+
+  .app[data-collapsed] .brand-name,
+  .app[data-collapsed] .nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .app[data-collapsed] .nav a {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--tap);
+    height: var(--tap);
+    padding: 0;
+  }
+
+  .app[data-collapsed] .nav-icon {
+    display: block;
+  }
+
+  /* Logs still says something needs attention, as a small number on the icon's corner. */
+  .app[data-collapsed] .nav-badge {
+    position: absolute;
+    top: 2px;
+    right: 0;
+  }
+
+  .app[data-collapsed] .sidebar-footer > :not(.collapse-form),
+  .app[data-collapsed] .sidebar .collapse-text,
+  .releases-body[data-collapsed] .release-rail .collapse-text {
+    display: none;
+  }
+
+  .app[data-collapsed] .sidebar .collapse-button svg,
+  .releases-body[data-collapsed] .release-rail .collapse-button svg {
+    transform: rotate(180deg);
+  }
+
+  .releases-body[data-collapsed] {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .releases-body[data-collapsed] .release-rail {
+    align-items: center;
+  }
+
+  .releases-body[data-collapsed] .release-group,
+  .releases-body[data-collapsed] .release-hidden,
+  .releases-body[data-collapsed] .release-item-meta,
+  .releases-body[data-collapsed] .release-bar,
+  .releases-body[data-collapsed] .release-item-head .muted {
+    display: none;
+  }
+
+  .releases-body[data-collapsed] .release-item {
+    width: 76px;
+    box-sizing: border-box;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 6px;
+  }
+
+  .releases-body[data-collapsed] .release-item-head {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 4px;
+    max-width: 100%;
+  }
+
+  .releases-body[data-collapsed] .release-item-name {
+    max-width: 64px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+
+  /* The health pill shrinks to a dot in its text colour: the pill's own fill is too pale. */
+  .releases-body[data-collapsed] .release-item .health {
+    width: 8px;
+    height: 8px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+    background: currentColor;
+  }
+
+  .releases-body[data-collapsed] .release-item-count {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+  }
+}
+
+/* Releases on a phone (30e; canvas 7.3 · MPMReleaseView): Releases / Sprints across the width,
+   the list behind the chosen release's button, and every task as a card. */
+@media (max-width: 899px) {
+  .sidebar .collapse-form,
+  .release-rail .collapse-form {
+    display: none;
+  }
+
+  .releases-modes {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  .releases-modes .chip {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+}
+
+/* Only with scripts: without them the button could not open, so the list stays shown. */
+@media (max-width: 899px) and (scripting: enabled) {
+  .release-picker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 56px;
+    padding: 8px 14px;
+    border: 1px solid var(--ink);
+    border-radius: var(--radius-m);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .release-picker-text {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .release-picker-text strong {
+    font-size: 18px;
+  }
+
+  .release-picker-text .muted {
+    font-size: 12px;
+  }
+
+  .release-picker svg {
+    flex: 0 0 auto;
+    transition: transform 120ms;
+  }
+
+  .release-picker[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+
+  .release-picker[aria-expanded="false"] + .release-list {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .release-table-scroll {
+    overflow-x: visible;
+  }
+
+  .release-table table {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .release-table thead {
+    display: none;
+  }
+
+  .release-table .task-group {
+    display: block;
+    overflow: hidden;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-m);
+    background: var(--surface);
+  }
+
+  /* :not([hidden]): a flex row would show the subtasks the arrow keeps closed. */
+  .release-table tr:not([hidden]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 12px;
+  }
+
+  .release-table .task-row-client {
+    background: color-mix(in srgb, var(--accent-soft) 50%, var(--surface));
+  }
+
+  .release-table td,
+  .release-table td:first-child,
+  .release-table td:nth-child(2),
+  .release-table td:nth-child(n + 3) {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    white-space: normal;
+  }
+
+  .release-table td:first-child {
+    flex: 1 1 100%;
+  }
+
+  /* As in the mockup: status, then the track chips, then the client request on the right.
+     People and the sprint or date are left to the wide table. */
+  .release-table td:nth-child(3) {
+    order: 1;
+  }
+
+  .release-table td:nth-child(2) {
+    order: 2;
+  }
+
+  .release-table td:nth-child(6) {
+    order: 3;
+    margin-left: auto;
+  }
+
+  .release-table td:nth-child(4),
+  .release-table td:nth-child(5),
+  .release-table td:empty,
+  .release-table .subtask-row td:nth-child(6) {
+    display: none;
+  }
+
+  .release-table .subtask-row:not([hidden]) {
+    padding: 8px 12px 8px 44px;
+    border-top: 1px solid var(--hairline-soft);
+    background: var(--surface-side);
+  }
+
+  .release-table .subtask-cell {
+    padding-left: 0;
+  }
+
+  /* A subtask is one line: its status sits right of its title. */
+  .release-table .subtask-row td:first-child {
+    flex: 1 1 0;
+  }
+
+  .release-table .task-toggle-space {
+    display: none;
+  }
+
+  .release-table .task-toggle {
+    flex-basis: 32px;
+    width: 32px;
+    height: 32px;
+    margin-top: -6px;
+  }
+}

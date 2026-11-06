@@ -1,0 +1,1 @@
+{% if not release.tasks_read %}Tasks not read{% elif release.tasks %}{{ release.tasks|length }} task{{ release.tasks|length|pluralize }} · {{ release.done }} done{% else %}No tasks yet{% endif %}

@@ -154,6 +154,9 @@ class User(AbstractBaseUser, PermissionsMixin):
         help_text="When a spam mark switched their emails to Nothing; cleared once they or "
         "the PM pick again.",
     )
+    # The PM's columns (30e): narrow when collapsed, the same on every device they sign in on.
+    menu_collapsed = models.BooleanField(default=False)
+    release_list_collapsed = models.BooleanField(default=False)
     is_active = models.BooleanField(
         default=True, help_text="Off means access is revoked; requests and replies stay."
     )

@@ -5,7 +5,9 @@ Releases (canvas 7 · PMReleaseView): the client's releases on the left, the cho
 dates, health, numbers, subtasks by track, warnings and task table on the right. "Plan by:
 Sprints" (30d) shows the same card and table by sprint of the client's boards. Hiding
 changes only this list (D-006): Jira and clients see nothing. Choosing a release or a filter
-swaps the page in place (filters.js); without scripts they are plain links.
+swaps the page in place (filters.js); without scripts they are plain links. The list collapses
+to a narrow column (30e; canvas 7.3 · PMReleaseViewCompact); on a phone it hides behind the
+chosen release's button (MPMReleaseView) and the table turns into cards.
 {% endcomment %}
 {% block title %}Releases · dimon.d{% endblock %}
 
@@ -43,18 +45,37 @@ swaps the page in place (filters.js); without scripts they are plain links.
       <p class="muted">dimond copies {{ page.client }}’s releases and sprints from Jira on every sync. They show up here after the next one.</p>
     </section>
   {% else %}
-    <div class="releases-body" data-region="results">
-      <nav class="release-list" aria-label="{% if page.plan_by == 'sprints' %}Sprints{% else %}Releases{% endif %} of {{ page.client }}">
+    <div class="releases-body" data-region="results" data-column="release_list"{% if user.release_list_collapsed %} data-collapsed{% endif %}>
+      <div class="release-rail">
+      {% if page.plan_by == "sprints" %}
+        {% include "accounts/collapse_button.html" with column="release_list" collapsed=user.release_list_collapsed name="the sprint list" text="Collapse list" %}
+      {% else %}
+        {% include "accounts/collapse_button.html" with column="release_list" collapsed=user.release_list_collapsed name="the release list" text="Collapse list" %}
+      {% endif %}
+      {% with release=page.selected %}
+        {% if release %}
+          <button class="release-picker" type="button" aria-expanded="false" aria-controls="release-list" data-release-picker>
+            <span class="release-picker-text">
+              <strong>{{ release.name }}</strong>
+              <span class="muted">{% include "tracker/release_meta.html" %}</span>
+            </span>
+            {% if release.health %}<span class="health health-{{ release.health|slugify }}">{{ release.health }}</span>{% endif %}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+          </button>
+        {% endif %}
+      {% endwith %}
+      <nav class="release-list" id="release-list" aria-label="{% if page.plan_by == 'sprints' %}Sprints{% else %}Releases{% endif %} of {{ page.client }}">
         {% for release in page.shown %}
           {% ifchanged release.group %}<h2 class="release-group">{{ release.group }}</h2>{% endifchanged %}
-          <a class="release-item" href="?{{ page.base }}&amp;{{ release.select }}"{% if release == page.selected %} aria-current="page"{% endif %}>
+          <a class="release-item" href="?{{ page.base }}&amp;{{ release.select }}" title="{{ release.name }}"{% if release == page.selected %} aria-current="page"{% endif %}>
             <span class="release-item-head">
-              <strong>{{ release.name }}</strong>
+              <strong class="release-item-name">{{ release.name }}</strong>
               {% if release.day %}<span class="muted">{{ release.day|date:"M j" }}</span>{% endif %}
               {% if release.health %}<span class="health health-{{ release.health|slugify }}">{{ release.health }}</span>{% endif %}
             </span>
             {% if release.tasks %}<span class="release-bar" aria-hidden="true"><span style="width: {{ release.done_pct }}%"></span></span>{% endif %}
-            <span class="muted release-item-meta">{% if not release.tasks_read %}Tasks not read{% elif release.tasks %}{{ release.tasks|length }} task{{ release.tasks|length|pluralize }} · {{ release.done }} done{% else %}No tasks yet{% endif %}</span>
+            <span class="muted release-item-meta">{% include "tracker/release_meta.html" %}</span>
+            {% if release.tasks_read %}<span class="release-item-count" aria-hidden="true">{{ release.tasks|length }}</span>{% endif %}
           </a>
         {% endfor %}
         {% if page.hidden %}
@@ -73,6 +94,7 @@ swaps the page in place (filters.js); without scripts they are plain links.
           </details>
         {% endif %}
       </nav>
+      </div>
 
       {% with release=page.selected %}
       {% if release %}
@@ -136,4 +158,5 @@ swaps the page in place (filters.js); without scripts they are plain links.
 </div>
 <script type="module" src="{% static 'js/filters.js' %}"></script>
 <script type="module" src="{% static 'js/release-table.js' %}"></script>
+<script type="module" src="{% static 'js/release-picker.js' %}"></script>
 {% endblock %}

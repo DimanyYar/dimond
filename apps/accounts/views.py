@@ -5,9 +5,10 @@ from django.contrib.auth import HASH_SESSION_KEY, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.notifications.models import DiscordPostStatus
@@ -582,3 +583,23 @@ def sign_out_other_devices(request: HttpRequest) -> HttpResponse:
     request.session[HASH_SESSION_KEY] = me.get_session_auth_hash()
     messages.success(request, "Signed out on your other devices.")
     return redirect("account")
+
+
+@require_POST
+@login_required
+def collapse_column(request: HttpRequest) -> HttpResponse:
+    """The PM's Collapse / Expand button on the menu or the release list (30e)."""
+    pm = _pm(request)
+    try:
+        column = services.Column(request.POST.get("column", ""))
+    except ValueError:
+        return HttpResponseBadRequest()
+    services.collapse_column(pm, column, request.POST.get("collapsed") == "1")
+    if request.headers.get("X-Requested-With") == "fetch":
+        # The page's script has already narrowed the column; it only needs to know it was kept.
+        return HttpResponse(status=204)
+    back = request.POST.get("next", "")
+    safe = url_has_allowed_host_and_scheme(
+        back, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    )
+    return redirect(back if safe else "my_requests")
