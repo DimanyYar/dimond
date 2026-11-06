@@ -5,14 +5,29 @@ The PM's shell: the same frame as the client's, with the PM's navigation. More s
 context processor: the Logs badge and the "Jira synced" line.
 {% endcomment %}
 {% block nav %}
-  <a href="{% url 'my_requests' %}"{% if request.resolver_match.url_name == "my_requests" %} aria-current="page"{% endif %}>Requests</a>
-  <a href="{% url 'clients' %}"{% if request.resolver_match.url_name == "clients" or request.resolver_match.url_name == "client" or request.resolver_match.url_name == "person" %} aria-current="page"{% endif %}>Clients</a>
-  <a href="{% url 'releases' %}"{% if request.resolver_match.url_name == "releases" %} aria-current="page"{% endif %}>Releases</a>
-  <a href="{% url 'logs' %}"{% if request.resolver_match.url_name == "logs" or request.resolver_match.url_name == "logs_emails" %} aria-current="page"{% endif %}>Logs{% with attention=sync.attention|add:mail_paused %}{% if attention %} <span class="nav-badge" aria-label="{{ attention }} need attention">{{ attention }}</span>{% endif %}{% endwith %}</a>
-  <a href="{% url 'account' %}"{% if request.resolver_match.url_name == "account" %} aria-current="page"{% endif %}>Account</a>
+  <a href="{% url 'my_requests' %}"{% if request.resolver_match.url_name == "my_requests" %} aria-current="page"{% endif %}>
+    {% include "layouts/nav_icon.html" with icon="requests" %}
+    <span class="nav-label">Requests</span>
+  </a>
+  <a href="{% url 'clients' %}"{% if request.resolver_match.url_name == "clients" or request.resolver_match.url_name == "client" or request.resolver_match.url_name == "person" %} aria-current="page"{% endif %}>
+    {% include "layouts/nav_icon.html" with icon="clients" %}
+    <span class="nav-label">Clients</span>
+  </a>
+  <a href="{% url 'releases' %}"{% if request.resolver_match.url_name == "releases" %} aria-current="page"{% endif %}>
+    {% include "layouts/nav_icon.html" with icon="releases" %}
+    <span class="nav-label">Releases</span>
+  </a>
+  <a href="{% url 'logs' %}"{% if request.resolver_match.url_name == "logs" or request.resolver_match.url_name == "logs_emails" %} aria-current="page"{% endif %}>
+    {% include "layouts/nav_icon.html" with icon="logs" %}
+    <span class="nav-label">Logs</span>{% with attention=sync.attention|add:mail_paused %}{% if attention %} <span class="nav-badge" aria-label="{{ attention }} need attention">{{ attention }}</span>{% endif %}{% endwith %}
+  </a>
+  <a href="{% url 'account' %}"{% if request.resolver_match.url_name == "account" %} aria-current="page"{% endif %}>
+    {% include "layouts/nav_icon.html" with icon="account" %}
+    <span class="nav-label">Account</span>
+  </a>
 {% endblock %}
 {% block sidebar_footer %}
   <a class="sync-line{% if sync.failed or sync.paused %} sync-line-bad{% endif %}" href="{% url 'logs' %}">{% if sync.paused %}Jira sync paused: login rejected{% elif sync.failed %}Jira sync failed {{ sync.last_ago }}{% elif sync.last %}Jira synced {{ sync.last_ago }}{% else %}Jira not synced yet{% endif %}</a>
-  <span>{{ user.name|default:user.email }} · PM</span>
+  <span class="sidebar-who">{{ user.name|default:user.email }} · PM</span>
   {% include "accounts/sign_out_button.html" %}
 {% endblock %}
