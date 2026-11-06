@@ -7167,11 +7167,6 @@ a.task-title:hover {
     right: 0;
   }
 
-  /* The tooltip must reach past the narrow column; the five icons always fit without scrolling. */
-  .app[data-collapsed] .sidebar {
-    overflow: visible;
-    z-index: 10;
-  }
 
   /* The item's name shows at once on hover or keyboard focus, beside the icon: the browser's own
      tooltip comes late, small, and not at all for some people. */
@@ -7258,6 +7253,16 @@ a.task-title:hover {
     display: block;
     font-size: 11px;
     color: var(--muted);
+  }
+}
+
+/* The names beside the icons must reach past the narrow column, so it stops scrolling. Only
+   when the window is tall enough for the whole collapsed menu: in a short or zoomed window it
+   keeps scrolling, so the Expand button at the bottom stays reachable. */
+@media (min-width: 900px) and (min-height: 520px) {
+  .app[data-collapsed] .sidebar {
+    overflow: visible;
+    z-index: 10;
   }
 }
 

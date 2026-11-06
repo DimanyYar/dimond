@@ -1,11 +1,15 @@
-// The PM's Collapse / Expand buttons (30e): the column narrows at once and the choice is saved
-// in the background, so it stays the same on every page and device. Delegated, so the release
+// The Collapse / Expand buttons of the menu and the release list (30e): the column narrows at
+// once and the choice is saved in the background, so it stays the same on every page and device. Delegated, so the release
 // list's button swapped in by filters.js works too. Without this script the form saves and
 // reloads the page.
 document.addEventListener("submit", async (event) => {
   const form = event.target.closest("form[data-collapse]");
   if (!form) return;
   event.preventDefault();
+  // One save at a time: a second click before the first answer could reach the server first
+  // and leave it keeping the older choice.
+  if (form.hasAttribute("data-saving")) return;
+  form.setAttribute("data-saving", "");
   const holder = form.closest(`[data-column="${form.dataset.collapse}"]`);
   const button = form.querySelector("button");
   const data = new FormData(form);
@@ -30,4 +34,5 @@ document.addEventListener("submit", async (event) => {
   // Not saved (offline, signed out, server error): the column goes back, so the page never
   // shows a width that the next page would not keep.
   if (!saved) show(!collapsed);
+  form.removeAttribute("data-saving");
 });
