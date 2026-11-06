@@ -313,6 +313,14 @@ class MockTracker:
         if sprint_id == CLOSING_SPRINT:
             raise TrackerRefused("Jira said no: Issues can't be moved to a closed sprint.")
 
+    def move_fix_version(self, key: str, remove_id: str, add_id: str) -> None:
+        """The demo keeps no edits: the next sync copies the demo releases as they were."""
+        if not any(task.key == key for task in RELEASE_TASKS):
+            raise IssueNotFound(key)
+        known = {version.id for version in VERSIONS.get(key.split("-")[0], [])}
+        if add_id and add_id not in known:
+            raise TrackerRefused(f"Jira said no: there is no version with id {add_id}.")
+
     def attach_file(self, key: str, name: str, content: bytes, content_type: str) -> None:
         """The demo keeps no files: a known key is enough to say it went well."""
         if not self._has_project(key.split("-")[0]):

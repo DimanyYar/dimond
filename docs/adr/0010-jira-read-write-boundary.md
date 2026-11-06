@@ -13,7 +13,10 @@ dimond writes to Jira only (1) a new task created by the PM, then put into the s
 chose in the Create task window (added Oct 29, 2026), (2) a client's answer to a
 team question, as a comment quoting the question and mentioning its author, and (3) when the
 PM links an existing task and leaves "Add a comment" ticked, one comment pointing back to the
-request with its files (added Oct 19, 2026). It reads the open sprints of the project's scrum
+request with its files (added Oct 19, 2026), and (4) the fix version of a task the PM moves to
+another release on the Releases page, and of its subtasks that carry the same one: that version
+is taken off and the new one put on, the task's other fix versions stay (added Nov 6, 2026,
+#30 step 30f). It reads the open sprints of the project's scrum
 boards for that window, statuses, fix versions and the team's questions for the client:
 comments tagged `#client` outside a quote, with the files they show
 (changed Oct 20, 2026, from comments mentioning a dimond service user), kept in Jira's markup
@@ -21,8 +24,8 @@ and formatted by dimond itself, never as Jira's HTML (ADR 0025, Oct 27, 2026). A
 tag needs
 no service account; a mention would have pointed at Dmitry while the sync signs in as him, and
 every mention of him would have reached the client. dimond's own answers quote the question,
-so the tag inside a quote never counts. For the Releases page it also reads, never writes,
-each client's project versions and the tasks and subtasks of its releases (added Nov 2, 2026,
+so the tag inside a quote never counts. For the Releases page it also reads each client's
+project versions and the tasks and subtasks of its releases (added Nov 2, 2026,
 ADR 0026). The answer goes as soon as the client sends it, without the
 PM (decided Oct 20, 2026); the client's words are escaped so they never mention anyone or
 open a new question. If Jira does not take it, nothing retries by itself: the PM sees why and

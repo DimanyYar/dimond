@@ -218,6 +218,21 @@ class JiraTracker:
             missing=TrackerRefused("The sprint is gone from Jira."),
         )
 
+    def move_fix_version(self, key: str, remove_id: str, add_id: str) -> None:
+        if not ISSUE_KEY.fullmatch(key):
+            raise IssueNotFound(key)
+        # "update" with remove and add, not "fields": setting the whole list would also drop
+        # the archived versions dimond does not copy.
+        changes = [{"remove": {"id": remove_id}}] if remove_id else []
+        changes += [{"add": {"id": add_id}}] if add_id else []
+        self._call(
+            f"issue/{key}",
+            lambda data: None,
+            body={"update": {"fixVersions": changes}},
+            method="PUT",
+            missing=IssueNotFound(key),
+        )
+
     def attach_file(self, key: str, name: str, content: bytes, content_type: str) -> None:
         if not ISSUE_KEY.fullmatch(key):
             raise IssueNotFound(key)
@@ -440,6 +455,7 @@ class JiraTracker:
         body: dict[str, Any] | None = None,
         upload: tuple[str, bytes, str] | None = None,
         missing: TrackerError | None = None,
+        method: str = "POST",
     ) -> T:
         """Ask Jira and turn its answer into dimond's values with `parse`. Anything that is
         not the JSON Jira 8.13 sends (a proxy's login page, a changed field) becomes a
@@ -451,14 +467,14 @@ class JiraTracker:
                     path, files={"file": upload}, headers={"X-Atlassian-Token": "no-check"}
                 )
             elif body is not None:
-                response = self._client.post(path, json=body)
+                response = self._client.request(method, path, json=body)
             else:
                 response = self._client.get(path, params=params)
         except httpx.TransportError as error:
             raise TrackerUnreachable(f"Jira at {self.address} did not answer: {error}") from error
         self._raise_for_answer(response, path, missing)
         try:
-            # Moving tasks into a sprint answers 204 with no body.
+            # Moving tasks into a sprint or editing a task answers 204 with no body.
             return parse(response.json() if response.content else None)
         except ValueError as error:
             raise TrackerUnreachable(

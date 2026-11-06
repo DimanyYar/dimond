@@ -5,7 +5,7 @@ news, such as Jira not answering, is everyone's."""
 
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from enum import StrEnum
 from urllib.parse import urlencode, urlsplit
@@ -22,6 +22,7 @@ from apps.requests.models import CLOSED_STATUSES, JIRA_STATUSES, ClientStatus, R
 from .base import TrackerNotConfigured
 from .connection import current_tracker
 from .models import (
+    ReleaseMove,
     SyncEvent,
     SyncOutcome,
     SyncRun,
@@ -446,6 +447,13 @@ class Release(TaskGroup):
         return not self.hidden
 
     @property
+    def date_note(self) -> str:
+        """Beside the release in a task's Move menu (30f)."""
+        if self.group == ReleaseGroup.HOTFIXES:
+            return "ships any day"
+        return _day(self.version.release_date) if self.version.release_date else "no date"
+
+    @property
     def health(self) -> Health:
         if self.group == ReleaseGroup.RELEASED:
             return Health.RELEASED
@@ -740,12 +748,23 @@ class FilterLink:
 
 
 @dataclass(frozen=True)
+class MoveTarget:
+    """A release a task can be moved to from the table (30f): its pk, or "none"."""
+
+    value: str
+    name: str
+    note: str
+
+
+@dataclass(frozen=True)
 class Table:
     rows: list[TaskRow]
     filters: list[FilterLink]
     type_filters: list[FilterLink]
     # Hot Fix lists when each task was done; the others list the sprint.
     when_column: str
+    # Where a task of this release can go; empty where tasks are not moved from (30f).
+    move_targets: list[MoveTarget] = field(default_factory=list)
 
 
 def _state(task: TrackerTask) -> TaskState:
@@ -1103,7 +1122,60 @@ def releases_page(
     page = ReleasesPage(clients, client, plan_by, items, selected, None)
     if selected is None:
         return page
-    return replace(page, table=_table(page._base(), selected, show, types))
+    table = _table(page._base(), selected, show, types)
+    if isinstance(selected, Release):
+        table = replace(table, move_targets=_move_targets(selected, page.shown))
+    return replace(page, table=table)
+
+
+# Tasks move out of open releases and Hot Fix; a released release is history, and the
+# buckets' tasks are not read (D-008).
+MOVABLE_FROM = (ReleaseGroup.OPEN, ReleaseGroup.HOTFIXES)
+
+
+def _move_targets(selected: Release, shown: Sequence[Release | SprintView]) -> list[MoveTarget]:
+    """Where a task of the chosen release can go (30f; canvas 7.2): the other open releases in
+    the list and Hot Fix, or no release at all. Hidden releases are left out, as in the list."""
+    if selected.group not in MOVABLE_FROM:
+        return []
+    targets = [
+        MoveTarget(str(r.version.pk), r.name, r.date_note)
+        for r in shown
+        if isinstance(r, Release) and r.group in MOVABLE_FROM and r != selected
+    ]
+    return [*targets, MoveTarget(NO_RELEASE, "No release", "clients see no plan")]
+
+
+NO_RELEASE = "none"
+
+
+def task_to_move(pm: User, key: str) -> TrackerTask:
+    """A task (not a subtask) in the copy of one of this PM's clients' projects. Raises
+    TrackerTask.DoesNotExist for anyone else's, exactly as for a missing one."""
+    projects = clients_for(pm).exclude(jira_project="").values_list("jira_project", flat=True)
+    return TrackerTask.objects.prefetch_related("subtasks__versions", "versions").get(
+        key=key, parent__isnull=True, project_key__in=projects
+    )
+
+
+def move_for(pm: User, pk: int) -> ReleaseMove:
+    """A move in one of this PM's clients' projects. Raises ReleaseMove.DoesNotExist for
+    anyone else's."""
+    projects = clients_for(pm).exclude(jira_project="").values_list("jira_project", flat=True)
+    return ReleaseMove.objects.get(pk=pk, project_key__in=projects)
+
+
+MOVES_SHOWN = 200
+
+
+def release_moves_for(pm: User) -> list[ReleaseMove]:
+    """Logs · Releases: the latest moves in this PM's clients' projects, by anyone."""
+    projects = clients_for(pm).exclude(jira_project="").values_list("jira_project", flat=True)
+    return list(
+        ReleaseMove.objects.filter(project_key__in=projects).select_related("moved_by", "undo_of")[
+            :MOVES_SHOWN
+        ]
+    )
 
 
 def release_for(pm: User, version_pk: int) -> TrackerVersion:
@@ -1111,3 +1183,24 @@ def release_for(pm: User, version_pk: int) -> TrackerVersion:
     else's, exactly as for a missing one."""
     projects = clients_for(pm).exclude(jira_project="").values_list("jira_project", flat=True)
     return TrackerVersion.objects.get(pk=version_pk, project_key__in=projects)
+
+
+@dataclass(frozen=True)
+class MoveToast:
+    """The note after a move on the Releases page (30f; canvas 7.2): what moved, Undo, and the
+    client request that follows the task."""
+
+    move: ReleaseMove
+    request: Request | None
+
+    @property
+    def can_undo(self) -> bool:
+        return self.move.undo_of_id is None
+
+
+def move_toast(pm: User, pk: int) -> MoveToast | None:
+    try:
+        move = move_for(pm, pk)
+    except ReleaseMove.DoesNotExist:
+        return None
+    return MoveToast(move, Request.objects.filter(jira_key=move.task_key).first())

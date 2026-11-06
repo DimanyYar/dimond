@@ -1,7 +1,8 @@
 {% comment %}
 The task table of a release (30c; canvas 7 · PMReleaseView): one row per task, its subtasks
 under it behind the arrow (release-table.js). Status comes from the subtasks (D-004); keys and
-titles open Jira in a new tab. `table` is selectors.Table.
+titles open Jira in a new tab. `table` is selectors.Table. In an open release or Hot Fix each
+task has a Move menu (30f): its subtasks with the same fix version of their own move along.
 {% endcomment %}
 <section class="release-table" aria-label="Tasks">
   <div class="release-filters">
@@ -46,6 +47,23 @@ titles open Jira in a new tab. `table` is selectors.Table.
                   <span class="task-text">
                     {% if row.url %}<a class="task-title" href="{{ row.url }}" target="_blank" rel="noopener">{{ row.task.summary }}</a>{% else %}<span class="task-title">{{ row.task.summary }}</span>{% endif %}
                     <span class="muted task-key">{% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener">{{ row.task.key }}<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" aria-hidden="true"><path d="M4 2H2v6h6V6M6 1h3v3M9 1L5 5"/></svg></a>{% else %}{{ row.task.key }}{% endif %} · {{ row.task.issue_type }}</span>
+                    {% if table.move_targets %}
+                      <details class="move-menu" name="move-menu">
+                        <summary class="move-pill" aria-label="Move {{ row.task.key }} from {{ page.selected.name }}">{{ page.selected.name }}<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5l3 3 3-3"/></svg></summary>
+                        <div class="move-options">
+                          <span class="muted move-options-head">Move {{ row.task.key }} to</span>
+                          {% for target in table.move_targets %}
+                            <form method="post" action="{% url 'move_task' row.task.key %}">
+                              {% csrf_token %}
+                              <input type="hidden" name="client" value="{{ page.client.pk }}">
+                              <input type="hidden" name="from" value="{{ page.selected.version.pk }}">
+                              <input type="hidden" name="to" value="{{ target.value }}">
+                              <button class="move-option" type="submit"><strong>{{ target.name }}</strong><span class="muted">{{ target.note }}</span></button>
+                            </form>
+                          {% endfor %}
+                        </div>
+                      </details>
+                    {% endif %}
                   </span>
                 </span>
               </td>

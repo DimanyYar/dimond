@@ -14,7 +14,8 @@ from apps.accounts.models import User
 from apps.accounts.selectors import has_clients_page
 
 from . import selectors, services
-from .models import TrackerVersion
+from .base import TrackerError
+from .models import ReleaseMove, TrackerTask, TrackerVersion
 
 
 def _pm(request: HttpRequest) -> User:
@@ -65,6 +66,9 @@ def releases(request: HttpRequest) -> HttpResponse:
     except ValueError:
         plan_by = selectors.PlanBy.RELEASES
     sprint = request.GET.get("sprint")
+    # The note after a move shows once, on the page the move came back to.
+    toast_pk = request.session.pop(UNDO_SESSION_KEY, None)
+    toast = selectors.move_toast(_pm(request), toast_pk) if toast_pk else None
     page = selectors.releases_page(
         _pm(request),
         _number(request.GET.get("client")),
@@ -74,7 +78,7 @@ def releases(request: HttpRequest) -> HttpResponse:
         plan_by,
         str(_number(sprint)) if sprint != "none" else sprint,
     )
-    return render(request, "tracker/releases.html", {"page": page})
+    return render(request, "tracker/releases.html", {"page": page, "toast": toast})
 
 
 @require_POST
@@ -113,3 +117,93 @@ def jira_webhook(request: HttpRequest, token: str) -> HttpResponse:
         return HttpResponseBadRequest("The webhook address in Jira needs ?key=${issue.key}.")
     services.wake_for_webhook(key)
     return HttpResponse(status=204)
+
+
+UNDO_SESSION_KEY = "release_move"
+
+
+def _move_end(pm: User, value: str | None) -> TrackerVersion | None:
+    """A release from the Move form, or None for "No release". Another PM's release, or
+    anything that is not a release, is "not found"."""
+    if value == selectors.NO_RELEASE:
+        return None
+    pk = _number(value)
+    if pk is None:
+        raise Http404
+    try:
+        return selectors.release_for(pm, pk)
+    except TrackerVersion.DoesNotExist:
+        raise Http404 from None
+
+
+def _back_to_releases(client: str | None, version: TrackerVersion | None) -> HttpResponse:
+    query = {"client": client or ""} | ({"release": str(version.pk)} if version else {})
+    return redirect(f"{reverse('releases')}?{urlencode(query)}")
+
+
+@require_POST
+@login_required
+def move_task(request: HttpRequest, key: str) -> HttpResponse:
+    """A task's Move menu on the Releases page (30f; D-005): another release, or none."""
+    pm = _pm(request)
+    try:
+        task = selectors.task_to_move(pm, key)
+    except TrackerTask.DoesNotExist:
+        raise Http404 from None
+    source = _move_end(pm, request.POST.get("from"))
+    target = _move_end(pm, request.POST.get("to"))
+    back = _back_to_releases(request.POST.get("client"), source)
+    if source == target:
+        return back
+    if source is not None and source not in task.versions.all():
+        messages.info(request, f"{task.key} is no longer in {source.name}: the page was old.")
+        return back
+    try:
+        moved = services.move_task(pm, task, source, target)
+    except TrackerError as error:
+        messages.error(request, f"{task.key} stays where it was. {error}")
+        return back
+    request.session[UNDO_SESSION_KEY] = moved.move.pk
+    if moved.left_behind:
+        messages.warning(
+            request,
+            f"Jira did not move {', '.join(moved.left_behind)} along with {task.key}: "
+            "change it in Jira.",
+        )
+    return back
+
+
+@require_POST
+@login_required
+def undo_move(request: HttpRequest, pk: int) -> HttpResponse:
+    """Undo on the note after a move: the task goes back with the subtasks that moved along."""
+    pm = _pm(request)
+    try:
+        move = selectors.move_for(pm, pk)
+    except ReleaseMove.DoesNotExist:
+        raise Http404 from None
+    client = request.POST.get("client")
+    if hasattr(move, "undone_by"):
+        messages.info(request, f"{move.task_key} was already moved back.")
+        return _back_to_releases(client, None)
+    try:
+        moved = services.undo_move(pm, move)
+    except (TrackerTask.DoesNotExist, TrackerVersion.DoesNotExist):
+        messages.error(
+            request, f"{move.task_key} can't go back: the task or the release is gone from Jira."
+        )
+        return _back_to_releases(client, None)
+    except TrackerError as error:
+        messages.error(request, f"{move.task_key} stays where it is. {error}")
+        return _back_to_releases(client, None)
+    request.session[UNDO_SESSION_KEY] = moved.move.pk
+    return _back_to_releases(client, moved.target)
+
+
+@require_GET
+@login_required
+def logs_releases(request: HttpRequest) -> HttpResponse:
+    """Logs · Releases (30f): every move of a task to another release, by whom and when."""
+    return render(
+        request, "tracker/logs_releases.html", {"moves": selectors.release_moves_for(_pm(request))}
+    )

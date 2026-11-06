@@ -34,6 +34,26 @@ chosen release's button (MPMReleaseView) and the table turns into cards.
     {% endif %}
   </header>
 
+  {% for message in messages %}
+    <div class="banner{% if message.level_tag == 'error' or message.level_tag == 'warning' %} banner-error{% endif %}" role="{% if message.level_tag == 'error' %}alert{% else %}status{% endif %}">{{ message }}</div>
+  {% endfor %}
+
+  {% if toast %}
+    <div class="move-toast" role="status">
+      <span class="move-toast-text">
+        <strong>{% if toast.move.undo_of %}Moved back:{% else %}Moved:{% endif %} {{ toast.move.task_key }} → {{ toast.move.to_label }}</strong>
+        <span>{% if toast.move.subtask_keys %}With {{ toast.move.subtask_keys|length }} subtask{{ toast.move.subtask_keys|length|pluralize }} that had {{ toast.move.from_label }} of their own. {% endif %}{% if toast.request %}{{ toast.request.key }} follows it: the client sees the new “Planned for” and a line in the thread, no email.{% else %}Changed in Jira.{% endif %}</span>
+      </span>
+      {% if toast.can_undo %}
+        <form method="post" action="{% url 'undo_move' toast.move.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="client" value="{{ page.client.pk }}">
+          <button class="btn btn-small" type="submit">Undo</button>
+        </form>
+      {% endif %}
+    </div>
+  {% endif %}
+
   {% if not page.client %}
     <section class="card empty-state">
       <h2>No client has a Jira project yet</h2>

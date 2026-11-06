@@ -7433,3 +7433,102 @@ a.task-title:hover {
     margin-top: -6px;
   }
 }
+
+/* Moving a task to another release (30f; canvas 7.2 · PMReleaseView): a pill with the task's
+   release, under its key, opens the choices right in the row. Inline, not a floating menu: the
+   table scrolls sideways, and a floating menu would be cut off at its edge. */
+.move-menu {
+  margin-top: 4px;
+}
+
+.move-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+
+.move-pill::-webkit-details-marker {
+  display: none;
+}
+
+.move-pill:hover,
+.move-menu[open] .move-pill {
+  border-color: var(--ink);
+}
+
+.move-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 260px;
+  margin-top: 6px;
+}
+
+.move-options-head {
+  font-size: 12px;
+}
+
+.move-option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.move-option:hover {
+  border-color: var(--ink);
+}
+
+.move-option strong,
+.move-option .muted {
+  white-space: nowrap;
+}
+
+.move-option .muted {
+  font-size: 12px;
+}
+
+/* The note after a move, with Undo (30f; canvas 7.2). */
+.move-toast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px 16px;
+  border-radius: var(--radius-m);
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.move-toast-text {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.move-toast .btn {
+  background: var(--surface);
+  color: var(--ink);
+}

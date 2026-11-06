@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -202,3 +203,49 @@ class ReleaseVisibility(models.Model):
 
     def __str__(self) -> str:
         return f"{self.version}: {'hidden' if self.hidden else 'shown'}"
+
+
+class ReleaseMove(models.Model):
+    """The PM moved a task to another release from the Releases page (#30, 30f): dimond changed
+    its fix version in Jira. Kept for Undo and for Logs · Releases. Names and Jira's ids are
+    stored as they were, so a line still reads right once a version is renamed or gone."""
+
+    moved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="release_moves"
+    )
+    project_key = models.CharField(max_length=32)
+    task_key = models.CharField(max_length=32)
+    task_summary = models.CharField(max_length=255)
+    from_version_id = models.CharField(max_length=32, blank=True, help_text="Empty: no release.")
+    from_name = models.CharField(max_length=255, blank=True)
+    to_version_id = models.CharField(max_length=32, blank=True, help_text="Empty: no release.")
+    to_name = models.CharField(max_length=255, blank=True)
+    subtask_keys = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Subtasks with a fix version of their own that moved along; Undo takes back "
+        "exactly these.",
+    )
+    undo_of = models.OneToOneField(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="undone_by",
+        help_text="The move this one took back with Undo.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+
+    def __str__(self) -> str:
+        return f"{self.task_key}: {self.from_label} → {self.to_label}"
+
+    @property
+    def from_label(self) -> str:
+        return self.from_name or "No release"
+
+    @property
+    def to_label(self) -> str:
+        return self.to_name or "No release"
