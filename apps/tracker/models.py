@@ -148,6 +148,8 @@ class TrackerVersion(models.Model):
 
 
 class TrackerSprint(models.Model):
+    # The client's project whose copy named it last: the Sprints mode lists a project's sprints.
+    project_key = models.CharField(max_length=32, blank=True)
     jira_id = models.PositiveIntegerField(unique=True)
     name = models.CharField(max_length=255)
     # The scrum board the sprint belongs to; empty for an old closed sprint of a board that has

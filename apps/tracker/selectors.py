@@ -4,7 +4,8 @@ client's releases (#30; ADR 0026). A PM sees only their own clients (ADR 0014); 
 news, such as Jira not answering, is everyone's."""
 
 import re
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from enum import StrEnum
 from urllib.parse import urlencode, urlsplit
@@ -26,6 +27,7 @@ from .models import (
     SyncRun,
     TrackerKind,
     TrackerSettings,
+    TrackerSprint,
     TrackerTask,
     TrackerVersion,
 )
@@ -318,6 +320,10 @@ class Health(StrEnum):
     NO_DATE = "No date"
     RECENT = "Last 30 days"
     RELEASED = "Released"
+    ACTIVE = "Active"
+    NEXT = "Next"
+    NOT_READ = "Not read"
+    CLOSED = "Closed"
     NONE = ""
 
 
@@ -358,21 +364,17 @@ class Track:
 
 
 @dataclass(frozen=True)
-class Release:
-    version: TrackerVersion
-    group: ReleaseGroup
-    hidden: bool
+class TaskGroup:
+    """What a release and a sprint share on the page: their tasks, numbers and tracks."""
+
     tasks: list[TrackerTask]
     # Subtasks with a fix version of their own whose parent is in another release: their work
     # counts in this release's tracks, but they are not tasks of it.
     other_subtasks: list[TrackerTask]
-    # Tasks are not read for the Unreleased bucket (D-008), so there is nothing to count.
+    # Tasks are not read for the Unreleased bucket (D-008) or a later future sprint (D-009),
+    # so there is nothing to count.
     tasks_read: bool
-    start: date | None
-    # The previous release when it has no date yet: this one starts the day after it ships.
-    starts_after: str
-    stale: bool
-    # The client requests linked to this release's tasks, by task key.
+    # The client requests linked to these tasks, by task key.
     requests: dict[str, Request]
     jira_address: str
     jira_url: str
@@ -398,6 +400,50 @@ class Release:
     @property
     def done_pct(self) -> int:
         return round(self.done * 100 / len(self.tasks)) if self.tasks else 0
+
+    @property
+    def tracks(self) -> list[Track]:
+        by_track: dict[str, list[TrackerTask]] = {}
+        for sub in self.subtasks:
+            by_track.setdefault(track_of(sub), []).append(sub)
+        return [
+            Track(
+                name,
+                len(subs),
+                sum(s.status_category == "done" for s in subs),
+                sum(s.status_category == "indeterminate" for s in subs),
+            )
+            for name in TRACKS
+            if (subs := by_track.get(name))
+        ]
+
+
+@dataclass(frozen=True)
+class Release(TaskGroup):
+    version: TrackerVersion
+    group: ReleaseGroup
+    hidden: bool
+    start: date | None
+    # The previous release when it has no date yet: this one starts the day after it ships.
+    starts_after: str
+    stale: bool
+
+    @property
+    def name(self) -> str:
+        return self.version.name
+
+    @property
+    def day(self) -> date | None:
+        return self.version.release_date
+
+    @property
+    def select(self) -> str:
+        """This release in the page's address."""
+        return f"release={self.version.pk}"
+
+    @property
+    def can_hide(self) -> bool:
+        return not self.hidden
 
     @property
     def health(self) -> Health:
@@ -434,22 +480,6 @@ class Release:
             f"ships {_day(version.release_date)}" if version.release_date else "no release date yet"
         )
         return f"{starts} · {ships}"
-
-    @property
-    def tracks(self) -> list[Track]:
-        by_track: dict[str, list[TrackerTask]] = {}
-        for sub in self.subtasks:
-            by_track.setdefault(track_of(sub), []).append(sub)
-        return [
-            Track(
-                name,
-                len(subs),
-                sum(s.status_category == "done" for s in subs),
-                sum(s.status_category == "indeterminate" for s in subs),
-            )
-            for name in TRACKS
-            if (subs := by_track.get(name))
-        ]
 
     @property
     def warnings(self) -> list[str]:
@@ -496,6 +526,160 @@ def _day(day: date | None) -> str:
 
 def _count(n: int, thing: str) -> str:
     return f"{n} {thing}{'' if n == 1 else 's'}"
+
+
+# The Sprints mode of the page (30d; canvas 7 · PMReleaseView, "Plan by: Sprints"): the same
+# release card and table, by sprint of the client's boards.
+
+
+class SprintKind(StrEnum):
+    ACTIVE = "active"
+    NEXT = "next"
+    LATER = "later"
+    CLOSED = "closed"
+    NONE = "none"
+
+
+@dataclass(frozen=True)
+class SprintView(TaskGroup):
+    # None for "Not in a sprint": the copied tasks no sprint holds.
+    sprint: TrackerSprint | None
+    kind: SprintKind
+
+    @property
+    def name(self) -> str:
+        return self.sprint.name if self.sprint else "Not in a sprint"
+
+    @property
+    def group(self) -> str:
+        if self.sprint is None:
+            return "No sprint"
+        return self.sprint.board or "Other sprints"
+
+    @property
+    def day(self) -> date | None:
+        ends = self.sprint.ends if self.sprint else None
+        return timezone.localdate(ends) if ends else None
+
+    @property
+    def select(self) -> str:
+        return f"sprint={self.sprint.pk if self.sprint else 'none'}"
+
+    @property
+    def can_hide(self) -> bool:
+        return False
+
+    @property
+    def hidden(self) -> bool:
+        return False
+
+    @property
+    def warnings(self) -> list[str]:
+        return []
+
+    @property
+    def health(self) -> Health:
+        return {
+            SprintKind.ACTIVE: Health.ACTIVE,
+            SprintKind.NEXT: Health.NEXT,
+            SprintKind.LATER: Health.NOT_READ,
+            SprintKind.CLOSED: Health.CLOSED,
+            SprintKind.NONE: Health.NONE,
+        }[self.kind]
+
+    @property
+    def date_line(self) -> str:
+        if self.sprint is None:
+            return "Copied tasks that sit in no sprint"
+        dates = self._dates()
+        if self.kind == SprintKind.ACTIVE:
+            return f"Active sprint · {dates}" if dates else "Active sprint"
+        if self.kind == SprintKind.NEXT:
+            return f"Next sprint · {dates}" if dates else "Next sprint · not started"
+        if self.kind == SprintKind.LATER:
+            return "Future sprint · dimond doesn’t read its tasks"
+        closed = f"Closed · {dates}" if dates else "Closed"
+        return f"{closed} · only its tasks that are in a copied release"
+
+    def _dates(self) -> str:
+        assert self.sprint is not None  # the "no sprint" item has no dates to show
+        starts, ends = self.sprint.starts, self.sprint.ends
+        if not (starts and ends):
+            return ""
+        return f"{_day(timezone.localdate(starts))} – {_day(timezone.localdate(ends))}"
+
+
+CLOSED_SHOWN = 2
+
+
+def _sprint_kind(sprint: TrackerSprint) -> SprintKind:
+    if sprint.state == "active":
+        return SprintKind.ACTIVE
+    if sprint.state == "future":
+        return SprintKind.NEXT if sprint.tasks_read else SprintKind.LATER
+    return SprintKind.CLOSED
+
+
+def _sprints(client: Company) -> list[SprintView]:
+    project = client.jira_project
+    tasks = list(
+        TrackerTask.objects.filter(project_key=project, parent__isnull=True).prefetch_related(
+            "subtasks", "versions", "sprints"
+        )
+    )
+    keys = {t.key for t in tasks}
+    requests = {
+        r.jira_key: r for r in client.requests.filter(jira_key__in=keys).only("pk", "jira_key")
+    }
+    address = _jira_address()
+    by_sprint: dict[int, list[TrackerTask]] = {}
+    for task in tasks:
+        for sprint in task.sprints.all():
+            by_sprint.setdefault(sprint.pk, []).append(task)
+    order = list(SprintKind)
+    # Board by board: active, next, later; then the newest closed ones. Jira numbers sprints in
+    # the order they are made.
+    sprints = sorted(
+        TrackerSprint.objects.filter(project_key=project),
+        key=lambda s: (
+            s.board,
+            order.index(_sprint_kind(s)),
+            -s.jira_id if _sprint_kind(s) == SprintKind.CLOSED else s.jira_id,
+        ),
+    )
+    views: list[SprintView] = []
+    closed_per_board: dict[str, int] = {}
+    for sprint in sprints:
+        kind = _sprint_kind(sprint)
+        if kind == SprintKind.CLOSED:
+            closed_per_board[sprint.board] = closed_per_board.get(sprint.board, 0) + 1
+            if closed_per_board[sprint.board] > CLOSED_SHOWN:
+                continue
+        own = by_sprint.get(sprint.pk, []) if sprint.tasks_read else []
+        views.append(_sprint_view(sprint, kind, own, requests, address))
+    loose = [t for t in tasks if not t.sprints.all()]
+    if loose:
+        views.append(_sprint_view(None, SprintKind.NONE, loose, requests, address))
+    return views
+
+
+def _sprint_view(
+    sprint: TrackerSprint | None,
+    kind: SprintKind,
+    tasks: list[TrackerTask],
+    requests: dict[str, Request],
+    address: str,
+) -> SprintView:
+    return SprintView(
+        tasks=tasks,
+        other_subtasks=[],
+        tasks_read=sprint is None or sprint.tasks_read,
+        requests={t.key: requests[t.key] for t in tasks if t.key in requests},
+        jira_address=address,
+        jira_url=f"{address}/issues/?jql=sprint%3D{sprint.jira_id}" if address and sprint else "",
+        sprint=sprint,
+        kind=kind,
+    )
 
 
 # The task table (30c; canvas 7 · PMReleaseView): a task per row, its subtasks under it.
@@ -608,7 +792,11 @@ def _when(task: TrackerTask, hotfix: bool) -> str:
     return sprints[-1].name if sprints else ""
 
 
-def _row(release: Release, task: TrackerTask) -> TaskRow:
+def _release_names(task: TrackerTask) -> str:
+    return ", ".join(v.name for v in task.versions.all()) or "No release"
+
+
+def _row(group: TaskGroup, task: TrackerTask) -> TaskRow:
     subtasks = sorted(task.subtasks.all(), key=lambda s: TRACKS.index(track_of(s)))
     state = _state(task)
     names = [task.assignee_name, *(s.assignee_name for s in subtasks)]
@@ -618,15 +806,17 @@ def _row(release: Release, task: TrackerTask) -> TaskRow:
         jira_says=task.status if JIRA_STATE.get(task.status_category) != state else "",
         chips=_chips(subtasks),
         people=list(dict.fromkeys(n for n in names if n))[:PEOPLE_SHOWN],
-        when=_when(task, release.group == ReleaseGroup.HOTFIXES),
-        request=release.requests.get(task.key),
-        subtasks=[SubtaskRow(s, track_of(s), _browse(release, s)) for s in subtasks],
-        url=_browse(release, task),
+        when=_when(task, group.group == ReleaseGroup.HOTFIXES)
+        if isinstance(group, Release)
+        else _release_names(task),
+        request=group.requests.get(task.key),
+        subtasks=[SubtaskRow(s, track_of(s), _browse(group, s)) for s in subtasks],
+        url=_browse(group, task),
     )
 
 
-def _browse(release: Release, task: TrackerTask) -> str:
-    return f"{release.jira_address}/browse/{task.key}" if release.jira_address else ""
+def _browse(group: TaskGroup, task: TrackerTask) -> str:
+    return f"{group.jira_address}/browse/{task.key}" if group.jira_address else ""
 
 
 PEOPLE_SHOWN = 4
@@ -641,8 +831,11 @@ def _wanted(row: TaskRow, show: TableFilter) -> bool:
     return True
 
 
-def _table(client: Company, release: Release, show: TableFilter, types: frozenset[str]) -> Table:
-    rows = [_row(release, task) for task in release.tasks]
+def _table(
+    base: dict[str, str], group: Release | SprintView, show: TableFilter, types: frozenset[str]
+) -> Table:
+    """`base` is the page's address without the table's own filters."""
+    rows = [_row(group, task) for task in group.tasks]
     shown = [
         row
         for row in rows
@@ -652,7 +845,7 @@ def _table(client: Company, release: Release, show: TableFilter, types: frozense
     shown.sort(key=lambda r: (r.request is None, STATE_ORDER.index(r.state), r.task.key))
 
     def query(show_: TableFilter, types_: frozenset[str]) -> str:
-        parts = {"client": str(client.pk), "release": str(release.version.pk)}
+        parts = base | dict([group.select.split("=")])
         if show_ != TableFilter.ALL:
             parts["show"] = show_.value
         if types_ != TASK_TYPES:
@@ -670,8 +863,14 @@ def _table(client: Company, release: Release, show: TableFilter, types: frozense
         type_filters=[
             FilterLink(t, query(show, types ^ {t}), t in types) for t in ("Story", "Task", "Bug")
         ],
-        when_column="Done" if release.group == ReleaseGroup.HOTFIXES else "Sprint",
+        when_column=_when_column(group),
     )
+
+
+def _when_column(group: Release | SprintView) -> str:
+    if isinstance(group, SprintView):
+        return "Release"
+    return "Done" if group.group == ReleaseGroup.HOTFIXES else "Sprint"
 
 
 def task_types(value: str | None) -> frozenset[str]:
@@ -681,20 +880,50 @@ def task_types(value: str | None) -> frozenset[str]:
     return frozenset(value.split(",")) & TASK_TYPES
 
 
+class PlanBy(StrEnum):
+    RELEASES = "releases"
+    SPRINTS = "sprints"
+
+
 @dataclass(frozen=True)
 class ReleasesPage:
     clients: list[Company]
     client: Company | None
-    releases: list[Release]
-    selected: Release | None
+    plan_by: PlanBy
+    # The releases, or the sprints in the Sprints mode: the list on the left.
+    releases: Sequence[Release | SprintView]
+    selected: Release | SprintView | None
     table: Table | None
 
     @property
-    def shown(self) -> list[Release]:
+    def base(self) -> str:
+        """The page's address for this client and mode, without the chosen item."""
+        return urlencode(self._base())
+
+    def _base(self) -> dict[str, str]:
+        parts = {"client": str(self.client.pk)} if self.client else {}
+        if self.plan_by == PlanBy.SPRINTS:
+            parts["mode"] = PlanBy.SPRINTS.value
+        return parts
+
+    @property
+    def mode_links(self) -> list[FilterLink]:
+        client = {"client": str(self.client.pk)} if self.client else {}
+        return [
+            FilterLink("Releases", urlencode(client), self.plan_by == PlanBy.RELEASES),
+            FilterLink(
+                "Sprints",
+                urlencode(client | {"mode": PlanBy.SPRINTS.value}),
+                self.plan_by == PlanBy.SPRINTS,
+            ),
+        ]
+
+    @property
+    def shown(self) -> list[Release | SprintView]:
         return [r for r in self.releases if not r.hidden]
 
     @property
-    def hidden(self) -> list[Release]:
+    def hidden(self) -> list[Release | SprintView]:
         return [r for r in self.releases if r.hidden]
 
 
@@ -843,20 +1072,38 @@ def releases_page(
     version_pk: int | None,
     show: TableFilter = TableFilter.ALL,
     types: frozenset[str] = TASK_TYPES,
+    plan_by: PlanBy = PlanBy.RELEASES,
+    sprint: str | None = None,
 ) -> ReleasesPage:
     """The Releases page of one of this PM's clients (canvas 7 · PMReleaseView): the list on
-    the left, the chosen release and its task table. Another PM's client or release is the
-    same as none."""
+    the left, the chosen release or sprint and its task table. Another PM's client, release or
+    sprint is the same as none. `sprint` is a sprint's id in the address, or "none"."""
     clients = list(clients_for(pm).exclude(jira_project=""))
     client = next((c for c in clients if c.pk == client_pk), clients[0] if clients else None)
-    releases = _releases(client) if client else []
-    shown = [r for r in releases if not r.hidden]
-    selected = next(
-        (r for r in releases if r.version.pk == version_pk),
-        next((r for r in shown if r.group == ReleaseGroup.OPEN), shown[0] if shown else None),
-    )
-    table = _table(client, selected, show, types) if client and selected else None
-    return ReleasesPage(clients, client, releases, selected, table)
+    items: Sequence[Release | SprintView]
+    selected: Release | SprintView | None
+    if plan_by == PlanBy.SPRINTS:
+        sprints = _sprints(client) if client else []
+        items = sprints
+        wanted = f"sprint={sprint}"
+        selected = next(
+            (s for s in sprints if s.select == wanted),
+            next(
+                (s for s in sprints if s.kind == SprintKind.ACTIVE), sprints[0] if sprints else None
+            ),
+        )
+    else:
+        releases = _releases(client) if client else []
+        items = releases
+        shown = [r for r in releases if not r.hidden]
+        selected = next(
+            (r for r in releases if r.version.pk == version_pk),
+            next((r for r in shown if r.group == ReleaseGroup.OPEN), shown[0] if shown else None),
+        )
+    page = ReleasesPage(clients, client, plan_by, items, selected, None)
+    if selected is None:
+        return page
+    return replace(page, table=_table(page._base(), selected, show, types))
 
 
 def release_for(pm: User, version_pk: int) -> TrackerVersion:
