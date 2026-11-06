@@ -21,11 +21,13 @@ document.addEventListener("submit", async (event) => {
   let saved = false;
   try {
     const response = await fetch(form.action, { method: "POST", body: data, headers: { "X-Requested-With": "fetch" } });
-    saved = response.ok;
+    // Only the server's 204 means it was kept: a signed-out session is redirected to the
+    // sign-in page, which fetch follows and gets a 200 for.
+    saved = response.status === 204;
   } catch {
     saved = false;
   }
-  // Not saved (offline, signed out): the column goes back, so the page never shows a width
-  // that the next page would not keep.
+  // Not saved (offline, signed out, server error): the column goes back, so the page never
+  // shows a width that the next page would not keep.
   if (!saved) show(!collapsed);
 });
