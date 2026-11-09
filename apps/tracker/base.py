@@ -236,6 +236,12 @@ class Tracker(Protocol):
         """Adds a comment in the tracker's markup and returns its id."""
         ...
 
+    def move_fix_version(self, key: str, remove_id: str, add_id: str) -> None:
+        """Takes one fix version off the task and puts another on, by Jira's ids; an empty id
+        skips that half (#30, 30f: moving a task to another release). Its other fix versions,
+        archived ones too, stay as they are."""
+        ...
+
     def versions(self, project_key: str) -> list[Version]:
         """Every fix version of the project, archived ones too, in the project's own order."""
         ...

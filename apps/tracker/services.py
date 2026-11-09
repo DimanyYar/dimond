@@ -3,6 +3,7 @@ ADR 0010, 0019)."""
 
 import logging
 import re
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from django.conf import settings
@@ -36,6 +37,7 @@ from .base import (
     Issue,
     IssueNotFound,
     ProjectNotFound,
+    Release,
     ReleaseTask,
     Sprint,
     Tracker,
@@ -49,6 +51,7 @@ from .base import (
 )
 from .connection import current_tracker, login_fingerprint
 from .models import (
+    ReleaseMove,
     ReleaseVisibility,
     SyncEvent,
     SyncOutcome,
@@ -725,3 +728,98 @@ def set_release_hidden(version: TrackerVersion, hidden: bool) -> None:
     notes). Only dimond's list changes; Jira and clients see nothing. The caller has already
     checked the release is one of this PM's clients' (selectors.release_for)."""
     ReleaseVisibility.objects.update_or_create(version=version, defaults={"hidden": hidden})
+
+
+# Moving a task to another release from the Releases page (#30, 30f; D-005).
+
+
+@dataclass(frozen=True)
+class Moved:
+    move: ReleaseMove
+    # Where the task is now; None for no release.
+    target: TrackerVersion | None
+    # Subtasks Jira would not move, though the task itself moved.
+    left_behind: list[str]
+
+
+def move_task(
+    pm: User,
+    task: TrackerTask,
+    source: TrackerVersion | None,
+    target: TrackerVersion | None,
+    *,
+    undo_of: ReleaseMove | None = None,
+) -> Moved:
+    """The PM moves a task from one release to another, or to none. dimond changes the fix
+    version in Jira first, on the task and on each subtask that has the same one of its own
+    (in FI subtasks usually have none), then its own copy, so the page shows the move at once.
+    A linked request gets its new "Planned for" and a line in its thread, never an email
+    (D-005); taking a task out of every dated release changes the card quietly. Raises the
+    tracker's error when Jira refuses the task itself: then nothing has changed."""
+    tracker = current_tracker()
+    source_id = source.jira_id if source else ""
+    target_id = target.jira_id if target else ""
+    tracker.move_fix_version(task.key, source_id, target_id)
+    _swap_version(task, source, target)
+    if undo_of is not None:
+        subtasks = list(TrackerTask.objects.filter(key__in=undo_of.subtask_keys))
+    else:
+        subtasks = [s for s in task.subtasks.all() if source and source in s.versions.all()]
+    moved, left_behind = [], []
+    for subtask in subtasks:
+        try:
+            tracker.move_fix_version(subtask.key, source_id, target_id)
+        except TrackerError as error:
+            logger.warning("Subtask %s not moved with %s: %s", subtask.key, task.key, error)
+            left_behind.append(subtask.key)
+            continue
+        _swap_version(subtask, source, target)
+        moved.append(subtask.key)
+    move = ReleaseMove.objects.create(
+        moved_by=pm,
+        project_key=task.project_key,
+        task_key=task.key,
+        task_summary=task.summary,
+        from_version_id=source_id,
+        from_name=source.name if source else "",
+        to_version_id=target_id,
+        to_name=target.name if target else "",
+        subtask_keys=moved,
+        undo_of=undo_of,
+    )
+    _follow_moved_request(task)
+    return Moved(move, target, left_behind)
+
+
+def undo_move(pm: User, move: ReleaseMove) -> Moved:
+    """Undo on the toast: the task goes back where it was, with the subtasks that moved along.
+    Raises TrackerVersion.DoesNotExist when a release has since gone from the copy, and
+    TrackerTask.DoesNotExist when the task has."""
+    task = TrackerTask.objects.get(key=move.task_key)
+    back_from = (
+        TrackerVersion.objects.get(jira_id=move.to_version_id) if move.to_version_id else None
+    )
+    back_to = (
+        TrackerVersion.objects.get(jira_id=move.from_version_id) if move.from_version_id else None
+    )
+    return move_task(pm, task, back_from, back_to, undo_of=move)
+
+
+def _swap_version(
+    task: TrackerTask, source: TrackerVersion | None, target: TrackerVersion | None
+) -> None:
+    if source is not None:
+        task.versions.remove(source)
+    if target is not None:
+        task.versions.add(target)
+
+
+def _follow_moved_request(task: TrackerTask) -> None:
+    request = Request.objects.filter(jira_key=task.key).first()
+    if request is None:
+        return
+    dated = sorted(
+        (Release(v.name, v.release_date) for v in task.versions.all() if v.release_date),
+        key=lambda release: release.release_date,
+    )
+    follow_releases(request, tuple(dated))

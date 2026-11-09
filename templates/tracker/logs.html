@@ -9,7 +9,7 @@ tab joins with the sign-in journal (#21).
 
 {% block content %}
 <div class="logs">
-  {% include "tracker/logs_top.html" with tab="jira" note="dimond reads task statuses from Jira. It writes to Jira only when you create or link a task." %}
+  {% include "tracker/logs_top.html" with tab="jira" note="dimond reads task statuses from Jira. It writes to Jira only when you create or link a task, or move one to another release." %}
 
   <div class="logs-body" data-region="results">
     <section class="logs-runs" aria-label="Runs">

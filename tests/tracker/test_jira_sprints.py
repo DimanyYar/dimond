@@ -140,3 +140,30 @@ def test_a_key_that_is_not_a_task_key_never_reaches_jira():
     with pytest.raises(IssueNotFound):
         jira.move_to_sprint("FI 1; drop", 1874)
     assert seen == []
+
+
+def test_moving_a_task_to_another_release_keeps_its_other_fix_versions():
+    seen: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(204)
+
+    jira = JiraTracker(URL, "dsmirnov", "secret", transport=httpx.MockTransport(handle))
+
+    jira.move_fix_version("FI-2208", "20130", "20140")
+
+    assert seen[0].method == "PUT"
+    assert seen[0].url.path == "/rest/api/2/issue/FI-2208"
+    assert json.loads(seen[0].content) == {
+        "update": {"fixVersions": [{"remove": {"id": "20130"}}, {"add": {"id": "20140"}}]}
+    }
+
+
+def test_a_task_key_that_is_not_one_never_reaches_jira_when_moving():
+    seen: list[httpx.Request] = []
+    jira = JiraTracker(URL, "u", "p", transport=httpx.MockTransport(lambda r: seen.append(r)))
+
+    with pytest.raises(IssueNotFound):
+        jira.move_fix_version("FI 1; drop", "20130", "")
+    assert seen == []
